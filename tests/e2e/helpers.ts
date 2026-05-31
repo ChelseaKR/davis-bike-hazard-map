@@ -1,20 +1,46 @@
-import type { APIRequestContext, Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 export const MOD_TOKEN = 'e2e-token';
 
-/** Approve the oldest pending hazard via the moderation API; returns its id. */
-export async function approveOldestPending(request: APIRequestContext): Promise<string> {
-  const queueRes = await request.get('/api/moderation/queue', {
+interface QueueHazard {
+  id: string;
+  description: string | null;
+}
+
+/** Fetch the moderation queue (returns [] on any non-OK response). */
+async function fetchQueue(request: APIRequestContext): Promise<QueueHazard[]> {
+  const res = await request.get('/api/moderation/queue', {
     headers: { authorization: `Bearer ${MOD_TOKEN}` },
   });
-  const { hazards } = await queueRes.json();
-  if (!hazards.length) throw new Error('no pending hazards to approve');
-  const id = hazards[0].id as string;
+  if (!res.ok()) return [];
+  const body = (await res.json()) as { hazards?: QueueHazard[] };
+  return body.hazards ?? [];
+}
+
+/**
+ * Poll until a pending hazard with the given description exists (the client
+ * sync is asynchronous), then approve it. Returns the approved hazard id.
+ */
+export async function waitAndApprove(
+  request: APIRequestContext,
+  description: string,
+): Promise<string> {
+  let id: string | undefined;
+  await expect
+    .poll(
+      async () => {
+        id = (await fetchQueue(request)).find((h) => h.description === description)?.id;
+        return Boolean(id);
+      },
+      { timeout: 15_000, intervals: [300, 600, 1000] },
+    )
+    .toBe(true);
+
   await request.post(`/api/moderation/${id}`, {
     headers: { authorization: `Bearer ${MOD_TOKEN}`, 'content-type': 'application/json' },
     data: { decision: 'approve' },
   });
-  return id;
+  return id!;
 }
 
 /** Switch the app to a given tab by its visible label. */
