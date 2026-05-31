@@ -32,8 +32,8 @@ export default defineConfig({
 
   webServer: {
     command:
-      'npm run build && cross-env NODE_ENV=production MODERATION_TOKEN=e2e-token ' +
-      `PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
+      'npm run build && cross-env NODE_ENV=production ' +
+      `MODERATION_TOKEN=e2e-token PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,

@@ -84,6 +84,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     global: true,
     max: config.rateLimit.max,
     timeWindow: config.rateLimit.windowMs,
+    // Only rate-limit the API. Static assets (index, JS/CSS, icons, the SW)
+    // must never be throttled — a single page load fetches many of them.
+    allowList: (req) => !(req.url ?? '').startsWith('/api/'),
   });
 
   // Validation errors -> 400 with a stable envelope.
