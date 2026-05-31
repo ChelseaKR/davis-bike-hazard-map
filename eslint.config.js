@@ -29,6 +29,16 @@ export default tseslint.config(
     rules: { 'no-undef': 'off' },
   },
 
+  // Plain JS/MJS config + scripts run in Node (Buffer, console, process, ...).
+  {
+    files: ['**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node },
+    },
+  },
+
   // Browser / React code.
   {
     files: ['src/**/*.{ts,tsx}'],

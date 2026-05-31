@@ -124,7 +124,7 @@ export function ModerationPanel() {
                 <img
                   className="moderation-photo"
                   src={h.photoUrl}
-                  alt="Submitted hazard photo awaiting review"
+                  alt="Submitted hazard awaiting review"
                   loading="lazy"
                 />
               )}

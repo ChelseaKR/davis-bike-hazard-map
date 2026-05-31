@@ -1,12 +1,15 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, type UserConfig } from 'vite';
+import type { UserConfig as VitestUserConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // The dev/preview API port the server listens on (see server/index.ts).
 const API_PORT = process.env.API_PORT ?? '8787';
 
+// Plugins are typed against the root `vite`; the Vitest `test` field is typed
+// via a type-only import so there's no cross-`vite`-instance plugin clash.
 // https://vitejs.dev/config/
-export default defineConfig({
+const config: UserConfig & { test: VitestUserConfig['test'] } = {
   plugins: [
     react(),
     VitePWA({
@@ -129,4 +132,6 @@ export default defineConfig({
       thresholds: { lines: 80, functions: 80, statements: 80, branches: 75 },
     },
   },
-});
+};
+
+export default defineConfig(config);

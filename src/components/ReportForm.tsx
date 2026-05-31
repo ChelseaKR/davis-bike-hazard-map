@@ -230,7 +230,7 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
         <legend>Photo (optional)</legend>
         {photo ? (
           <div className="photo-attached">
-            <img src={photo} alt="Attached hazard photo (metadata removed)" />
+            <img src={photo} alt="Attached hazard, location data removed" />
             <button
               type="button"
               className="btn"
