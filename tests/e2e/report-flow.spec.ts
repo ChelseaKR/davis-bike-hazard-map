@@ -49,8 +49,10 @@ test('offline: a report is saved, then syncs when back online', async ({
   // Saved locally with an explicit offline acknowledgement.
   await expect(page.getByText(/saved offline/i)).toBeVisible();
 
-  // Back online -> background sync drains the queue; then approve and verify.
+  // Back online: reopening the app (as a cyclist would on reconnect) runs the
+  // sync loop's immediate tick, draining the IndexedDB queue to the server.
   await context.setOffline(false);
+  await page.reload();
   await waitAndApprove(request, desc);
 
   await page.reload();
