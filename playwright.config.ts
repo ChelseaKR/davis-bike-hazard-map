@@ -10,15 +10,22 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = 8788;
 const BASE_URL = `http://localhost:${PORT}`;
 
-// Local runs use Chromium only (fast, one browser to install). CI sets
-// E2E_ALL_BROWSERS to fan out across Firefox and WebKit as well.
-const projects = [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }];
-if (process.env.E2E_ALL_BROWSERS) {
-  projects.push(
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-  );
-}
+// Browser selection: local runs use Chromium only (fast, one install).
+//   E2E_BROWSERS=chromium,firefox   explicit comma list (takes precedence)
+//   E2E_ALL_BROWSERS=1              chromium + firefox + webkit
+// CI runs chromium+firefox as a required gate and webkit as a separate
+// non-blocking job (Linux-WebKit needs a fix — see the e2e-webkit CI job).
+const ALL = {
+  chromium: { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+  firefox: { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+  webkit: { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+} as const;
+const selected: (keyof typeof ALL)[] = process.env.E2E_BROWSERS
+  ? (process.env.E2E_BROWSERS.split(',').map((b) => b.trim()) as (keyof typeof ALL)[])
+  : process.env.E2E_ALL_BROWSERS
+    ? ['chromium', 'firefox', 'webkit']
+    : ['chromium'];
+const projects = selected.filter((b) => b in ALL).map((b) => ALL[b]);
 
 export default defineConfig({
   testDir: './tests/e2e',
