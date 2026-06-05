@@ -1,8 +1,17 @@
-import { describe, it, expect, vi } from 'vitest';
-import { syncOnce, MAX_SYNC_ATTEMPTS } from '../../src/lib/sync.ts';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { syncOnce, startSync, MAX_SYNC_ATTEMPTS } from '../../src/lib/sync.ts';
 import { ApiRequestError } from '../../src/lib/api.ts';
 import type { QueuedReport } from '../../src/lib/db.ts';
 import type { Hazard, ReportSubmission } from '../../shared/types.ts';
+
+// startSync drains the real queue via these; mock them so the loop touches
+// neither IndexedDB nor the network. (The syncOnce tests below inject deps and
+// never reach this module.)
+vi.mock('../../src/lib/db.ts', () => ({
+  getPendingReports: vi.fn(),
+  updateReport: vi.fn(),
+}));
+import * as db from '../../src/lib/db.ts';
 
 function queued(over: Partial<QueuedReport> = {}): QueuedReport {
   const submission: ReportSubmission = {
@@ -100,5 +109,50 @@ describe('syncOnce', () => {
       submit: vi.fn(),
     });
     expect(result).toEqual({ attempted: 0, synced: 0, failed: 0 });
+  });
+});
+
+describe('startSync', () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+    // The loop calls the (mocked) db getter; return an empty queue so it's a
+    // no-op that still records the call.
+    vi.mocked(db.getPendingReports).mockReset().mockResolvedValue([]);
+  });
+
+  it('drains the queue once immediately on start', async () => {
+    const stop = startSync();
+    // Let the immediate tick's microtasks settle.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(db.getPendingReports).toHaveBeenCalled();
+    stop();
+  });
+
+  it('drains again when the app returns to the foreground', async () => {
+    const stop = startSync();
+    await Promise.resolve();
+    vi.mocked(db.getPendingReports).mockClear();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    expect(db.getPendingReports).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('stops listening after the disposer runs', async () => {
+    const stop = startSync();
+    await Promise.resolve();
+    stop();
+    vi.mocked(db.getPendingReports).mockClear();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('online'));
+    await Promise.resolve();
+    expect(db.getPendingReports).not.toHaveBeenCalled();
   });
 });

@@ -79,8 +79,13 @@ export function isOnline(): boolean {
 }
 
 /**
- * Start the background sync loop: on an interval, when we come back online, and
- * once immediately. Returns a disposer that stops it.
+ * Start the background sync loop: on an interval, when we come back online,
+ * when a backgrounded PWA returns to the foreground, and once immediately.
+ *
+ * The foreground (`visibilitychange`) trigger matters for the bike case: a
+ * phone that was asleep for hours may never fire `online` because the socket
+ * never formally dropped, so we drain the queue the moment the app is reopened.
+ * Returns a disposer that stops it.
  */
 export function startSync(onResult?: (r: SyncResult) => void): () => void {
   let stopped = false;
@@ -95,13 +100,19 @@ export function startSync(onResult?: (r: SyncResult) => void): () => void {
     }
   };
 
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') void tick();
+  };
+
   const interval = setInterval(tick, config.syncIntervalMs);
   window.addEventListener('online', tick);
+  document.addEventListener('visibilitychange', onVisible);
   void tick();
 
   return () => {
     stopped = true;
     clearInterval(interval);
     window.removeEventListener('online', tick);
+    document.removeEventListener('visibilitychange', onVisible);
   };
 }

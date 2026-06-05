@@ -8,6 +8,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import type { Hazard, HazardFilters } from '../shared/types.ts';
 import { useHazards } from './hooks/useHazards.ts';
 import { useOnline } from './hooks/useOnline.ts';
+import { useRefreshOnReconnect } from './hooks/useRefreshOnReconnect.ts';
 import { startSync } from './lib/sync.ts';
 import { confirmHazard } from './lib/api.ts';
 import { Filters } from './components/Filters.tsx';
@@ -52,6 +53,10 @@ export default function App() {
       }
     });
   }, [refresh]);
+
+  // Also pull a fresh feed whenever we reconnect or the app is foregrounded,
+  // so the map isn't stuck on data cached from before we went offline.
+  useRefreshOnReconnect(refresh);
 
   const onConfirm = useCallback(
     async (id: string) => {
