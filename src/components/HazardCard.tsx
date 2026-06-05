@@ -11,6 +11,7 @@ import {
   type Hazard,
 } from '../../shared/types.ts';
 import { timeAgo, formatLatLng } from '../lib/format.ts';
+import { HazardPhoto } from './HazardPhoto.tsx';
 
 interface HazardCardProps {
   hazard: Hazard;
@@ -54,11 +55,10 @@ export function HazardCard({
       {hazard.description && <p className="hazard-desc">{hazard.description}</p>}
 
       {hazard.photoUrl && (
-        <img
+        <HazardPhoto
           className="hazard-photo"
           src={hazard.photoUrl}
           alt={`Reported ${CATEGORY_LABELS[hazard.category].toLowerCase()} hazard`}
-          loading="lazy"
         />
       )}
 

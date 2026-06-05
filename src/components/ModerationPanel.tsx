@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CATEGORY_LABELS, SEVERITY_LABELS, type Hazard } from '../../shared/types.ts';
 import { decideModeration, fetchModerationQueue } from '../lib/api.ts';
 import { timeAgo } from '../lib/format.ts';
+import { HazardPhoto } from './HazardPhoto.tsx';
 
 const TOKEN_KEY = 'dbhm.moderatorToken';
 
@@ -121,11 +122,10 @@ export function ModerationPanel() {
               </div>
               {h.description && <p>{h.description}</p>}
               {h.photoUrl && (
-                <img
+                <HazardPhoto
                   className="moderation-photo"
                   src={h.photoUrl}
                   alt="Submitted hazard awaiting review"
-                  loading="lazy"
                 />
               )}
               <div className="moderation-actions">

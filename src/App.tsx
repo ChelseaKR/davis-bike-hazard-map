@@ -16,6 +16,7 @@ import { ReportForm } from './components/ReportForm.tsx';
 import { MyReports } from './components/MyReports.tsx';
 import { ModerationPanel } from './components/ModerationPanel.tsx';
 import { StatusBanner } from './components/StatusBanner.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
 // Leaflet is the heaviest dependency; keep it out of the initial bundle so the
 // report flow is fast on mobile data.
@@ -100,42 +101,46 @@ export default function App() {
       <StatusBanner refreshKey={statusKey} />
 
       <main className="app-main">
-        {(tab === 'map' || tab === 'list') && (
-          <Filters value={filters} onChange={setFilters} resultCount={hazards.length} />
-        )}
+        {/* Keyed by tab so a crash in one view is contained and auto-clears
+            when the user navigates to another tab — the shell stays usable. */}
+        <ErrorBoundary key={tab} source={`view:${tab}`}>
+          {(tab === 'map' || tab === 'list') && (
+            <Filters value={filters} onChange={setFilters} resultCount={hazards.length} />
+          )}
 
-        {tab === 'map' && (
-          <Suspense fallback={<p className="hint">Loading map…</p>}>
-            <MapView hazards={hazards} onConfirm={onConfirm} focusHazard={focusHazard} />
-          </Suspense>
-        )}
+          {tab === 'map' && (
+            <Suspense fallback={<p className="hint">Loading map…</p>}>
+              <MapView hazards={hazards} onConfirm={onConfirm} focusHazard={focusHazard} />
+            </Suspense>
+          )}
 
-        {tab === 'list' && (
-          <div id="list-panel">
-            <ListView
-              hazards={hazards}
-              loading={loading}
-              error={error}
-              onConfirm={onConfirm}
-              onFocusOnMap={showOnMap}
-            />
-          </div>
-        )}
+          {tab === 'list' && (
+            <div id="list-panel">
+              <ListView
+                hazards={hazards}
+                loading={loading}
+                error={error}
+                onConfirm={onConfirm}
+                onFocusOnMap={showOnMap}
+              />
+            </div>
+          )}
 
-        {tab === 'report' && (
-          <>
-            {!online && (
-              <p className="hint offline-hint">
-                You're offline — your report will be saved and synced later.
-              </p>
-            )}
-            <ReportForm onSubmitted={onSubmitted} />
-          </>
-        )}
+          {tab === 'report' && (
+            <>
+              {!online && (
+                <p className="hint offline-hint">
+                  You're offline — your report will be saved and synced later.
+                </p>
+              )}
+              <ReportForm onSubmitted={onSubmitted} />
+            </>
+          )}
 
-        {tab === 'mine' && <MyReports onChange={() => setStatusKey((k) => k + 1)} />}
+          {tab === 'mine' && <MyReports onChange={() => setStatusKey((k) => k + 1)} />}
 
-        {tab === 'moderate' && <ModerationPanel />}
+          {tab === 'moderate' && <ModerationPanel />}
+        </ErrorBoundary>
       </main>
 
       <footer className="app-footer">

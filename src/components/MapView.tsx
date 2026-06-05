@@ -48,6 +48,13 @@ function buildPopup(hazard: Hazard, onConfirm?: (id: string) => void): HTMLEleme
     img.alt = `Reported ${CATEGORY_LABELS[hazard.category].toLowerCase()}`;
     img.className = 'map-popup-photo';
     img.loading = 'lazy';
+    // Degrade to a caption if the photo fails to load (e.g. 404 after expiry).
+    img.addEventListener('error', () => {
+      const fallback = document.createElement('p');
+      fallback.className = 'map-popup-note';
+      fallback.textContent = 'Photo unavailable';
+      img.replaceWith(fallback);
+    });
     el.appendChild(img);
   }
 
