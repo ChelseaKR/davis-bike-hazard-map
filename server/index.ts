@@ -9,6 +9,7 @@ import fastifyStatic from '@fastify/static';
 import { buildApp } from './app.ts';
 import { serverConfig } from './config.ts';
 import { createRepository } from './lib/repository.ts';
+import { startBackups } from './lib/backup.ts';
 
 async function main() {
   const repo = createRepository(serverConfig.dataFile);
@@ -51,6 +52,17 @@ async function main() {
     60 * 60 * 1000,
   );
   sweep.unref?.();
+
+  // Periodic timestamped snapshots of the JSON store (no-op in-memory).
+  startBackups(
+    {
+      dataFile: serverConfig.dataFile,
+      backupDir: serverConfig.backup.dir,
+      retain: serverConfig.backup.retain,
+    },
+    serverConfig.backup.intervalHours * 60 * 60 * 1000,
+    (path) => app.log.info(`Data snapshot written: ${path}`),
+  );
 
   try {
     await app.listen({ port: serverConfig.port, host: serverConfig.host });

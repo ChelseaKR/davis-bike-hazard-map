@@ -6,6 +6,7 @@
  * generated and logged so the moderation panel is usable out of the box.
  */
 import { randomUUID } from 'node:crypto';
+import { dirname, join } from 'node:path';
 
 function int(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -16,14 +17,22 @@ function int(name: string, fallback: number): number {
 const isProd = process.env.NODE_ENV === 'production';
 const isTest = process.env.NODE_ENV === 'test';
 
+// Where the JSON-backed store persists. Empty => in-memory (tests/dev).
+//
+// IMPORTANT: the JSON file store assumes a SINGLE server process. Writes are
+// atomic per process (temp + rename), but two processes pointed at the same
+// file WILL corrupt it — there is no cross-process lock. Do not run multiple
+// instances / a clustered process manager against one DATABASE_PATH. (This
+// constraint goes away with the Postgres store — see docs/ARCHITECTURE.md.)
+const dataFile = process.env.DATABASE_PATH ?? (isProd ? './data/hazards.json' : '');
+
 export const serverConfig = {
   isProd,
   isTest,
   port: int('API_PORT', int('PORT', 8787)),
   host: process.env.HOST ?? '0.0.0.0',
 
-  /** Where the JSON-backed store persists. Empty => in-memory (tests/dev). */
-  dataFile: process.env.DATABASE_PATH ?? (isProd ? './data/hazards.json' : ''),
+  dataFile,
 
   /** Moderator bearer token. Required in production. */
   moderationToken: process.env.MODERATION_TOKEN ?? (isProd ? '' : `dev-${randomUUID()}`),
@@ -53,5 +62,15 @@ export const serverConfig = {
     low: int('TTL_LOW_DAYS', 14),
     moderate: int('TTL_MODERATE_DAYS', 21),
     high: int('TTL_HIGH_DAYS', 30),
+  },
+
+  /**
+   * Periodic timestamped snapshots of the JSON store (it has no PITR). Disabled
+   * when running in-memory. Defaults to a `backups/` dir beside the data file.
+   */
+  backup: {
+    dir: process.env.BACKUP_DIR ?? (dataFile ? join(dirname(dataFile), 'backups') : ''),
+    intervalHours: int('BACKUP_INTERVAL_HOURS', 6),
+    retain: int('BACKUP_RETAIN', 14),
   },
 } as const;

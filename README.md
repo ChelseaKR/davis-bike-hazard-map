@@ -63,7 +63,7 @@ CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs the same gate
 
 - **Run it:** `MODERATION_TOKEN=… DATABASE_PATH=./data/hazards.json make start` (production serves the built client + API on `PORT`, default 8787). `MODERATION_TOKEN` is **required** in production — the server refuses to start without it.
 - **Health:** `GET /api/health` → `{ "status": "ok" }`. Put this behind your uptime check.
-- **Data:** a single JSON file at `DATABASE_PATH`, written atomically (temp + rename). **Back it up** on a schedule; to restore, stop the server, replace the file, restart.
+- **Data:** a single JSON file at `DATABASE_PATH`, written atomically (temp + rename). ⚠️ **Single-process only** — never run two instances against one file (there is no cross-process lock; concurrent writes corrupt it). The server takes **automatic timestamped snapshots** every `BACKUP_INTERVAL_HOURS` (default 6) into `BACKUP_DIR` (default `backups/` beside the data file), keeping the newest `BACKUP_RETAIN` (default 14). To restore, stop the server, copy a snapshot over `DATABASE_PATH`, restart. (Still copy snapshots off-box for disaster recovery.)
 - **Moderation queue depth** is the signal to watch: `GET /api/moderation/queue` (with the bearer token) — a growing queue means reports aren't being reviewed (SLA: 48 h).
 - **Rotate the moderator token:** change `MODERATION_TOKEN` and restart; moderators re-enter it in the Moderate tab.
 - **311 down?** Hand-off degrades gracefully (returns a dry-run result, never throws) — the app keeps working; retry later.
