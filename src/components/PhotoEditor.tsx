@@ -18,7 +18,12 @@ import {
 } from '../lib/blur.ts';
 import { dataUrlToBytes, hasExif, stripExifFromDataUrl } from '../lib/exif.ts';
 import { computeScaledDimensions, fileToDataUrl } from '../lib/photo.ts';
+import { MAX_PHOTO_BYTES } from '../../shared/validation.ts';
 import { config } from '../config.ts';
+
+// Sanity ceiling on the RAW file we'll read into memory. The editor downscales
+// to a small JPEG, but we reject absurd inputs up front rather than decode them.
+const MAX_RAW_PHOTO_BYTES = 25 * 1024 * 1024;
 
 interface PhotoEditorProps {
   onComplete: (dataUrl: string) => void;
@@ -47,6 +52,11 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
+    // Reject an oversized file before reading it into memory (early validation).
+    if (file.size > MAX_RAW_PHOTO_BYTES) {
+      setError('That image is too large. Please choose one under 25 MB.');
+      return;
+    }
     setBusy(true);
     try {
       const raw = await fileToDataUrl(file);
@@ -66,6 +76,15 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
       if (ctx) {
         ctx.drawImage(img, 0, 0, dims.width, dims.height);
         baseUrl = ctx.canvas.toDataURL('image/jpeg', config.photoQuality);
+      }
+
+      // After downscaling this should comfortably fit; guard the rare case
+      // where a busy 1280px frame still exceeds the upload limit, so the user
+      // finds out here (with the photo in hand) rather than at submit.
+      if (baseUrl.length > MAX_PHOTO_BYTES * 1.4) {
+        setError('This photo is too detailed to compress under the limit. Try a simpler shot.');
+        setBusy(false);
+        return;
       }
 
       imgRef.current = await loadImage(baseUrl);

@@ -4,6 +4,7 @@
  */
 import type { Hazard } from '../../shared/types.ts';
 import { HazardCard } from './HazardCard.tsx';
+import { SkeletonList } from './Skeleton.tsx';
 
 interface ListViewProps {
   hazards: Hazard[];
@@ -11,6 +12,7 @@ interface ListViewProps {
   error: string | null;
   onConfirm?: (id: string) => void;
   onFocusOnMap?: (hazard: Hazard) => void;
+  onRetry?: () => void;
 }
 
 export function ListView({
@@ -19,14 +21,23 @@ export function ListView({
   error,
   onConfirm,
   onFocusOnMap,
+  onRetry,
 }: ListViewProps) {
+  // Skeletons only on the very first load (when we have nothing to show yet);
+  // a background refresh keeps the existing cards visible.
+  const showSkeleton = loading && hazards.length === 0 && !error;
   return (
     <section className="list-view" aria-label="Hazard list">
-      {loading && <p className="hint">Loading hazards…</p>}
+      {showSkeleton && <SkeletonList />}
       {error && (
-        <p role="alert" className="error-text">
-          {error}
-        </p>
+        <div role="alert" className="feed-error">
+          <p className="error-text">{error}</p>
+          {onRetry && (
+            <button type="button" className="btn btn-small" onClick={onRetry}>
+              Retry
+            </button>
+          )}
+        </div>
       )}
       {!loading && !error && hazards.length === 0 && (
         <p className="empty-state">

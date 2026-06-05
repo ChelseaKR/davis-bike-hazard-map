@@ -19,6 +19,8 @@ import { MyReports } from './components/MyReports.tsx';
 import { ModerationPanel } from './components/ModerationPanel.tsx';
 import { StatusBanner } from './components/StatusBanner.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { FeedFreshness } from './components/FeedFreshness.tsx';
+import { SkeletonMap } from './components/Skeleton.tsx';
 
 // Leaflet is the heaviest dependency; keep it out of the initial bundle so the
 // report flow is fast on mobile data.
@@ -38,7 +40,7 @@ export default function App() {
   const [{ tab, filters, focusHazard, statusKey }, dispatch] = useViewState();
   const online = useOnline();
 
-  const { hazards, loading, error, refresh } = useHazards(filters);
+  const { hazards, loading, error, lastUpdatedAt, refresh } = useHazards(filters);
 
   // Drain the offline queue in the background; refresh the map on any success.
   useEffect(() => {
@@ -106,15 +108,22 @@ export default function App() {
             when the user navigates to another tab — the shell stays usable. */}
         <ErrorBoundary key={tab} source={`view:${tab}`}>
           {(tab === 'map' || tab === 'list') && (
-            <Filters
-              value={filters}
-              onChange={(filters) => dispatch({ type: 'setFilters', filters })}
-              resultCount={hazards.length}
-            />
+            <>
+              <Filters
+                value={filters}
+                onChange={(filters) => dispatch({ type: 'setFilters', filters })}
+                resultCount={hazards.length}
+              />
+              <FeedFreshness
+                updatedAt={lastUpdatedAt}
+                loading={loading}
+                onRefresh={() => void refresh()}
+              />
+            </>
           )}
 
           {tab === 'map' && (
-            <Suspense fallback={<p className="hint">Loading map…</p>}>
+            <Suspense fallback={<SkeletonMap />}>
               <MapView hazards={hazards} onConfirm={onConfirm} focusHazard={focusHazard} />
             </Suspense>
           )}
@@ -127,6 +136,7 @@ export default function App() {
                 error={error}
                 onConfirm={onConfirm}
                 onFocusOnMap={showOnMap}
+                onRetry={() => void refresh()}
               />
             </div>
           )}

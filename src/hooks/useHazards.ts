@@ -8,6 +8,8 @@ interface UseHazardsResult {
   all: Hazard[];
   loading: boolean;
   error: string | null;
+  /** Epoch ms of the last successful fetch, or null before the first one. */
+  lastUpdatedAt: number | null;
   refresh: () => Promise<void>;
 }
 
@@ -21,12 +23,14 @@ export function useHazards(filters: HazardFilters): UseHazardsResult {
   const [all, setAll] = useState<Hazard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       setAll(await fetchHazards());
+      setLastUpdatedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load hazards.');
     } finally {
@@ -39,5 +43,5 @@ export function useHazards(filters: HazardFilters): UseHazardsResult {
   }, [refresh]);
 
   const hazards = sortByPriority(applyFilters(all, filters));
-  return { hazards, all, loading, error, refresh };
+  return { hazards, all, loading, error, lastUpdatedAt, refresh };
 }

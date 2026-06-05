@@ -606,6 +606,66 @@ textarea {
   color: var(--brand-dark);
 }
 
+/* --- Feed freshness + retry --- */
+.feed-freshness {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+.feed-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* --- Loading skeletons --- */
+.skeleton {
+  background: var(--line);
+  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: skeleton-shimmer 1.4s infinite;
+}
+.skeleton-line {
+  height: 0.85rem;
+  margin: 0.5rem 0;
+}
+.skeleton-title {
+  height: 1.1rem;
+  width: 55%;
+}
+.skeleton-short {
+  width: 35%;
+}
+.skeleton-card {
+  list-style: none;
+}
+.skeleton-map {
+  width: 100%;
+  height: 60vh;
+  min-height: 320px;
+}
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* --- Error boundary & degraded media --- */
 .error-boundary {
   margin: 1rem 0;
