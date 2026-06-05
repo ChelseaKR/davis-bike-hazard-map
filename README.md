@@ -51,7 +51,7 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 | Gate | Command | Enforces |
 |------|---------|----------|
 | Lint + typecheck | `make verify` | TS strict, ESLint clean |
-| Unit + integration | `make verify` | 139 tests; coverage ≥ 80% lines/fns, ≥ 75% branches on core logic |
+| Unit + integration | `make verify` | 200+ tests (incl. Postgres adapter when `TEST_DATABASE_URL` is set); coverage ≥ 80% lines/fns, ≥ 75% branches on core logic |
 | EXIF / privacy | (in unit + server tests) | photos are EXIF-clean; precise location never public |
 | Accessibility | `make a11y` + `make e2e` | zero axe violations (component + full-page incl. contrast) |
 | Offline → sync | `make e2e` | file offline → syncs → moderated → on the map |
