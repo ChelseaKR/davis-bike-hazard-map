@@ -69,6 +69,31 @@ describe('health', () => {
   });
 });
 
+describe('client error sink', () => {
+  it('accepts a valid client error report with 204 and no body', async () => {
+    const res = await post('/api/client-errors', {
+      message: 'boom',
+      stack: 'Error: boom\n  at x',
+      source: 'window.onerror',
+      path: '/',
+      at: 1_700_000_000_000,
+    });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
+  });
+
+  it('rejects an empty message', async () => {
+    const res = await post('/api/client-errors', { message: '' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('validation_error');
+  });
+
+  it('requires no auth (it is best-effort public telemetry)', async () => {
+    const res = await post('/api/client-errors', { message: 'anon error' });
+    expect(res.statusCode).toBe(204);
+  });
+});
+
 describe('report intake and moderation gate', () => {
   it('accepts a report but keeps it out of the public feed until approved', async () => {
     const res = await post('/api/reports', baseReport);

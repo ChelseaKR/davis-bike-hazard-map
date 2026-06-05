@@ -57,6 +57,26 @@ export function reportError(error: unknown, context: ErrorContext): void {
   }
 }
 
+/**
+ * Install global handlers so uncaught errors and unhandled promise rejections
+ * are reported the same way the error boundary reports render errors. Safe to
+ * call once at startup; returns a disposer (used in tests).
+ */
+export function installGlobalErrorHandlers(): () => void {
+  const onError = (event: ErrorEvent) => {
+    reportError(event.error ?? event.message, { source: 'window.onerror' });
+  };
+  const onRejection = (event: PromiseRejectionEvent) => {
+    reportError(event.reason, { source: 'unhandledrejection' });
+  };
+  window.addEventListener('error', onError);
+  window.addEventListener('unhandledrejection', onRejection);
+  return () => {
+    window.removeEventListener('error', onError);
+    window.removeEventListener('unhandledrejection', onRejection);
+  };
+}
+
 /** Test seam: reset the per-session report counter. */
 export function resetTelemetryForTest(): void {
   reportedCount = 0;

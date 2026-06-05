@@ -19,6 +19,7 @@ import {
   reportSubmissionSchema,
   hazardFiltersSchema,
   moderationDecisionSchema,
+  clientErrorSchema,
 } from '../shared/validation.ts';
 import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
 import { dataUrlToBytes } from '../shared/exif.ts';
@@ -118,6 +119,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   // --- Health ---
   app.get('/api/health', async () => ({ status: 'ok', time: now() }));
+
+  // --- Client error sink (privacy-safe, best-effort telemetry) ---
+  // The PWA beacons render/runtime errors here so failures in the field are
+  // visible in the same logs as the server's. The payload is validated and
+  // length-capped; we log a warning and acknowledge with 204 (no body).
+  app.post('/api/client-errors', async (req, reply) => {
+    const report = clientErrorSchema.parse(req.body);
+    app.log.warn({ clientError: report }, 'client error reported');
+    return reply.status(204).send();
+  });
 
   // --- Public feed ---
   app.get('/api/hazards', async (req) => {

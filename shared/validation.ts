@@ -74,3 +74,19 @@ export const moderationDecisionSchema = z.object({
   decision: z.enum(['approve', 'reject', 'resolve']),
   reason: z.string().trim().max(300).optional(),
 });
+
+/**
+ * A client-side error report. Deliberately small and PII-free: only a message,
+ * an optional stack and source label, and the path (never a query string). All
+ * fields are length-capped so a flood can't bloat the server logs.
+ */
+export const clientErrorSchema = z.object({
+  message: z.string().trim().min(1).max(1000),
+  stack: z.string().trim().max(4000).nullish(),
+  source: z.string().trim().max(120).optional().default('unknown'),
+  detail: z.string().trim().max(500).nullish(),
+  path: z.string().trim().max(200).nullish(),
+  at: z.number().int().positive().optional(),
+});
+
+export type ClientError = z.infer<typeof clientErrorSchema>;

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { reportError, resetTelemetryForTest } from '../../src/lib/telemetry.ts';
+import {
+  reportError,
+  resetTelemetryForTest,
+  installGlobalErrorHandlers,
+} from '../../src/lib/telemetry.ts';
 
 describe('reportError', () => {
   let beacon: ReturnType<typeof vi.fn>;
@@ -35,5 +39,43 @@ describe('reportError', () => {
     }
     // Capped at 25 per session.
     expect(beacon).toHaveBeenCalledTimes(25);
+  });
+});
+
+describe('installGlobalErrorHandlers', () => {
+  let beacon: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    resetTelemetryForTest();
+    beacon = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('navigator', { sendBeacon: beacon });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('reports uncaught errors and unhandled rejections, and detaches on dispose', () => {
+    // Capture the registered handlers and invoke them directly, rather than
+    // dispatching real global events (which Vitest's own runner would also
+    // catch and flag as unhandled).
+    const handlers: Record<string, EventListener> = {};
+    vi.spyOn(window, 'addEventListener').mockImplementation((type, h) => {
+      handlers[type as string] = h as EventListener;
+    });
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+
+    const dispose = installGlobalErrorHandlers();
+
+    handlers.error({ error: new Error('uncaught') } as unknown as Event);
+    expect(beacon).toHaveBeenCalledTimes(1);
+
+    handlers.unhandledrejection({ reason: new Error('rejected') } as unknown as Event);
+    expect(beacon).toHaveBeenCalledTimes(2);
+
+    dispose();
+    expect(removeSpy).toHaveBeenCalledTimes(2);
   });
 });
