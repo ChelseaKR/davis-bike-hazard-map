@@ -11,6 +11,7 @@ import { serverConfig } from './config.ts';
 import { createRepository } from './lib/repository.ts';
 import { createPhotoStore } from './lib/photoStore.ts';
 import { migrateInlinePhotos } from './lib/hazards.ts';
+import { createModeratorStore, bootstrapModerator } from './lib/moderators.ts';
 import { startBackups } from './lib/backup.ts';
 
 async function main() {
@@ -20,17 +21,34 @@ async function main() {
     console.error('DATABASE_URL is required in production. Refusing to start.');
     process.exit(1);
   }
+  if (serverConfig.isProd && !serverConfig.sessionSecret) {
+    console.error('SESSION_SECRET is required in production. Refusing to start.');
+    process.exit(1);
+  }
 
   const repo = await createRepository({
     databaseUrl: serverConfig.databaseUrl,
     dataFile: serverConfig.dataFile,
   });
   const photos = createPhotoStore(serverConfig.dataFile);
+  const moderators = await createModeratorStore(serverConfig.databaseUrl);
   // Move any legacy inline (base64) photos out of the JSON into the blob store.
   const migrated = await migrateInlinePhotos(repo, photos);
-  const app = await buildApp({ repo, photos, config: serverConfig });
+  const app = await buildApp({ repo, photos, moderators, config: serverConfig });
   if (migrated > 0) {
     app.log.info(`Migrated ${migrated} inline photo(s) to the blob store.`);
+  }
+
+  // Seed the bootstrap moderator on first boot (idempotent).
+  const created = await bootstrapModerator(
+    moderators,
+    serverConfig.moderatorBootstrap.username,
+    serverConfig.moderatorBootstrap.password,
+    Date.now(),
+  );
+  if (created) app.log.info(`Bootstrapped moderator account: ${created}`);
+  if (!serverConfig.isProd) {
+    app.log.info('Dev moderator login — username: admin, password: admin');
   }
 
   // Serve the built client (and SPA fallback) in production.
@@ -48,14 +66,6 @@ async function main() {
     } else {
       app.log.warn(`CLIENT_DIR "${root}" not found — run "npm run build" first.`);
     }
-  }
-
-  if (serverConfig.isProd && !serverConfig.moderationToken) {
-    app.log.error('MODERATION_TOKEN is required in production. Refusing to start.');
-    process.exit(1);
-  }
-  if (!serverConfig.isProd) {
-    app.log.info(`Dev moderator token: ${serverConfig.moderationToken}`);
   }
 
   // Periodic expiry sweep so the map self-cleans even with no traffic.

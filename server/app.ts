@@ -21,11 +21,19 @@ import {
   hazardFiltersSchema,
   moderationDecisionSchema,
   clientErrorSchema,
+  loginSchema,
 } from '../shared/validation.ts';
 import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
 import { serverConfig } from './config.ts';
 import type { Repository } from './lib/repository.ts';
 import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
+import {
+  MemoryModeratorStore,
+  DUMMY_PASSWORD_HASH,
+  type ModeratorStore,
+} from './lib/moderators.ts';
+import { verifyPassword } from './lib/password.ts';
+import { issueToken, verifyToken } from './lib/token.ts';
 import {
   confirmHazard,
   createHazard,
@@ -39,10 +47,16 @@ import { forwardToGogov } from './lib/gogov.ts';
 export interface AppDeps {
   repo: Repository;
   photos?: PhotoStore;
+  moderators?: ModeratorStore;
   now?: () => number;
   config?: typeof serverConfig;
   fetchImpl?: typeof fetch;
   logger?: boolean;
+}
+
+/** A request that has passed the moderator session check. */
+interface AuthedRequest extends FastifyRequest {
+  moderatorUsername?: string;
 }
 
 const ttlOpts = (config: typeof serverConfig) => ({
@@ -59,6 +73,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const { repo } = deps;
   const photos = deps.photos ?? new MemoryPhotoStore();
+  const moderators = deps.moderators ?? new MemoryModeratorStore();
 
   const app = Fastify({
     logger: deps.logger ?? (!config.isTest && { redact: ['req.headers.authorization'] }),
@@ -115,9 +130,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const requireModerator = async (req: FastifyRequest, reply: FastifyReply) => {
     const header = req.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (!config.moderationToken || token !== config.moderationToken) {
-      await reply.status(401).send({ error: 'unauthorized', message: 'Moderator token required.' });
+    const payload = token ? verifyToken(token, config.sessionSecret, now()) : null;
+    if (!payload) {
+      await reply.status(401).send({ error: 'unauthorized', message: 'Moderator sign-in required.' });
+      return;
     }
+    (req as AuthedRequest).moderatorUsername = payload.sub;
   };
 
   // --- Health ---
@@ -131,6 +149,34 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const report = clientErrorSchema.parse(req.body);
     app.log.warn({ clientError: report }, 'client error reported');
     return reply.status(204).send();
+  });
+
+  // --- Moderator auth ---
+  // Login is rate-limited harder than the global API to blunt credential
+  // stuffing. A miss still runs a hash compare (against a dummy) so the
+  // response time doesn't reveal whether the username exists.
+  app.post(
+    '/api/auth/login',
+    { config: { rateLimit: { max: 10, timeWindow: 15 * 60 * 1000 } } },
+    async (req, reply) => {
+      const { username, password } = loginSchema.parse(req.body);
+      const moderator = await moderators.findByUsername(username);
+      const ok = await verifyPassword(password, moderator?.passwordHash ?? DUMMY_PASSWORD_HASH);
+      if (!moderator || !ok) {
+        return reply
+          .status(401)
+          .send({ error: 'invalid_credentials', message: 'Wrong username or password.' });
+      }
+      const token = issueToken(username, config.sessionSecret, config.sessionTtlMs, now());
+      return { token, username, expiresAt: now() + config.sessionTtlMs };
+    },
+  );
+
+  // Exchange a still-valid session for a fresh one (sliding expiry).
+  app.post('/api/auth/refresh', { preHandler: requireModerator }, async (req) => {
+    const username = (req as AuthedRequest).moderatorUsername!;
+    const token = issueToken(username, config.sessionSecret, config.sessionTtlMs, now());
+    return { token, username, expiresAt: now() + config.sessionTtlMs };
   });
 
   // --- Public feed ---
@@ -219,7 +265,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.post('/api/moderation/:id', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const { decision, reason } = moderationDecisionSchema.parse(req.body);
-    const updated = await moderateHazard(repo, id, decision, now(), reason);
+    const by = (req as AuthedRequest).moderatorUsername;
+    const updated = await moderateHazard(repo, id, decision, now(), reason, by);
     if (!updated) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }

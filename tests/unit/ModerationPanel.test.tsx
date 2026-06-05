@@ -5,7 +5,7 @@ import { ModerationPanel } from '../../src/components/ModerationPanel.tsx';
 import { checkA11y } from '../axe.ts';
 import type { Hazard } from '../../shared/types.ts';
 
-const TOKEN_KEY = 'dbhm.moderatorToken';
+const SESSION_KEY = 'dbhm.session';
 
 const queueItem: Hazard = {
   id: 'h1',
@@ -26,12 +26,22 @@ function resp(body: unknown, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
 }
 
+function storedSession(token = 'sess-token') {
+  return JSON.stringify({ token, username: 'mod', expiresAt: Date.now() + 1_000_000 });
+}
+
 beforeEach(() => {
   localStorage.clear();
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    const headers = (init?.headers ?? {}) as Record<string, string>;
+    if (url.includes('/auth/login')) {
+      const { username, password } = JSON.parse(String(init?.body ?? '{}'));
+      return username === 'mod' && password === 'pw'
+        ? resp({ token: 'sess-token', username: 'mod', expiresAt: Date.now() + 1_000_000 })
+        : resp({ error: 'invalid_credentials', message: 'Wrong username or password.' }, 401);
+    }
     if (url.includes('/moderation/queue')) {
-      return headers.authorization === 'Bearer secret'
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      return headers.authorization === 'Bearer sess-token'
         ? resp({ hazards: [queueItem] })
         : resp({ error: 'unauthorized', message: 'no' }, 401);
     }
@@ -51,23 +61,39 @@ describe('ModerationPanel', () => {
     await checkA11y(container);
   });
 
-  it('rejects an invalid token entered in the form', async () => {
+  it('rejects wrong credentials at sign-in', async () => {
     const user = userEvent.setup();
     render(<ModerationPanel />);
-    await user.type(screen.getByLabelText(/moderator token/i), 'wrong');
-    await user.click(screen.getByRole('button', { name: /open queue/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/not accepted/i);
+    await user.type(screen.getByLabelText(/username/i), 'mod');
+    await user.type(screen.getByLabelText(/password/i), 'nope');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/wrong username or password/i);
   });
 
-  it('auto-opens the queue from a stored token and approves an item', async () => {
-    localStorage.setItem(TOKEN_KEY, 'secret');
+  it('signs in, opens the queue, and approves an item', async () => {
+    const user = userEvent.setup();
+    render(<ModerationPanel />);
+    await user.type(screen.getByLabelText(/username/i), 'mod');
+    await user.type(screen.getByLabelText(/password/i), 'pw');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    expect(await screen.findByText('Pending pothole')).toBeInTheDocument();
+    expect(screen.getByText(/pending review \(1\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/signed in as mod/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /approve/i }));
+    await waitFor(() => expect(screen.getByText(/queue is clear/i)).toBeInTheDocument());
+  });
+
+  it('auto-opens the queue from a stored session and can sign out', async () => {
+    localStorage.setItem(SESSION_KEY, storedSession());
     const user = userEvent.setup();
     render(<ModerationPanel />);
 
     expect(await screen.findByText('Pending pothole')).toBeInTheDocument();
-    expect(screen.getByText(/pending review \(1\)/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /approve/i }));
-    await waitFor(() => expect(screen.getByText(/queue is clear/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /sign out/i }));
+    // Back to the sign-in form.
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
   });
 });

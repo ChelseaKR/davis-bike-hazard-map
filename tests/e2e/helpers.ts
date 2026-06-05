@@ -1,16 +1,28 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
-export const MOD_TOKEN = 'e2e-token';
+// Bootstrap moderator credentials the e2e server is started with (playwright.config).
+export const MOD_USER = 'e2e';
+export const MOD_PASS = 'e2e-password';
 
 interface QueueHazard {
   id: string;
   description: string | null;
 }
 
+/** Sign in as the e2e moderator and return a session bearer token. */
+async function moderatorToken(request: APIRequestContext): Promise<string> {
+  const res = await request.post('/api/auth/login', {
+    headers: { 'content-type': 'application/json' },
+    data: { username: MOD_USER, password: MOD_PASS },
+  });
+  const body = (await res.json()) as { token: string };
+  return body.token;
+}
+
 /** Fetch the moderation queue (returns [] on any non-OK response). */
-async function fetchQueue(request: APIRequestContext): Promise<QueueHazard[]> {
+async function fetchQueue(request: APIRequestContext, token: string): Promise<QueueHazard[]> {
   const res = await request.get('/api/moderation/queue', {
-    headers: { authorization: `Bearer ${MOD_TOKEN}` },
+    headers: { authorization: `Bearer ${token}` },
   });
   if (!res.ok()) return [];
   const body = (await res.json()) as { hazards?: QueueHazard[] };
@@ -25,11 +37,12 @@ export async function waitAndApprove(
   request: APIRequestContext,
   description: string,
 ): Promise<string> {
+  const token = await moderatorToken(request);
   let id: string | undefined;
   await expect
     .poll(
       async () => {
-        id = (await fetchQueue(request)).find((h) => h.description === description)?.id;
+        id = (await fetchQueue(request, token)).find((h) => h.description === description)?.id;
         return Boolean(id);
       },
       { timeout: 15_000, intervals: [300, 600, 1000] },
@@ -37,7 +50,7 @@ export async function waitAndApprove(
     .toBe(true);
 
   await request.post(`/api/moderation/${id}`, {
-    headers: { authorization: `Bearer ${MOD_TOKEN}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     data: { decision: 'approve' },
   });
   return id!;

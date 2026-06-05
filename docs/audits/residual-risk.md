@@ -14,7 +14,7 @@ optional 311 hand-off. Trust boundary at the API; the client is untrusted.
 | R2 | **Info disclosure** — photo leaks a face/plate | Client blur offered + EXIF strip ×2 + moderation gate | Medium — blur is user-driven; a moderator may miss one. Mitigation: reject-on-doubt policy | moderation |
 | R3 | **Info disclosure** — precise location de-anonymises a reporter | ~70 m deterministic fuzzing; precise point server-only | Low — fuzz grid is a tunable trade-off (`DEFAULT_FUZZ_METERS`) | privacy reviewer |
 | R4 | **Spoofing/DoS** — spam or flooding | Per-IP global + per-hour report rate limits; idempotent writes; out-of-area rejection | Medium — no account/captcha; a determined actor can rotate IPs | maintainer |
-| R5 | **Elevation** — unauthorised moderation | Bearer token required on all moderation/hand-off routes; server is the authority | Medium — shared token (MVP). Move to per-user auth before scaling moderators | maintainer |
+| R5 | **Elevation** — unauthorised moderation | Per-moderator accounts (scrypt-hashed passwords) → signed, expiring session tokens required on all moderation/hand-off routes; login is rate-limited and constant-time; every decision is attributed to a named moderator | Low — first-party session tokens (no rotation/refresh-token revocation list yet); SESSION_SECRET rotation invalidates all sessions | maintainer |
 | R6 | **Tampering** — 311 adapter injection | Fixed, minimal payload contract; least-privilege; dry-run default | Low — only structured fields forwarded | maintainer |
 | R7 | **Repudiation/availability** — data loss on crash | Atomic file writes (temp+rename); idempotent client retries; **automatic timestamped snapshots** (`server/lib/backup.ts`, retained N deep) | Low — single-node store; snapshots are local, so copy them off-box for DR | ops |
 
@@ -26,7 +26,8 @@ optional 311 hand-off. Trust boundary at the API; the client is untrusted.
 
 ## Known limitations carried into v1
 
-- Shared moderator token (R5) and IP-only rate limiting (R4) are MVP-grade.
+- IP-only rate limiting (R4) is MVP-grade (no captcha). Moderator auth (R5) is
+  now per-user accounts with hashed passwords and expiring sessions.
 - Single-**process** JSON store (R7) — fine for launch volume; never run two
   instances against one file. Local snapshots cover crash recovery; PostGIS is
   the scale path (and replaces snapshots with managed backups / pg_dump).

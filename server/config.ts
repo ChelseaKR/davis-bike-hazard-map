@@ -39,8 +39,15 @@ export const serverConfig = {
   databaseUrl,
   dataFile,
 
-  /** Moderator bearer token. Required in production. */
-  moderationToken: process.env.MODERATION_TOKEN ?? (isProd ? '' : `dev-${randomUUID()}`),
+  /** Secret used to sign moderator session tokens. Required in production. */
+  sessionSecret: process.env.SESSION_SECRET ?? (isProd ? '' : `dev-secret-${randomUUID()}`),
+  /** Moderator session lifetime. */
+  sessionTtlMs: int('SESSION_TTL_HOURS', 12) * 60 * 60 * 1000,
+  /** Optional bootstrap moderator, created on first boot if absent. */
+  moderatorBootstrap: {
+    username: process.env.MODERATOR_USERNAME ?? (isProd ? undefined : 'admin'),
+    password: process.env.MODERATOR_PASSWORD ?? (isProd ? undefined : 'admin'),
+  },
 
   /** Optional 311/GOGov hand-off webhook. Empty => hand-off runs in dry-run. */
   gogovWebhookUrl: process.env.GOGOV_WEBHOOK_URL ?? '',

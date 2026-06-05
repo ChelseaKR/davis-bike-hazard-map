@@ -2,87 +2,150 @@
  * Lightweight moderation queue. Nothing reaches the public map until a
  * moderator approves it here (the "no unmoderated public photo feed" gate).
  *
- * Auth is a shared moderator token kept in localStorage on the moderator's
- * device — deliberately simple for a civic MVP; the server is the authority and
- * rejects every moderation call without a valid token.
+ * Auth is a per-moderator account: the moderator signs in with a username and
+ * password, the server returns a signed, expiring session token, and that token
+ * is sent as the bearer on every moderation call. The session is kept in
+ * localStorage so a refresh doesn't force a re-login; "Sign out" clears it.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { CATEGORY_LABELS, SEVERITY_LABELS, type Hazard } from '../../shared/types.ts';
-import { decideModeration, fetchModerationQueue } from '../lib/api.ts';
+import {
+  decideModeration,
+  fetchModerationQueue,
+  login,
+  ApiRequestError,
+  type Session,
+} from '../lib/api.ts';
 import { timeAgo } from '../lib/format.ts';
 import { HazardPhoto } from './HazardPhoto.tsx';
 
-const TOKEN_KEY = 'dbhm.moderatorToken';
+const SESSION_KEY = 'dbhm.session';
+
+function loadStoredSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as Session;
+    // Drop a session the client already knows is expired.
+    return s.expiresAt > Date.now() ? s : null;
+  } catch {
+    return null;
+  }
+}
 
 export function ModerationPanel() {
-  const [token, setToken] = useState(
-    () => localStorage.getItem(TOKEN_KEY) ?? '',
-  );
-  const [authed, setAuthed] = useState(false);
+  const [session, setSession] = useState<Session | null>(loadStoredSession);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [queue, setQueue] = useState<Hazard[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async (tok: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      setQueue(await fetchModerationQueue(tok));
-      setAuthed(true);
-      localStorage.setItem(TOKEN_KEY, tok);
-    } catch {
-      setAuthed(false);
-      setError('That moderator token was not accepted.');
-    } finally {
-      setBusy(false);
-    }
+  const signOut = useCallback((message?: string) => {
+    localStorage.removeItem(SESSION_KEY);
+    setSession(null);
+    setQueue([]);
+    setPassword('');
+    if (message) setError(message);
   }, []);
 
+  const load = useCallback(
+    async (tok: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        setQueue(await fetchModerationQueue(tok));
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.status === 401) {
+          signOut('Your session expired. Please sign in again.');
+        } else {
+          setError('Could not load the queue. Try again.');
+        }
+      } finally {
+        setBusy(false);
+      }
+    },
+    [signOut],
+  );
+
   useEffect(() => {
-    if (token) void load(token);
-    // Only auto-load once on mount with a stored token.
+    if (session) void load(session.token);
+    // Load once on mount with a stored session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const decide = async (
-    id: string,
-    decision: 'approve' | 'reject' | 'resolve',
-  ) => {
+  const signIn = async () => {
     setBusy(true);
+    setError(null);
     try {
-      await decideModeration(id, decision, token);
-      setQueue((q) => q.filter((h) => h.id !== id));
+      const s = await login(username.trim(), password);
+      localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+      setSession(s);
+      setPassword('');
+      await load(s.token);
     } catch {
-      setError('Could not record that decision. Try again.');
+      setError('Wrong username or password.');
     } finally {
       setBusy(false);
     }
   };
 
-  if (!authed) {
+  const decide = async (
+    id: string,
+    decision: 'approve' | 'reject' | 'resolve',
+  ) => {
+    if (!session) return;
+    setBusy(true);
+    try {
+      await decideModeration(id, decision, session.token);
+      setQueue((q) => q.filter((h) => h.id !== id));
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        signOut('Your session expired. Please sign in again.');
+      } else {
+        setError('Could not record that decision. Try again.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!session) {
     return (
       <section className="moderation" aria-label="Moderation sign-in">
-        <h2>Moderator access</h2>
+        <h2>Moderator sign-in</h2>
         <p className="hint">
           Reports stay hidden from the public map until a moderator approves
-          them. Enter your moderator token to review the queue.
+          them. Sign in with your moderator account to review the queue.
         </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void load(token);
+            void signIn();
           }}
         >
-          <label htmlFor="modToken">Moderator token</label>
+          <label htmlFor="modUser">Username</label>
           <input
-            id="modToken"
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            autoComplete="off"
+            id="modUser"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
           />
-          <button type="submit" className="btn btn-primary" disabled={busy || !token}>
-            {busy ? 'Checking…' : 'Open queue'}
+          <label htmlFor="modPass">Password</label>
+          <input
+            id="modPass"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={busy || !username || !password}
+          >
+            {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
         {error && (
@@ -98,8 +161,12 @@ export function ModerationPanel() {
     <section className="moderation" aria-label="Moderation queue">
       <div className="moderation-head">
         <h2>Pending review ({queue.length})</h2>
-        <button type="button" className="btn btn-small" onClick={() => load(token)}>
+        <span className="hint">Signed in as {session.username}</span>
+        <button type="button" className="btn btn-small" onClick={() => load(session.token)}>
           Refresh
+        </button>
+        <button type="button" className="btn btn-small" onClick={() => signOut()}>
+          Sign out
         </button>
       </div>
       {error && (

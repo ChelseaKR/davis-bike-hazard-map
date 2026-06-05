@@ -50,7 +50,8 @@ describe('App', () => {
   it('renders the moderation sign-in accessibly', async () => {
     const { container } = render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Moderate' }));
-    await screen.findByLabelText(/moderator token/i);
+    await screen.findByLabelText(/username/i);
+    await screen.findByLabelText(/password/i);
     await checkA11y(container);
   });
 });

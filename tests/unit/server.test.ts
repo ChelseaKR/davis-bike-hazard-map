@@ -2,17 +2,21 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../server/app.ts';
 import { MemoryRepository } from '../../server/lib/repository.ts';
+import { MemoryModeratorStore } from '../../server/lib/moderators.ts';
+import { hashPassword } from '../../server/lib/password.ts';
 import { serverConfig } from '../../server/config.ts';
 import { bytesToDataUrl, hasExif, dataUrlToBytes } from '../../shared/exif.ts';
 
-const TOKEN = 'test-moderator-token';
+const MOD_USER = 'mod';
+const MOD_PASS = 'correct horse battery staple';
 const DAY = 24 * 60 * 60 * 1000;
 
 const testConfig = {
   ...serverConfig,
   isProd: false,
   isTest: true,
-  moderationToken: TOKEN,
+  sessionSecret: 'test-session-secret',
+  sessionTtlMs: 12 * 60 * 60 * 1000,
   gogovWebhookUrl: '',
   gogovApiKey: '',
   corsOrigins: [],
@@ -24,6 +28,8 @@ const testConfig = {
 let clock = 1_700_000_000_000;
 let app: FastifyInstance;
 let repo: MemoryRepository;
+// A session bearer token for the seeded moderator, refreshed each test.
+let token: string;
 
 function jpegWithExif(): string {
   const bytes = Uint8Array.from([
@@ -48,8 +54,16 @@ const baseReport = {
 beforeEach(async () => {
   clock = 1_700_000_000_000;
   repo = new MemoryRepository();
-  app = await buildApp({ repo, config: testConfig, now: () => clock, logger: false });
+  const moderators = new MemoryModeratorStore();
+  await moderators.upsert({
+    username: MOD_USER,
+    passwordHash: await hashPassword(MOD_PASS),
+    createdAt: clock,
+  });
+  app = await buildApp({ repo, moderators, config: testConfig, now: () => clock, logger: false });
   await app.ready();
+  const res = await post('/api/auth/login', { username: MOD_USER, password: MOD_PASS });
+  token = res.json().token;
 });
 
 function post(url: string, body: unknown, headers: Record<string, string> = {}) {
@@ -98,7 +112,7 @@ describe('public feed: bbox + conditional requests', () => {
   async function approveOne() {
     const res = await post('/api/reports', baseReport);
     const id = res.json().hazard.id;
-    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${TOKEN}` });
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
     return id;
   }
 
@@ -147,7 +161,7 @@ describe('report intake and moderation gate', () => {
   it('fuzzes the public location (never exposes the precise point)', async () => {
     const res = await post('/api/reports', baseReport);
     const id = res.json().hazard.id;
-    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${TOKEN}` });
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
 
     const pub = await app.inject({ method: 'GET', url: '/api/hazards' });
     const hazard = pub.json().hazards[0];
@@ -192,10 +206,55 @@ describe('moderation auth', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/moderation/queue',
-      headers: { authorization: `Bearer ${TOKEN}` },
+      headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().hazards).toHaveLength(1);
+  });
+});
+
+describe('moderator accounts', () => {
+  it('issues a session on correct credentials', async () => {
+    const res = await post('/api/auth/login', { username: MOD_USER, password: MOD_PASS });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.username).toBe(MOD_USER);
+    expect(typeof body.token).toBe('string');
+    expect(body.expiresAt).toBeGreaterThan(clock);
+  });
+
+  it('rejects a wrong password and an unknown user the same way (401)', async () => {
+    const wrong = await post('/api/auth/login', { username: MOD_USER, password: 'nope' });
+    const unknown = await post('/api/auth/login', { username: 'ghost', password: 'whatever' });
+    expect(wrong.statusCode).toBe(401);
+    expect(unknown.statusCode).toBe(401);
+    expect(wrong.json().error).toBe('invalid_credentials');
+  });
+
+  it('records the acting moderator in the audit trail', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve', reason: 'clear' }, { authorization: `Bearer ${token}` });
+    const stored = (await repo.findById(id))!;
+    expect(stored.moderation.at(-1)).toMatchObject({ decision: 'approve', by: MOD_USER });
+  });
+
+  it('rejects an expired session token', async () => {
+    const { issueToken } = await import('../../server/lib/token.ts');
+    const expired = issueToken(MOD_USER, testConfig.sessionSecret, 1000, clock - 1_000_000);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/moderation/queue',
+      headers: { authorization: `Bearer ${expired}` },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('refreshes a valid session into a new token', async () => {
+    const res = await post('/api/auth/refresh', {}, { authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().username).toBe(MOD_USER);
+    expect(typeof res.json().token).toBe('string');
   });
 });
 
@@ -208,7 +267,7 @@ describe('photo privacy', () => {
     const pending = await app.inject({ method: 'GET', url: `/api/photos/${id}` });
     expect(pending.statusCode).toBe(404);
 
-    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${TOKEN}` });
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
 
     const ok = await app.inject({ method: 'GET', url: `/api/photos/${id}` });
     expect(ok.statusCode).toBe(200);
@@ -222,7 +281,7 @@ describe('photo privacy', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/moderation/queue',
-      headers: { authorization: `Bearer ${TOKEN}` },
+      headers: { authorization: `Bearer ${token}` },
     });
     const photoUrl = res.json().hazards[0].photoUrl as string;
     expect(photoUrl.startsWith('data:image/jpeg;base64,')).toBe(true);
@@ -243,7 +302,7 @@ describe('lifecycle', () => {
   it('confirms an approved hazard and increments the count', async () => {
     const res = await post('/api/reports', baseReport);
     const id = res.json().hazard.id;
-    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${TOKEN}` });
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
 
     const conf = await post(`/api/hazards/${id}/confirm`, {});
     expect(conf.statusCode).toBe(200);
@@ -260,7 +319,7 @@ describe('lifecycle', () => {
   it('rejected reports never become public', async () => {
     const res = await post('/api/reports', baseReport);
     const id = res.json().hazard.id;
-    await post(`/api/moderation/${id}`, { decision: 'reject' }, { authorization: `Bearer ${TOKEN}` });
+    await post(`/api/moderation/${id}`, { decision: 'reject' }, { authorization: `Bearer ${token}` });
     const pub = await app.inject({ method: 'GET', url: '/api/hazards' });
     expect(pub.json().hazards).toHaveLength(0);
   });
@@ -268,7 +327,7 @@ describe('lifecycle', () => {
   it('expires approved hazards past their TTL', async () => {
     const res = await post('/api/reports', baseReport);
     const id = res.json().hazard.id;
-    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${TOKEN}` });
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
 
     expect((await app.inject({ method: 'GET', url: '/api/hazards' })).json().hazards).toHaveLength(1);
     clock += 31 * DAY; // past the high-severity TTL
@@ -282,7 +341,7 @@ describe('filters', () => {
     const approve = async (clientId: string, over: Record<string, unknown>) => {
       const r = await post('/api/reports', { ...baseReport, clientId, ...over });
       const id = r.json().hazard.id;
-      await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${TOKEN}` });
+      await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
     };
     await approve('11111111-1111-4111-8111-111111111111', { category: 'pothole', severity: 'high' });
     await approve('22222222-2222-4222-8222-222222222222', {
@@ -308,7 +367,7 @@ describe('311 hand-off', () => {
     const handoff = await post(
       `/api/moderation/${id}/handoff`,
       {},
-      { authorization: `Bearer ${TOKEN}` },
+      { authorization: `Bearer ${token}` },
     );
     expect(handoff.statusCode).toBe(200);
     const result = handoff.json().result;

@@ -88,6 +88,12 @@ export const moderationDecisionSchema = z.object({
   reason: z.string().trim().max(300).optional(),
 });
 
+/** Moderator login credentials. */
+export const loginSchema = z.object({
+  username: z.string().trim().min(1).max(100),
+  password: z.string().min(1).max(200),
+});
+
 /**
  * A client-side error report. Deliberately small and PII-free: only a message,
  * an optional stack and source label, and the path (never a query string). All

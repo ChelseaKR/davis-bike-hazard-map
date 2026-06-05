@@ -81,7 +81,21 @@ export async function confirmHazard(id: string): Promise<{ hazard: Hazard }> {
   return request<{ hazard: Hazard }>(`/hazards/${id}/confirm`, { method: 'POST' });
 }
 
-/** Moderation: fetch the queue of pending hazards (requires a moderator token). */
+export interface Session {
+  token: string;
+  username: string;
+  expiresAt: number;
+}
+
+/** Moderator login. Returns a session token used as the bearer for moderation. */
+export async function login(username: string, password: string): Promise<Session> {
+  return request<Session>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+/** Moderation: fetch the queue of pending hazards (requires a session token). */
 export async function fetchModerationQueue(token: string): Promise<Hazard[]> {
   const { hazards } = await request<{ hazards: Hazard[] }>('/moderation/queue', {
     headers: { authorization: `Bearer ${token}` },

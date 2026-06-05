@@ -19,7 +19,7 @@ Davis cyclists hit the same hazards repeatedly; the city's 311 is underused and 
 ```bash
 make install        # install dependencies
 make dev            # client (Vite, :5173) + API server (:8787) with hot reload
-# open http://localhost:5173  — the dev API moderator token is printed to the log
+# open http://localhost:5173  — dev moderator login is admin / admin (printed to the log)
 ```
 
 Other entrypoints:
@@ -34,7 +34,7 @@ make seed           # load a first pass of demo hazards into ./data/hazards.json
 make help           # list all targets
 ```
 
-Configuration is via environment variables — see [`.env.example`](./.env.example). The app runs with all defaults unset (in-memory store, generated dev moderator token).
+Configuration is via environment variables — see [`.env.example`](./.env.example). The app runs with all defaults unset (in-memory store, a dev moderator account admin/admin).
 
 ## Project layout
 
@@ -61,12 +61,12 @@ CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs the same gate
 
 ## Operations (2 a.m. runbook)
 
-- **Run it:** `MODERATION_TOKEN=… DATABASE_URL=postgresql://… make start` (production serves the built client + API on `PORT`, default 8787). Both `MODERATION_TOKEN` and `DATABASE_URL` are **required** in production — the server refuses to start without them. (Dev can omit `DATABASE_URL` and fall back to a `DATABASE_PATH` JSON file or in-memory.)
+- **Run it:** `SESSION_SECRET=… DATABASE_URL=postgresql://… MODERATOR_USERNAME=… MODERATOR_PASSWORD=… make start` (production serves the built client + API on `PORT`, default 8787). `SESSION_SECRET` and `DATABASE_URL` are **required** in production — the server refuses to start without them; the bootstrap moderator is created on first boot. (Dev can omit `DATABASE_URL` and falls back to `DATABASE_PATH`/in-memory with an admin/admin account.)
 - **Health:** `GET /api/health` → `{ "status": "ok" }`. Put this behind your uptime check.
 - **Data (production):** PostgreSQL at `DATABASE_URL` (schema auto-created on boot; safe for multiple processes). Use your provider's managed backups / `pg_dump`.
 - **Data (dev fallback):** a single JSON file at `DATABASE_PATH`, written atomically (temp + rename). ⚠️ **Single-process only** — never run two instances against one file (there is no cross-process lock; concurrent writes corrupt it). The server takes **automatic timestamped snapshots** every `BACKUP_INTERVAL_HOURS` (default 6) into `BACKUP_DIR` (default `backups/` beside the data file), keeping the newest `BACKUP_RETAIN` (default 14). To restore, stop the server, copy a snapshot over `DATABASE_PATH`, restart. Photo bytes live separately in a `photos/` dir beside the data file (kept out of the JSON to keep it small) — back that dir up too. (Still copy snapshots off-box for disaster recovery.)
 - **Moderation queue depth** is the signal to watch: `GET /api/moderation/queue` (with the bearer token) — a growing queue means reports aren't being reviewed (SLA: 48 h).
-- **Rotate the moderator token:** change `MODERATION_TOKEN` and restart; moderators re-enter it in the Moderate tab.
+- **Moderator accounts:** each moderator signs in with a username + password (Moderate tab) and gets an expiring session token; the audit trail records who approved/rejected each report. Rotate `SESSION_SECRET` to invalidate all sessions; change a password by re-seeding `MODERATOR_PASSWORD` (or via the DB).
 - **311 down?** Hand-off degrades gracefully (returns a dry-run result, never throws) — the app keeps working; retry later.
 - **Map tiles:** OpenStreetMap. If tile usage gets heavy, self-host tiles and set `VITE_TILE_URL`.
 

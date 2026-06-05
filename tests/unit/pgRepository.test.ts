@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PostgresRepository } from '../../server/lib/pgRepository.ts';
+import { createModeratorStore, type ModeratorStore } from '../../server/lib/moderators.ts';
 import type { StoredHazard } from '../../server/lib/types.ts';
 
 const URL = process.env.TEST_DATABASE_URL;
@@ -100,5 +101,31 @@ suite('PostgresRepository', () => {
     expect(n).toBe(1);
     expect((await repo.findById('dead'))?.status).toBe('expired');
     expect((await repo.findById('live'))?.status).toBe('approved');
+  });
+});
+
+suite('PostgresModeratorStore', () => {
+  let store: ModeratorStore;
+
+  beforeAll(async () => {
+    store = await createModeratorStore(URL!);
+  });
+
+  beforeEach(async () => {
+    await (store as unknown as { pool: { query: (s: string) => Promise<unknown> } }).pool.query(
+      'TRUNCATE moderators',
+    );
+  });
+
+  it('upserts and reads back a moderator; updates the hash on conflict', async () => {
+    await store.upsert({ username: 'alice', passwordHash: 'h1', createdAt: 1 });
+    expect((await store.findByUsername('alice'))?.passwordHash).toBe('h1');
+    expect(await store.count()).toBe(1);
+
+    await store.upsert({ username: 'alice', passwordHash: 'h2', createdAt: 2 });
+    expect((await store.findByUsername('alice'))?.passwordHash).toBe('h2');
+    expect(await store.count()).toBe(1); // upsert, not a duplicate
+
+    expect(await store.findByUsername('ghost')).toBeUndefined();
   });
 });

@@ -38,8 +38,9 @@ export default defineConfig({
     // (e2e uses a throwaway in-memory store).
     command:
       'cross-env PWA_DISABLE=true npm run build && cross-env NODE_ENV=production ' +
-      'ALLOW_INMEMORY=true ' +
-      `MODERATION_TOKEN=e2e-token PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
+      'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret ' +
+      'MODERATOR_USERNAME=e2e MODERATOR_PASSWORD=e2e-password ' +
+      `PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
