@@ -80,9 +80,27 @@ function buildPopup(hazard: Hazard, onConfirm?: (id: string) => void): HTMLEleme
   return el;
 }
 
+interface MarkerEntry {
+  marker: L.Marker;
+  /** Last hazard `updatedAt` rendered, to skip no-op updates. */
+  updatedAt: number;
+}
+
+function makeMarker(hazard: Hazard, onConfirm?: (id: string) => void): L.Marker {
+  const marker = L.marker([hazard.location.lat, hazard.location.lng], {
+    icon: hazardIcon(hazard.severity),
+    keyboard: true,
+    title: `${CATEGORY_LABELS[hazard.category]}, ${SEVERITY_LABELS[hazard.severity]} severity`,
+    alt: `${CATEGORY_LABELS[hazard.category]} hazard marker`,
+  });
+  marker.bindPopup(() => buildPopup(hazard, onConfirm));
+  return marker;
+}
+
 function ClusterLayer({ hazards, onConfirm }: MapViewProps) {
   const map = useMap();
   const groupRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markersRef = useRef<Map<string, MarkerEntry>>(new Map());
 
   useEffect(() => {
     const group = L.markerClusterGroup({
@@ -91,26 +109,47 @@ function ClusterLayer({ hazards, onConfirm }: MapViewProps) {
     });
     groupRef.current = group;
     map.addLayer(group);
+    const markers = markersRef.current;
     return () => {
       map.removeLayer(group);
       groupRef.current = null;
+      markers.clear();
     };
   }, [map]);
 
+  // Reconcile markers against the latest hazards by id instead of clearing and
+  // re-adding everything — re-clustering the whole set on each refresh is the
+  // expensive part, and most markers are unchanged between refreshes.
   useEffect(() => {
     const group = groupRef.current;
     if (!group) return;
-    group.clearLayers();
-    for (const hazard of hazards) {
-      const marker = L.marker([hazard.location.lat, hazard.location.lng], {
-        icon: hazardIcon(hazard.severity),
-        keyboard: true,
-        title: `${CATEGORY_LABELS[hazard.category]}, ${SEVERITY_LABELS[hazard.severity]} severity`,
-        alt: `${CATEGORY_LABELS[hazard.category]} hazard marker`,
-      });
-      marker.bindPopup(() => buildPopup(hazard, onConfirm));
-      group.addLayer(marker);
+    const entries = markersRef.current;
+    const nextIds = new Set(hazards.map((h) => h.id));
+
+    // Remove markers for hazards that are gone.
+    for (const [id, entry] of entries) {
+      if (!nextIds.has(id)) {
+        group.removeLayer(entry.marker);
+        entries.delete(id);
+      }
     }
+
+    // Add new markers; update in place only when the hazard actually changed.
+    const toAdd: L.Marker[] = [];
+    for (const hazard of hazards) {
+      const existing = entries.get(hazard.id);
+      if (!existing) {
+        const marker = makeMarker(hazard, onConfirm);
+        entries.set(hazard.id, { marker, updatedAt: hazard.updatedAt });
+        toAdd.push(marker);
+      } else if (existing.updatedAt !== hazard.updatedAt) {
+        existing.marker.setLatLng([hazard.location.lat, hazard.location.lng]);
+        existing.marker.setIcon(hazardIcon(hazard.severity));
+        existing.marker.bindPopup(() => buildPopup(hazard, onConfirm));
+        existing.updatedAt = hazard.updatedAt;
+      }
+    }
+    if (toAdd.length) group.addLayers(toAdd);
   }, [hazards, onConfirm]);
 
   return null;

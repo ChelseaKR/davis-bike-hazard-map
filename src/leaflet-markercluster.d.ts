@@ -17,7 +17,9 @@ declare module 'leaflet' {
 
   interface MarkerClusterGroup extends FeatureGroup {
     addLayer(layer: Layer): this;
+    addLayers(layers: Layer[]): this;
     removeLayer(layer: Layer): this;
+    removeLayers(layers: Layer[]): this;
     clearLayers(): this;
     hasLayer(layer: Layer): boolean;
   }
