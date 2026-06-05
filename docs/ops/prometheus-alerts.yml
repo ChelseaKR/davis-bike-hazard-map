@@ -1,0 +1,43 @@
+# Example Prometheus alert rules for the Davis Bike Hazard Map.
+#
+# Scrape GET /api/metrics (Prometheus text format). The moderation backlog is
+# the operational signal to watch against the 48-hour first-review SLA.
+#
+#   scrape_configs:
+#     - job_name: dbhm
+#       metrics_path: /api/metrics
+#       static_configs:
+#         - targets: ['davis-bike-hazard-map.fly.dev']
+
+groups:
+  - name: dbhm-moderation
+    rules:
+      # Backlog growing — reports aren't being reviewed fast enough.
+      - alert: ModerationQueueBacklog
+        expr: dbhm_moderation_queue_depth > 25
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Moderation queue is backing up ({{ $value }} pending)'
+          description: 'More than 25 reports have waited > 30m. Review the queue.'
+
+      # SLA breach — the oldest unmoderated report is over 48 hours old.
+      - alert: ModerationSlaBreached
+        expr: dbhm_oldest_pending_age_seconds > 172800
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Moderation SLA breached (oldest pending > 48h)'
+          description: 'A report has waited longer than the 48-hour review SLA.'
+
+  - name: dbhm-availability
+    rules:
+      - alert: ApiDown
+        expr: up{job="dbhm"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Davis Bike Hazard Map API is unreachable'

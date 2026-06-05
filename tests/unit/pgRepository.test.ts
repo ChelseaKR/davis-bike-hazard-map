@@ -93,6 +93,14 @@ suite('PostgresRepository', () => {
     expect(inBox.map((h) => h.id)).toEqual(['b', 'a']); // faraway culled
   });
 
+  it('reports pending-queue stats (count + oldest createdAt)', async () => {
+    expect(await repo.pendingStats()).toEqual({ count: 0, oldestCreatedAt: null });
+    await repo.insert(hazard({ id: 'p1', clientId: 'p1', status: 'pending', createdAt: 200 }));
+    await repo.insert(hazard({ id: 'p2', clientId: 'p2', status: 'pending', createdAt: 100 }));
+    await repo.insert(hazard({ id: 'a1', clientId: 'a1', status: 'approved', createdAt: 50 }));
+    expect(await repo.pendingStats()).toEqual({ count: 2, oldestCreatedAt: 100 });
+  });
+
   it('expire transitions approved rows past their TTL', async () => {
     const now = 5000;
     await repo.insert(hazard({ id: 'live', clientId: 'l', status: 'approved', expiresAt: now + 1 }));

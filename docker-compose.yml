@@ -1,11 +1,8 @@
-# Local Postgres for development and integration tests.
+# Local stack: Postgres + the production-mode app (API serving the built PWA).
 #
-#   docker compose up -d db
-#   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dbhm npm run dev:server
+#   docker compose up -d db            # just the database for `npm run dev`, or
+#   docker compose up --build          # full prod-like stack on :8787
 #   TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dbhm_test npm test
-#
-# The app itself runs from `make dev` / the Dockerfile; this file only provides
-# the database dependency. (The app service is added in the deploy setup.)
 services:
   db:
     image: postgres:16-alpine
@@ -22,6 +19,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/dbhm
+      SESSION_SECRET: dev-compose-secret-change-me
+      MODERATOR_USERNAME: admin
+      MODERATOR_PASSWORD: admin
+      PORT: '8787'
+    ports:
+      - '8787:8787'
 
 volumes:
   dbhm-pgdata:

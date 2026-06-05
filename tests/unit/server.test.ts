@@ -83,6 +83,23 @@ describe('health', () => {
   });
 });
 
+describe('metrics', () => {
+  it('exposes moderation backlog gauges in Prometheus format', async () => {
+    await post('/api/reports', baseReport);
+    const res = await app.inject({ method: 'GET', url: '/api/metrics' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    expect(res.body).toContain('dbhm_moderation_queue_depth 1');
+    expect(res.body).toMatch(/dbhm_oldest_pending_age_seconds \d+/);
+  });
+
+  it('reports a zero backlog when the queue is empty', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/metrics' });
+    expect(res.body).toContain('dbhm_moderation_queue_depth 0');
+    expect(res.body).toContain('dbhm_oldest_pending_age_seconds 0');
+  });
+});
+
 describe('client error sink', () => {
   it('accepts a valid client error report with 204 and no body', async () => {
     const res = await post('/api/client-errors', {

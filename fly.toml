@@ -1,0 +1,38 @@
+# Fly.io deployment for the Davis Bike Hazard Map.
+#
+#   fly launch --no-deploy            # once, to create the app
+#   fly postgres create               # provision a database, then attach it:
+#   fly postgres attach <pg-app>      # sets DATABASE_URL as a secret
+#   fly secrets set SESSION_SECRET=$(openssl rand -hex 32) \
+#                   MODERATOR_USERNAME=you MODERATOR_PASSWORD=…  # first-boot moderator
+#   fly deploy
+#
+# DATABASE_URL and SESSION_SECRET are required in production (the server refuses
+# to boot without them). PORT is provided to the container by Fly.
+
+app = "davis-bike-hazard-map"
+primary_region = "sjc" # San Jose — closest to Davis, CA
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8787"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

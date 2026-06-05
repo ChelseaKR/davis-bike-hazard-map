@@ -141,6 +141,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Health ---
   app.get('/api/health', async () => ({ status: 'ok', time: now() }));
 
+  // --- Metrics (Prometheus text format) ---
+  // Moderation backlog is the operational signal to watch against the 48 h SLA;
+  // scrape this and alert on depth / oldest-pending age (see docs/ops).
+  app.get('/api/metrics', async (_req, reply) => {
+    const { count, oldestCreatedAt } = await repo.pendingStats();
+    const oldestAgeSeconds = oldestCreatedAt === null ? 0 : Math.max(0, (now() - oldestCreatedAt) / 1000);
+    const lines = [
+      '# HELP dbhm_moderation_queue_depth Reports awaiting moderation.',
+      '# TYPE dbhm_moderation_queue_depth gauge',
+      `dbhm_moderation_queue_depth ${count}`,
+      '# HELP dbhm_oldest_pending_age_seconds Age of the oldest unmoderated report.',
+      '# TYPE dbhm_oldest_pending_age_seconds gauge',
+      `dbhm_oldest_pending_age_seconds ${Math.round(oldestAgeSeconds)}`,
+    ];
+    return reply.header('content-type', 'text/plain; version=0.0.4').send(lines.join('\n') + '\n');
+  });
+
   // --- Client error sink (privacy-safe, best-effort telemetry) ---
   // The PWA beacons render/runtime errors here so failures in the field are
   // visible in the same logs as the server's. The payload is validated and

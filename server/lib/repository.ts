@@ -34,8 +34,17 @@ export interface Repository {
   listActive(now: number, bbox?: BBox): Promise<StoredHazard[]>;
   /** Transition approved rows past their TTL to `expired`; return the count. */
   expire(now: number): Promise<number>;
+  /** Moderation backlog stats for observability (cheap; no photos loaded). */
+  pendingStats(): Promise<PendingStats>;
   /** Release resources (e.g. a connection pool). Optional. */
   close?(): Promise<void>;
+}
+
+export interface PendingStats {
+  /** Reports awaiting moderation. */
+  count: number;
+  /** createdAt of the oldest pending report, or null if the queue is empty. */
+  oldestCreatedAt: number | null;
 }
 
 /** Whether a public point lies inside a bounding box (inclusive). */
@@ -93,6 +102,19 @@ export class MemoryRepository implements Repository {
     }
     if (expired) this.persist();
     return expired;
+  }
+
+  async pendingStats(): Promise<PendingStats> {
+    let count = 0;
+    let oldestCreatedAt: number | null = null;
+    for (const h of this.store.values()) {
+      if (h.status !== 'pending') continue;
+      count++;
+      if (oldestCreatedAt === null || h.createdAt < oldestCreatedAt) {
+        oldestCreatedAt = h.createdAt;
+      }
+    }
+    return { count, oldestCreatedAt };
   }
 
   /** No-op for the in-memory store; the file store overrides this. */

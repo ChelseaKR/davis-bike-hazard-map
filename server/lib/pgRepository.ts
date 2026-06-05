@@ -13,7 +13,7 @@
  */
 import { Pool, type PoolClient } from 'pg';
 import type { StoredHazard, ModerationAction, PhotoRef } from './types.ts';
-import type { BBox, Repository } from './repository.ts';
+import type { BBox, PendingStats, Repository } from './repository.ts';
 
 interface HazardRow {
   id: string;
@@ -188,6 +188,18 @@ export class PostgresRepository implements Repository {
       [now],
     );
     return res.rowCount ?? 0;
+  }
+
+  async pendingStats(): Promise<PendingStats> {
+    const res = await this.pool.query<{ count: string; oldest: string | null }>(
+      `SELECT COUNT(*)::text AS count, MIN(created_at)::text AS oldest
+       FROM hazards WHERE status = 'pending'`,
+    );
+    const row = res.rows[0];
+    return {
+      count: Number(row?.count ?? 0),
+      oldestCreatedAt: row?.oldest != null ? Number(row.oldest) : null,
+    };
   }
 
   async close(): Promise<void> {
