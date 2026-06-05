@@ -16,6 +16,15 @@ export interface ModerationAction {
   at: number;
 }
 
+/**
+ * Reference to a photo whose bytes live in the PhotoStore (keyed by hazard id),
+ * NOT inline in this record. Only the mime is kept here so the record stays
+ * small and the JSON file doesn't carry base64.
+ */
+export interface PhotoRef {
+  mime: string;
+}
+
 export interface StoredHazard {
   id: string;
   clientId: string;
@@ -26,8 +35,8 @@ export interface StoredHazard {
   preciseLocation: GeoPoint;
   /** Grid-snapped location safe for public display. */
   publicLocation: GeoPoint;
-  /** EXIF-stripped photo as a data URL, or null. Internal only. */
-  photo: string | null;
+  /** Reference to the EXIF-stripped photo in the PhotoStore, or null. */
+  photo: PhotoRef | null;
   status: HazardStatus;
   confirmations: number;
   createdAt: number;

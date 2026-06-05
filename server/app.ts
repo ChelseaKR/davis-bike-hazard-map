@@ -22,9 +22,9 @@ import {
   clientErrorSchema,
 } from '../shared/validation.ts';
 import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
-import { dataUrlToBytes } from '../shared/exif.ts';
 import { serverConfig } from './config.ts';
 import type { Repository } from './lib/repository.ts';
+import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
 import {
   confirmHazard,
   createHazard,
@@ -37,6 +37,7 @@ import { forwardToGogov } from './lib/gogov.ts';
 
 export interface AppDeps {
   repo: Repository;
+  photos?: PhotoStore;
   now?: () => number;
   config?: typeof serverConfig;
   fetchImpl?: typeof fetch;
@@ -56,6 +57,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const now = deps.now ?? (() => Date.now());
   const fetchImpl = deps.fetchImpl ?? fetch;
   const { repo } = deps;
+  const photos = deps.photos ?? new MemoryPhotoStore();
 
   const app = Fastify({
     logger: deps.logger ?? (!config.isTest && { redact: ['req.headers.authorization'] }),
@@ -163,7 +165,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
     async (req, reply) => {
       const report = reportSubmissionSchema.parse(req.body);
-      const stored = createHazard(repo, report, now(), ttlOpts(config));
+      const stored = createHazard(repo, photos, report, now(), ttlOpts(config));
       return reply.status(201).send({ hazard: toPublic(stored) });
     },
   );
@@ -185,16 +187,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (!hazard || !hazard.photo || hazard.status !== 'approved' || hazard.expiresAt <= now()) {
       return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
     }
-    const { bytes, mime } = dataUrlToBytes(hazard.photo);
+    const bytes = photos.get(id);
+    if (!bytes) {
+      return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
+    }
     return reply
-      .header('content-type', mime)
+      .header('content-type', hazard.photo.mime)
       .header('cache-control', 'public, max-age=3600')
       .send(Buffer.from(bytes));
   });
 
   // --- Moderation (auth) ---
   app.get('/api/moderation/queue', { preHandler: requireModerator }, async () => ({
-    hazards: listModerationQueue(repo),
+    hazards: listModerationQueue(repo, photos),
   }));
 
   app.post('/api/moderation/:id', { preHandler: requireModerator }, async (req, reply) => {

@@ -9,11 +9,19 @@ import fastifyStatic from '@fastify/static';
 import { buildApp } from './app.ts';
 import { serverConfig } from './config.ts';
 import { createRepository } from './lib/repository.ts';
+import { createPhotoStore } from './lib/photoStore.ts';
+import { migrateInlinePhotos } from './lib/hazards.ts';
 import { startBackups } from './lib/backup.ts';
 
 async function main() {
   const repo = createRepository(serverConfig.dataFile);
-  const app = await buildApp({ repo, config: serverConfig });
+  const photos = createPhotoStore(serverConfig.dataFile);
+  // Move any legacy inline (base64) photos out of the JSON into the blob store.
+  const migrated = migrateInlinePhotos(repo, photos);
+  const app = await buildApp({ repo, photos, config: serverConfig });
+  if (migrated > 0) {
+    app.log.info(`Migrated ${migrated} inline photo(s) to the blob store.`);
+  }
 
   // Serve the built client (and SPA fallback) in production.
   if (serverConfig.serveClient) {

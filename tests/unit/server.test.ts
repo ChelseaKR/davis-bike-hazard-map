@@ -188,6 +188,15 @@ describe('photo privacy', () => {
     expect(photoUrl.startsWith('data:image/jpeg;base64,')).toBe(true);
     expect(hasExif(dataUrlToBytes(photoUrl).bytes)).toBe(false);
   });
+
+  it('keeps photo bytes OUT of the persisted record (only a { mime } ref)', async () => {
+    const res = await post('/api/reports', { ...baseReport, photo: jpegWithExif() });
+    const id = res.json().hazard.id;
+    const stored = repo.findById(id)!;
+    expect(stored.photo).toEqual({ mime: 'image/jpeg' });
+    // The serialized record must not carry the base64 blob.
+    expect(JSON.stringify(stored)).not.toContain('base64');
+  });
 });
 
 describe('lifecycle', () => {
@@ -274,5 +283,40 @@ describe('311 hand-off', () => {
     const id = res.json().hazard.id;
     const handoff = await post(`/api/moderation/${id}/handoff`, {});
     expect(handoff.statusCode).toBe(401);
+  });
+});
+
+describe('legacy inline-photo migration', () => {
+  it('moves a base64 data-URL photo into the blob store and leaves a { mime } ref', async () => {
+    const { migrateInlinePhotos } = await import('../../server/lib/hazards.ts');
+    const { MemoryPhotoStore } = await import('../../server/lib/photoStore.ts');
+    const photos = new MemoryPhotoStore();
+    const r = new MemoryRepository();
+
+    // A record in the OLD shape: photo is an inline data URL string.
+    const dataUrl = bytesToDataUrl(new Uint8Array([1, 2, 3]), 'image/jpeg');
+    r.insert({
+      id: 'leg-1',
+      clientId: 'cid-1',
+      category: 'pothole',
+      severity: 'high',
+      description: null,
+      preciseLocation: { lat: 38.54, lng: -121.74 },
+      publicLocation: { lat: 38.54, lng: -121.74 },
+      photo: dataUrl as unknown as { mime: string },
+      status: 'approved',
+      confirmations: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      expiresAt: 9_999_999_999_999,
+      moderation: [],
+    });
+
+    const migrated = migrateInlinePhotos(r, photos);
+    expect(migrated).toBe(1);
+    expect(r.findById('leg-1')!.photo).toEqual({ mime: 'image/jpeg' });
+    expect(Array.from(photos.get('leg-1')!)).toEqual([1, 2, 3]);
+    // Idempotent: a second run migrates nothing.
+    expect(migrateInlinePhotos(r, photos)).toBe(0);
   });
 });

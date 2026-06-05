@@ -7,6 +7,7 @@
  */
 import { serverConfig } from '../server/config.ts';
 import { createRepository } from '../server/lib/repository.ts';
+import { createPhotoStore } from '../server/lib/photoStore.ts';
 import { createHazard, moderateHazard } from '../server/lib/hazards.ts';
 import { newId } from '../server/lib/id.ts';
 import type { Severity } from '../shared/types.ts';
@@ -64,6 +65,7 @@ const SEEDS: Omit<ValidatedReport, 'clientId' | 'capturedAt'>[] = [
 function main() {
   const dataFile = serverConfig.dataFile || './data/hazards.json';
   const repo = createRepository(dataFile);
+  const photos = createPhotoStore(dataFile);
   const now = Date.now();
 
   let created = 0;
@@ -74,7 +76,7 @@ function main() {
       // Stagger captures over the past few days for realistic recency.
       capturedAt: now - (i + 1) * 12 * 60 * 60 * 1000,
     };
-    const stored = createHazard(repo, report, report.capturedAt, ttlOpts);
+    const stored = createHazard(repo, photos, report, report.capturedAt, ttlOpts);
     moderateHazard(repo, stored.id, 'approve', report.capturedAt);
     created++;
   });

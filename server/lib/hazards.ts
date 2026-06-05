@@ -12,7 +12,8 @@ import { fuzzCoordinate } from '../../shared/geo.ts';
 import { dataUrlToBytes, bytesToDataUrl, stripExifBytes } from '../../shared/exif.ts';
 import { newId } from './id.ts';
 import type { Repository } from './repository.ts';
-import type { ModerationAction, StoredHazard } from './types.ts';
+import type { PhotoStore } from './photoStore.ts';
+import type { ModerationAction, PhotoRef, StoredHazard } from './types.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -20,13 +21,18 @@ interface CreateOptions {
   ttlDays: Record<Severity, number>;
 }
 
+interface SanitizedPhoto {
+  bytes: Uint8Array;
+  mime: string;
+}
+
 /** Server-side EXIF backstop: re-strip JPEG bytes even though the client did. */
-function sanitizePhoto(photo: string | null): string | null {
+function sanitizePhoto(photo: string | null): SanitizedPhoto | null {
   if (!photo) return null;
   try {
     const { bytes, mime } = dataUrlToBytes(photo);
-    if (mime !== 'image/jpeg') return photo;
-    return bytesToDataUrl(stripExifBytes(bytes), mime);
+    if (mime !== 'image/jpeg') return { bytes, mime };
+    return { bytes: stripExifBytes(bytes), mime };
   } catch {
     // Unparseable photo => drop it rather than store something suspect.
     return null;
@@ -43,6 +49,7 @@ function expiryFor(severity: Severity, createdAt: number, ttlDays: Record<Severi
  */
 export function createHazard(
   repo: Repository,
+  photos: PhotoStore,
   report: ValidatedReport,
   now: number,
   opts: CreateOptions,
@@ -50,15 +57,23 @@ export function createHazard(
   const existing = repo.findByClientId(report.clientId);
   if (existing) return existing;
 
+  const id = newId();
+  const sanitized = sanitizePhoto(report.photo);
+  let photo: PhotoRef | null = null;
+  if (sanitized) {
+    photos.put(id, sanitized.bytes);
+    photo = { mime: sanitized.mime };
+  }
+
   const stored: StoredHazard = {
-    id: newId(),
+    id,
     clientId: report.clientId,
     category: report.category,
     severity: report.severity,
     description: report.description ?? null,
     preciseLocation: report.location,
     publicLocation: fuzzCoordinate(report.location),
-    photo: sanitizePhoto(report.photo),
+    photo,
     status: 'pending',
     confirmations: 0,
     createdAt: now,
@@ -149,11 +164,16 @@ export function toPublic(h: StoredHazard): Hazard {
 
 /**
  * Project for the MODERATION queue. The moderator must SEE the photo to judge
- * it, so it is inlined here (this response is auth-gated); it is never exposed
- * through the public photo route while the hazard is still pending.
+ * it, so it is inlined here as a data URL (this response is auth-gated); it is
+ * never exposed through the public photo route while the hazard is pending.
  */
-export function toModeration(h: StoredHazard): Hazard {
-  return { ...toPublic(h), photoUrl: h.photo };
+export function toModeration(h: StoredHazard, photos: PhotoStore): Hazard {
+  let photoUrl: string | null = null;
+  if (h.photo) {
+    const bytes = photos.get(h.id);
+    if (bytes) photoUrl = bytesToDataUrl(bytes, h.photo.mime);
+  }
+  return { ...toPublic(h), photoUrl };
 }
 
 /** The public feed: approved and not expired. */
@@ -167,10 +187,33 @@ export function listPublic(repo: Repository, now: number): Hazard[] {
 }
 
 /** The moderation queue: everything still pending review, oldest first. */
-export function listModerationQueue(repo: Repository): Hazard[] {
+export function listModerationQueue(repo: Repository, photos: PhotoStore): Hazard[] {
   return repo
     .all()
     .filter((h) => h.status === 'pending')
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map(toModeration);
+    .map((h) => toModeration(h, photos));
+}
+
+/**
+ * One-time migration: older records stored the photo inline as a base64 data
+ * URL string. Move any such bytes into the PhotoStore and replace the field
+ * with a small { mime } reference. Safe to run on every startup (idempotent).
+ */
+export function migrateInlinePhotos(repo: Repository, photos: PhotoStore): number {
+  let migrated = 0;
+  for (const h of repo.all()) {
+    const legacy = (h as { photo: unknown }).photo;
+    if (typeof legacy !== 'string') continue;
+    try {
+      const { bytes, mime } = dataUrlToBytes(legacy);
+      photos.put(h.id, bytes);
+      repo.update(h.id, { photo: { mime } });
+      migrated++;
+    } catch {
+      // Unparseable legacy photo: drop the reference rather than keep junk.
+      repo.update(h.id, { photo: null });
+    }
+  }
+  return migrated;
 }
