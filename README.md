@@ -4,6 +4,8 @@
 
 **Status:** `Beta` · **Track:** Civic (shippable product) · **License:** MIT · **Data:** open
 
+> **Running the private beta?** See [`BETA.md`](./BETA.md) for one-time provisioning, the preview link, and what to watch.
+
 ## Why it matters
 Davis cyclists hit the same hazards repeatedly; the city's 311 is underused and reports vanish into a queue. A fast, public, local map turns scattered private frustration into shared, actionable, open data — and is the kind of tangible civic thing real neighbors will actually use.
 

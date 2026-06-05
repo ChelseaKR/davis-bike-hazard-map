@@ -1,0 +1,33 @@
+name: Deploy (Fly.io)
+
+# Auto-deploys the beta on every push to main, once a FLY_API_TOKEN secret is
+# configured (Settings → Secrets and variables → Actions). Until then the
+# deploy step is skipped cleanly, so this workflow stays green. Can also be run
+# on demand from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-fly
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Fly.io
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        if: ${{ env.FLY_API_TOKEN != '' }}
+        run: flyctl deploy --remote-only
+      - name: Skipped (no token)
+        if: ${{ env.FLY_API_TOKEN == '' }}
+        run: echo "FLY_API_TOKEN not set — skipping deploy. See BETA.md to configure."
