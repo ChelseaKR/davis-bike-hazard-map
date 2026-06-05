@@ -32,6 +32,14 @@ test.describe('accessibility', () => {
     expect(results.violations).toEqual([]);
   });
 
+  test('moderation sign-in has no WCAG A/AA violations', async ({ page }) => {
+    await page.goto('/');
+    await openTab(page, 'Moderate');
+    await page.getByLabel(/username/i).waitFor();
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
   test('primary task is keyboard reachable', async ({ page }) => {
     await page.goto('/');
     // Tab through the nav and activate the Report tab with the keyboard.

@@ -11,11 +11,14 @@ unmoderated public photo feed** — this is a launch gate, not a nice-to-have.
 
 1. A report arrives as `pending`. It is invisible on the map/list, and its photo
    is not servable to the public (`GET /api/photos/:id` 404s until approved).
-2. A moderator authenticates with a bearer token and reviews the queue
+2. A moderator signs in to their **named account** (username + scrypt-hashed
+   password → a signed, expiring session token) and reviews the queue
    (`GET /api/moderation/queue`). The photo is inlined in that auth-gated
    response so it can be judged; it is never exposed publicly while pending.
 3. The moderator **approves** (becomes public, fuzzed), **rejects** (never
-   public), or later **resolves** (cleared from the map).
+   public), or later **resolves** (cleared from the map). Every decision is
+   recorded in the report's `moderation[]` trail **with the moderator's name**,
+   so actions are attributable.
 4. The map self-cleans: approved hazards expire after a severity-based TTL.
 
 ## What gets rejected
@@ -42,6 +45,7 @@ unmoderated public photo feed** — this is a launch gate, not a nice-to-have.
 - [x] No public exposure before approval — **auto-gated** (server tests:
   "keeps it out of the public feed until approved", photo gating).
 - [x] Moderation endpoints require auth — **auto-gated** (server auth tests).
+- [x] Per-moderator accounts + attributable audit trail — **auto-gated** (auth + `by` tests).
 - [x] Out-of-area / spam resistance — **auto-gated** (validation + rate-limit).
 - [ ] Moderation guidelines + reviewer roster — **review-gated** (operational sign-off pre-launch).
 

@@ -37,7 +37,7 @@ fully accessible List view** that renders the identical filtered dataset
 | File a report | Tab to "Report" → Enter → choose type/severity → "Use my location" → "Submit" | Pass (keyboard-only e2e: `a11y.spec.ts › primary task is keyboard reachable`) |
 | Browse hazards without the map | Tab to "List" → arrow/Tab through cards → "I saw this too" | Pass |
 | Filter | Tab to filters → toggle category chips / selects | Pass |
-| Moderate | Tab to "Moderate" → token field → queue → Approve/Reject | Pass |
+| Moderate | Tab to "Moderate" → username + password → queue → Approve/Reject | Pass (full-page axe: `a11y.spec.ts › moderation sign-in`) |
 
 - Visible focus: global `:focus-visible` outline (3px). 
 - Severity uses shape (▲ ◆ ⬢) + text label + colour.
@@ -50,6 +50,7 @@ fully accessible List view** that renders the identical filtered dataset
 - [x] Keyboard completion of every primary task — **auto-gated** (Playwright keyboard test).
 - [x] Map/list parity (same data, list independent of map) — **auto-gated** (unit test).
 - [x] Severity not by colour alone — **review-gated** (this report).
-- [ ] Screen-reader walkthrough (VoiceOver/NVDA) sign-off — **review-gated** (pending human sign-off before public launch).
+- [x] Screen-reader **walkthrough script** committed + code-level SR affordances verified and regression-guarded — see [`screen-reader-walkthrough.md`](./screen-reader-walkthrough.md).
+- [ ] Human VoiceOver + NVDA pass against that script — **review-gated** (final sign-off before public launch; script is ready to run).
 
-**Last verified: 2026-05-31 · Recheck cadence: per release.**
+**Last verified: 2026-06-05 (SR script + Moderate-tab axe added) · Recheck cadence: per release.**

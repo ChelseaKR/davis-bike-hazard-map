@@ -50,7 +50,8 @@ describe('ReportForm', () => {
     await waitFor(() => expect(submit).toBeEnabled());
     await userEvent.click(submit);
 
-    expect(await screen.findByText(/report saved/i)).toBeInTheDocument();
+    // Success is announced via a live region (SR walkthrough §2).
+    expect(await screen.findByRole('status')).toHaveTextContent(/report saved/i);
     const stored = await getAllReports();
     expect(stored).toHaveLength(1);
     expect(stored[0].submission.category).toBe('glass_debris');
