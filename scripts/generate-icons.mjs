@@ -100,6 +100,7 @@ function pinPixel(size, maskable) {
 
 mkdirSync(OUT_DIR, { recursive: true });
 const targets = [
+  { name: 'icon-180.png', size: 180, maskable: false }, // iOS apple-touch-icon
   { name: 'icon-192.png', size: 192, maskable: false },
   { name: 'icon-512.png', size: 512, maskable: false },
   { name: 'icon-512-maskable.png', size: 512, maskable: true },

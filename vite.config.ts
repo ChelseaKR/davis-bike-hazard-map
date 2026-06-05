@@ -49,8 +49,11 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
-        // App shell: navigations fall back to the cached index when offline.
+        // App shell: navigations fall back to the cached index when offline, so
+        // a cold launch with no network still boots the PWA (the last hazard
+        // payload and map tiles come from the runtime caches below).
         navigateFallback: 'index.html',
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             // OpenStreetMap raster tiles — cache-first so the last-seen area

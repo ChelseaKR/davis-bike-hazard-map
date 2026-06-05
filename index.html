@@ -12,7 +12,12 @@
       content="Crowdsourced, offline-first cycling-hazard map for Davis, CA. Report potholes, glass, and blocked bike lanes from your phone."
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- iOS add-to-home-screen: explicit 180px icon + standalone web-app meta. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bike Hazards" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Davis Bike Hazard Map</title>
   </head>
   <body>
