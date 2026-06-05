@@ -14,6 +14,7 @@ import Fastify, {
 import rateLimit from '@fastify/rate-limit';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import { createHash } from 'node:crypto';
 import { ZodError } from 'zod';
 import {
   reportSubmissionSchema,
@@ -133,9 +134,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   // --- Public feed ---
-  app.get('/api/hazards', async (req) => {
+  app.get('/api/hazards', async (req, reply) => {
     const filters = hazardFiltersSchema.parse(parseHazardQuery(req.query));
-    let hazards = listPublic(repo, now());
+    // bbox is pushed down to the store (SQL) for spatial culling at scale.
+    let hazards = await listPublic(repo, now(), filters.bbox);
 
     if (filters.categories?.length) {
       const set = new Set(filters.categories);
@@ -149,7 +151,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const cutoff = now() - filters.withinDays * 24 * 60 * 60 * 1000;
       hazards = hazards.filter((h) => h.updatedAt >= cutoff);
     }
-    return { hazards };
+
+    // Conditional request: hash the payload so repeat polls (every 30s) get a
+    // cheap 304 instead of re-downloading the whole feed.
+    const body = JSON.stringify({ hazards });
+    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+    return reply
+      .header('etag', etag)
+      .header('cache-control', 'no-cache')
+      .header('content-type', 'application/json')
+      .send(body);
   });
 
   // --- Submit a report (idempotent on clientId) ---
@@ -165,7 +179,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
     async (req, reply) => {
       const report = reportSubmissionSchema.parse(req.body);
-      const stored = createHazard(repo, photos, report, now(), ttlOpts(config));
+      const stored = await createHazard(repo, photos, report, now(), ttlOpts(config));
       return reply.status(201).send({ hazard: toPublic(stored) });
     },
   );
@@ -173,7 +187,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Confirm a hazard ("I saw this too") ---
   app.post('/api/hazards/:id/confirm', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const updated = confirmHazard(repo, id, now(), ttlOpts(config));
+    const updated = await confirmHazard(repo, id, now(), ttlOpts(config));
     if (!updated) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found or not active.' });
     }
@@ -183,7 +197,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Serve a moderated photo (approved + live only) ---
   app.get('/api/photos/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const hazard = repo.findById(id);
+    const hazard = await repo.findById(id);
     if (!hazard || !hazard.photo || hazard.status !== 'approved' || hazard.expiresAt <= now()) {
       return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
     }
@@ -199,13 +213,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   // --- Moderation (auth) ---
   app.get('/api/moderation/queue', { preHandler: requireModerator }, async () => ({
-    hazards: listModerationQueue(repo, photos),
+    hazards: await listModerationQueue(repo, photos),
   }));
 
   app.post('/api/moderation/:id', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const { decision, reason } = moderationDecisionSchema.parse(req.body);
-    const updated = moderateHazard(repo, id, decision, now(), reason);
+    const updated = await moderateHazard(repo, id, decision, now(), reason);
     if (!updated) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
@@ -215,7 +229,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Optional 311/GOGov hand-off (moderator-triggered, least privilege) ---
   app.post('/api/moderation/:id/handoff', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const hazard = repo.findById(id);
+    const hazard = await repo.findById(id);
     if (!hazard) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
@@ -239,5 +253,12 @@ function parseHazardQuery(query: unknown): Record<string, unknown> {
   }
   if (typeof q.minSeverity === 'string' && q.minSeverity) out.minSeverity = q.minSeverity;
   if (typeof q.withinDays === 'string' && q.withinDays) out.withinDays = q.withinDays;
+  // bbox=minLat,minLng,maxLat,maxLng (Leaflet getBounds order: S,W,N,E).
+  if (typeof q.bbox === 'string' && q.bbox) {
+    const parts = q.bbox.split(',').map(Number);
+    if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
+      out.bbox = { minLat: parts[0], minLng: parts[1], maxLat: parts[2], maxLng: parts[3] };
+    }
+  }
   return out;
 }

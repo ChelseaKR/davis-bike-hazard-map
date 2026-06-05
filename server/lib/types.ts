@@ -14,6 +14,8 @@ export interface ModerationAction {
   decision: 'approve' | 'reject' | 'resolve';
   reason?: string;
   at: number;
+  /** Username of the moderator who took the action (audit trail). */
+  by?: string;
 }
 
 /**

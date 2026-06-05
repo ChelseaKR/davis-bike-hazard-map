@@ -94,6 +94,46 @@ describe('client error sink', () => {
   });
 });
 
+describe('public feed: bbox + conditional requests', () => {
+  async function approveOne() {
+    const res = await post('/api/reports', baseReport);
+    const id = res.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${TOKEN}` });
+    return id;
+  }
+
+  it('culls hazards outside the bbox', async () => {
+    await approveOne();
+    // A box around Davis includes it...
+    const inBox = await app.inject({
+      method: 'GET',
+      url: '/api/hazards?bbox=38.52,-121.82,38.59,-121.68',
+    });
+    expect(inBox.json().hazards).toHaveLength(1);
+    // ...a box over the Sierra does not.
+    const outBox = await app.inject({
+      method: 'GET',
+      url: '/api/hazards?bbox=40.0,-120.0,40.1,-119.9',
+    });
+    expect(outBox.json().hazards).toHaveLength(0);
+  });
+
+  it('serves an ETag and answers a matching If-None-Match with 304', async () => {
+    await approveOne();
+    const first = await app.inject({ method: 'GET', url: '/api/hazards' });
+    expect(first.statusCode).toBe(200);
+    const etag = first.headers.etag as string;
+    expect(etag).toBeTruthy();
+
+    const second = await app.inject({
+      method: 'GET',
+      url: '/api/hazards',
+      headers: { 'if-none-match': etag },
+    });
+    expect(second.statusCode).toBe(304);
+  });
+});
+
 describe('report intake and moderation gate', () => {
   it('accepts a report but keeps it out of the public feed until approved', async () => {
     const res = await post('/api/reports', baseReport);
@@ -128,7 +168,7 @@ describe('report intake and moderation gate', () => {
     const a = await post('/api/reports', baseReport);
     const b = await post('/api/reports', baseReport);
     expect(a.json().hazard.id).toBe(b.json().hazard.id);
-    expect(repo.all()).toHaveLength(1);
+    expect(await repo.all()).toHaveLength(1);
   });
 });
 
@@ -192,7 +232,7 @@ describe('photo privacy', () => {
   it('keeps photo bytes OUT of the persisted record (only a { mime } ref)', async () => {
     const res = await post('/api/reports', { ...baseReport, photo: jpegWithExif() });
     const id = res.json().hazard.id;
-    const stored = repo.findById(id)!;
+    const stored = (await repo.findById(id))!;
     expect(stored.photo).toEqual({ mime: 'image/jpeg' });
     // The serialized record must not carry the base64 blob.
     expect(JSON.stringify(stored)).not.toContain('base64');
@@ -233,7 +273,7 @@ describe('lifecycle', () => {
     expect((await app.inject({ method: 'GET', url: '/api/hazards' })).json().hazards).toHaveLength(1);
     clock += 31 * DAY; // past the high-severity TTL
     expect((await app.inject({ method: 'GET', url: '/api/hazards' })).json().hazards).toHaveLength(0);
-    expect(repo.findById(id)?.status).toBe('expired');
+    expect((await repo.findById(id))?.status).toBe('expired');
   });
 });
 
@@ -295,7 +335,7 @@ describe('legacy inline-photo migration', () => {
 
     // A record in the OLD shape: photo is an inline data URL string.
     const dataUrl = bytesToDataUrl(new Uint8Array([1, 2, 3]), 'image/jpeg');
-    r.insert({
+    await r.insert({
       id: 'leg-1',
       clientId: 'cid-1',
       category: 'pothole',
@@ -312,11 +352,11 @@ describe('legacy inline-photo migration', () => {
       moderation: [],
     });
 
-    const migrated = migrateInlinePhotos(r, photos);
+    const migrated = await migrateInlinePhotos(r, photos);
     expect(migrated).toBe(1);
-    expect(r.findById('leg-1')!.photo).toEqual({ mime: 'image/jpeg' });
+    expect((await r.findById('leg-1'))!.photo).toEqual({ mime: 'image/jpeg' });
     expect(Array.from(photos.get('leg-1')!)).toEqual([1, 2, 3]);
     // Idempotent: a second run migrates nothing.
-    expect(migrateInlinePhotos(r, photos)).toBe(0);
+    expect(await migrateInlinePhotos(r, photos)).toBe(0);
   });
 });

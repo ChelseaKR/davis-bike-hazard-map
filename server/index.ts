@@ -14,10 +14,20 @@ import { migrateInlinePhotos } from './lib/hazards.ts';
 import { startBackups } from './lib/backup.ts';
 
 async function main() {
-  const repo = createRepository(serverConfig.dataFile);
+  // Production must use a real database. The one exception is ephemeral
+  // throwaway runs (e2e, preview) that opt in explicitly with ALLOW_INMEMORY.
+  if (serverConfig.isProd && !serverConfig.databaseUrl && process.env.ALLOW_INMEMORY !== 'true') {
+    console.error('DATABASE_URL is required in production. Refusing to start.');
+    process.exit(1);
+  }
+
+  const repo = await createRepository({
+    databaseUrl: serverConfig.databaseUrl,
+    dataFile: serverConfig.dataFile,
+  });
   const photos = createPhotoStore(serverConfig.dataFile);
   // Move any legacy inline (base64) photos out of the JSON into the blob store.
-  const migrated = migrateInlinePhotos(repo, photos);
+  const migrated = await migrateInlinePhotos(repo, photos);
   const app = await buildApp({ repo, photos, config: serverConfig });
   if (migrated > 0) {
     app.log.info(`Migrated ${migrated} inline photo(s) to the blob store.`);

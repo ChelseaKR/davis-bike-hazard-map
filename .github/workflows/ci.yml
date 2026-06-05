@@ -21,6 +21,20 @@ jobs:
   verify:
     name: Lint · Typecheck · Unit · Build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dbhm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,6 +47,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Unit + integration tests (coverage-gated)
+        # TEST_DATABASE_URL turns on the Postgres adapter integration tests.
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dbhm_test
         run: npm run test:coverage
       - name: Accessibility (axe, component-level)
         run: npm run a11y

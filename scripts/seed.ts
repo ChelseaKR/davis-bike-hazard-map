@@ -62,26 +62,30 @@ const SEEDS: Omit<ValidatedReport, 'clientId' | 'capturedAt'>[] = [
   },
 ];
 
-function main() {
+async function main() {
   const dataFile = serverConfig.dataFile || './data/hazards.json';
-  const repo = createRepository(dataFile);
-  const photos = createPhotoStore(dataFile);
+  const repo = await createRepository({
+    databaseUrl: serverConfig.databaseUrl,
+    dataFile: serverConfig.databaseUrl ? undefined : dataFile,
+  });
+  const photos = createPhotoStore(serverConfig.databaseUrl ? '' : dataFile);
   const now = Date.now();
 
   let created = 0;
-  SEEDS.forEach((seed, i) => {
+  for (const [i, seed] of SEEDS.entries()) {
     const report: ValidatedReport = {
       ...seed,
       clientId: newId(),
       // Stagger captures over the past few days for realistic recency.
       capturedAt: now - (i + 1) * 12 * 60 * 60 * 1000,
     };
-    const stored = createHazard(repo, photos, report, report.capturedAt, ttlOpts);
-    moderateHazard(repo, stored.id, 'approve', report.capturedAt);
+    const stored = await createHazard(repo, photos, report, report.capturedAt, ttlOpts);
+    await moderateHazard(repo, stored.id, 'approve', report.capturedAt, undefined, 'seed');
     created++;
-  });
+  }
 
-  console.log(`Seeded ${created} approved hazards into ${dataFile}`);
+  await repo.close?.();
+  console.log(`Seeded ${created} approved hazards`);
 }
 
-main();
+void main();

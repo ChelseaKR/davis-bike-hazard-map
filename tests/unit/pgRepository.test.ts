@@ -1,0 +1,104 @@
+/**
+ * Integration tests for the Postgres store. They run only when
+ * TEST_DATABASE_URL points at a reachable Postgres (CI provides one via the
+ * docker-compose service); otherwise the suite is skipped so unit runs without
+ * a database stay green.
+ */
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { PostgresRepository } from '../../server/lib/pgRepository.ts';
+import type { StoredHazard } from '../../server/lib/types.ts';
+
+const URL = process.env.TEST_DATABASE_URL;
+const suite = URL ? describe : describe.skip;
+
+function hazard(over: Partial<StoredHazard> = {}): StoredHazard {
+  return {
+    id: 'h1',
+    clientId: 'c1',
+    category: 'pothole',
+    severity: 'high',
+    description: 'Deep pothole',
+    preciseLocation: { lat: 38.5462, lng: -121.7361 },
+    publicLocation: { lat: 38.5455, lng: -121.7355 },
+    photo: { mime: 'image/jpeg' },
+    status: 'pending',
+    confirmations: 0,
+    createdAt: 1000,
+    updatedAt: 1000,
+    expiresAt: 9_999_999_999_999,
+    moderation: [],
+    ...over,
+  };
+}
+
+suite('PostgresRepository', () => {
+  let repo: PostgresRepository;
+
+  beforeAll(async () => {
+    repo = new PostgresRepository(URL!);
+    await repo.init();
+    // Idempotent init must not throw on a second run.
+    await repo.init();
+  });
+
+  afterAll(async () => {
+    await repo.close();
+  });
+
+  beforeEach(async () => {
+    // Clean slate between tests.
+    await repo['pool'].query('TRUNCATE hazards');
+  });
+
+  it('round-trips a record including the photo ref and moderation jsonb', async () => {
+    await repo.insert(
+      hazard({ moderation: [{ decision: 'approve', at: 1234, by: 'alice' }] }),
+    );
+    const got = await repo.findById('h1');
+    expect(got).toEqual(
+      hazard({ moderation: [{ decision: 'approve', at: 1234, by: 'alice' }] }),
+    );
+  });
+
+  it('finds by client id and returns undefined for misses', async () => {
+    await repo.insert(hazard({ id: 'h1', clientId: 'cabc' }));
+    expect((await repo.findByClientId('cabc'))?.id).toBe('h1');
+    expect(await repo.findByClientId('nope')).toBeUndefined();
+    expect(await repo.findById('nope')).toBeUndefined();
+  });
+
+  it('merges a partial update transactionally', async () => {
+    await repo.insert(hazard({ status: 'pending', confirmations: 0 }));
+    const updated = await repo.update('h1', { status: 'approved', confirmations: 3 });
+    expect(updated?.status).toBe('approved');
+    expect(updated?.confirmations).toBe(3);
+    // Untouched fields survive the merge.
+    expect(updated?.description).toBe('Deep pothole');
+    expect(await repo.update('missing', { confirmations: 1 })).toBeUndefined();
+  });
+
+  it('listActive filters by status, expiry, and bounding box, newest first', async () => {
+    const now = 5000;
+    await repo.insert(hazard({ id: 'a', clientId: 'a', status: 'approved', updatedAt: 10, expiresAt: now + 1, publicLocation: { lat: 38.54, lng: -121.74 } }));
+    await repo.insert(hazard({ id: 'b', clientId: 'b', status: 'approved', updatedAt: 20, expiresAt: now + 1, publicLocation: { lat: 38.55, lng: -121.73 } }));
+    await repo.insert(hazard({ id: 'pending', clientId: 'p', status: 'pending', updatedAt: 30, expiresAt: now + 1 }));
+    await repo.insert(hazard({ id: 'expired', clientId: 'e', status: 'approved', updatedAt: 40, expiresAt: now - 1 }));
+    await repo.insert(hazard({ id: 'faraway', clientId: 'f', status: 'approved', updatedAt: 50, expiresAt: now + 1, publicLocation: { lat: 40.0, lng: -120.0 } }));
+
+    const all = await repo.listActive(now);
+    expect(all.map((h) => h.id)).toEqual(['faraway', 'b', 'a']); // updatedAt desc; pending+expired excluded
+
+    const inBox = await repo.listActive(now, { minLat: 38.5, minLng: -121.8, maxLat: 38.6, maxLng: -121.7 });
+    expect(inBox.map((h) => h.id)).toEqual(['b', 'a']); // faraway culled
+  });
+
+  it('expire transitions approved rows past their TTL', async () => {
+    const now = 5000;
+    await repo.insert(hazard({ id: 'live', clientId: 'l', status: 'approved', expiresAt: now + 1 }));
+    await repo.insert(hazard({ id: 'dead', clientId: 'd', status: 'approved', expiresAt: now - 1 }));
+    const n = await repo.expire(now);
+    expect(n).toBe(1);
+    expect((await repo.findById('dead'))?.status).toBe('expired');
+    expect((await repo.findById('live'))?.status).toBe('approved');
+  });
+});

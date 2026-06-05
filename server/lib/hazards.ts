@@ -11,7 +11,7 @@ import type { ValidatedReport } from '../../shared/validation.ts';
 import { fuzzCoordinate } from '../../shared/geo.ts';
 import { dataUrlToBytes, bytesToDataUrl, stripExifBytes } from '../../shared/exif.ts';
 import { newId } from './id.ts';
-import type { Repository } from './repository.ts';
+import type { BBox, Repository } from './repository.ts';
 import type { PhotoStore } from './photoStore.ts';
 import type { ModerationAction, PhotoRef, StoredHazard } from './types.ts';
 
@@ -47,14 +47,14 @@ function expiryFor(severity: Severity, createdAt: number, ttlDays: Record<Severi
  * Create a hazard from a validated submission. Idempotent on `clientId`, so a
  * retried offline sync never produces duplicates.
  */
-export function createHazard(
+export async function createHazard(
   repo: Repository,
   photos: PhotoStore,
   report: ValidatedReport,
   now: number,
   opts: CreateOptions,
-): StoredHazard {
-  const existing = repo.findByClientId(report.clientId);
+): Promise<StoredHazard> {
+  const existing = await repo.findByClientId(report.clientId);
   if (existing) return existing;
 
   const id = newId();
@@ -85,19 +85,20 @@ export function createHazard(
 }
 
 /** Apply a moderation decision. Returns undefined if the hazard is unknown. */
-export function moderateHazard(
+export async function moderateHazard(
   repo: Repository,
   id: string,
   decision: ModerationAction['decision'],
   now: number,
   reason?: string,
-): StoredHazard | undefined {
-  const hazard = repo.findById(id);
+  by?: string,
+): Promise<StoredHazard | undefined> {
+  const hazard = await repo.findById(id);
   if (!hazard) return undefined;
 
   const status =
     decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'resolved';
-  const action: ModerationAction = { decision, reason, at: now };
+  const action: ModerationAction = { decision, reason, at: now, by };
 
   return repo.update(id, {
     status,
@@ -111,13 +112,13 @@ export function moderateHazard(
  * confirmed; each confirmation also nudges the expiry out so actively-seen
  * hazards stay on the map.
  */
-export function confirmHazard(
+export async function confirmHazard(
   repo: Repository,
   id: string,
   now: number,
   opts: CreateOptions,
-): StoredHazard | undefined {
-  const hazard = repo.findById(id);
+): Promise<StoredHazard | undefined> {
+  const hazard = await repo.findById(id);
   if (!hazard || hazard.status !== 'approved' || hazard.expiresAt <= now) {
     return undefined;
   }
@@ -131,17 +132,11 @@ export function confirmHazard(
 
 /**
  * Lazily expire approved hazards past their TTL. Called before reads so the
- * public feed is always self-cleaning even without a cron.
+ * public feed is always self-cleaning even without a cron. Delegated to the
+ * repository so Postgres can do it in a single UPDATE.
  */
-export function sweepExpired(repo: Repository, now: number): number {
-  let expired = 0;
-  for (const h of repo.all()) {
-    if (h.status === 'approved' && h.expiresAt <= now) {
-      repo.update(h.id, { status: 'expired', updatedAt: now });
-      expired++;
-    }
-  }
-  return expired;
+export function sweepExpired(repo: Repository, now: number): Promise<number> {
+  return repo.expire(now);
 }
 
 /** Project a stored hazard to the PUBLIC shape (fuzzed location, photo URL). */
@@ -176,20 +171,20 @@ export function toModeration(h: StoredHazard, photos: PhotoStore): Hazard {
   return { ...toPublic(h), photoUrl };
 }
 
-/** The public feed: approved and not expired. */
-export function listPublic(repo: Repository, now: number): Hazard[] {
-  sweepExpired(repo, now);
-  return repo
-    .all()
-    .filter((h) => h.status === 'approved' && h.expiresAt > now)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map(toPublic);
+/** The public feed: approved and not expired, optionally culled to a bbox. */
+export async function listPublic(repo: Repository, now: number, bbox?: BBox): Promise<Hazard[]> {
+  await repo.expire(now);
+  const rows = await repo.listActive(now, bbox);
+  return rows.map(toPublic);
 }
 
 /** The moderation queue: everything still pending review, oldest first. */
-export function listModerationQueue(repo: Repository, photos: PhotoStore): Hazard[] {
-  return repo
-    .all()
+export async function listModerationQueue(
+  repo: Repository,
+  photos: PhotoStore,
+): Promise<Hazard[]> {
+  const rows = await repo.all();
+  return rows
     .filter((h) => h.status === 'pending')
     .sort((a, b) => a.createdAt - b.createdAt)
     .map((h) => toModeration(h, photos));
@@ -200,19 +195,19 @@ export function listModerationQueue(repo: Repository, photos: PhotoStore): Hazar
  * URL string. Move any such bytes into the PhotoStore and replace the field
  * with a small { mime } reference. Safe to run on every startup (idempotent).
  */
-export function migrateInlinePhotos(repo: Repository, photos: PhotoStore): number {
+export async function migrateInlinePhotos(repo: Repository, photos: PhotoStore): Promise<number> {
   let migrated = 0;
-  for (const h of repo.all()) {
+  for (const h of await repo.all()) {
     const legacy = (h as { photo: unknown }).photo;
     if (typeof legacy !== 'string') continue;
     try {
       const { bytes, mime } = dataUrlToBytes(legacy);
       photos.put(h.id, bytes);
-      repo.update(h.id, { photo: { mime } });
+      await repo.update(h.id, { photo: { mime } });
       migrated++;
     } catch {
       // Unparseable legacy photo: drop the reference rather than keep junk.
-      repo.update(h.id, { photo: null });
+      await repo.update(h.id, { photo: null });
     }
   }
   return migrated;

@@ -17,14 +17,18 @@ function int(name: string, fallback: number): number {
 const isProd = process.env.NODE_ENV === 'production';
 const isTest = process.env.NODE_ENV === 'test';
 
-// Where the JSON-backed store persists. Empty => in-memory (tests/dev).
+// Production store: PostgreSQL. When DATABASE_URL is set the Postgres repository
+// is used (and it is REQUIRED in production — the server refuses to boot
+// without it). Safe for multiple processes, unlike the JSON store below.
+const databaseUrl = process.env.DATABASE_URL ?? '';
+
+// JSON-backed store for dev/MVP. Empty => in-memory (tests/zero-config dev).
 //
 // IMPORTANT: the JSON file store assumes a SINGLE server process. Writes are
 // atomic per process (temp + rename), but two processes pointed at the same
-// file WILL corrupt it — there is no cross-process lock. Do not run multiple
-// instances / a clustered process manager against one DATABASE_PATH. (This
-// constraint goes away with the Postgres store — see docs/ARCHITECTURE.md.)
-const dataFile = process.env.DATABASE_PATH ?? (isProd ? './data/hazards.json' : '');
+// file WILL corrupt it — there is no cross-process lock. Use Postgres
+// (DATABASE_URL) for any multi-process deployment.
+const dataFile = process.env.DATABASE_PATH ?? '';
 
 export const serverConfig = {
   isProd,
@@ -32,6 +36,7 @@ export const serverConfig = {
   port: int('API_PORT', int('PORT', 8787)),
   host: process.env.HOST ?? '0.0.0.0',
 
+  databaseUrl,
   dataFile,
 
   /** Moderator bearer token. Required in production. */

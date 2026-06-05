@@ -79,12 +79,18 @@ These record where the build deviated from the roadmap, and why.
   and trivially offline-cacheable on mobile data; Leaflet + markercluster covers
   clustering/filtering with a small footprint. *Rejected MapLibre GL:* heavier,
   and vector tiles add hosting/cost without a v1 benefit here.
-- **ADR-2 — JSON-file repository behind a `Repository` interface instead of
-  Postgres/PostGIS.** Rationale: a civic MVP's volume is tiny; an atomic
-  JSON-file store has zero native dependencies, runs anywhere, and keeps the
-  domain logic storage-agnostic. The roadmap's PostGIS remains the documented
-  scaling path — implement the same `Repository` interface. *Rejected PostGIS
-  for v1:* operational cost and a native build for no current benefit.
+- **ADR-2 — PostgreSQL as the production store; JSON-file for dev; one async
+  `Repository` interface.** The store is selected by env: `DATABASE_URL` →
+  `PostgresRepository` (required in production), else `DATABASE_PATH` →
+  single-process `JsonFileRepository`, else in-memory. Postgres gives
+  multi-process safety, indexed reads, bounding-box pushdown for the public
+  feed, and managed backups; the JSON store stays for zero-dependency local
+  dev. *Plain Postgres, not PostGIS:* the only spatial query is a bounding box,
+  which `lat/lng BETWEEN` on btree-indexed columns answers — PostGIS would add
+  an extension dependency for no current benefit and can be layered on later
+  (radius/polygon queries) behind the same interface. *Update from the original
+  ADR-2,* which deferred Postgres entirely; the async refactor that enabled it
+  also kept the JSON store working unchanged for dev.
 - **ADR-3 — Manual region blur as the floor, automatic face detection as
   progressive enhancement.** Rationale: manual blur works fully offline with no
   ML model and never silently misses a face; the experimental `FaceDetector`

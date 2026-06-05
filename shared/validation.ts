@@ -63,10 +63,23 @@ export const reportSubmissionSchema = z.object({
 
 export type ValidatedReport = z.infer<typeof reportSubmissionSchema>;
 
+/** A geographic bounding box (south, west, north, east). */
+export const bboxSchema = z
+  .object({
+    minLat: z.number().gte(-90).lte(90),
+    minLng: z.number().gte(-180).lte(180),
+    maxLat: z.number().gte(-90).lte(90),
+    maxLng: z.number().gte(-180).lte(180),
+  })
+  .refine((b) => b.minLat <= b.maxLat && b.minLng <= b.maxLng, {
+    message: 'bbox min must not exceed max.',
+  });
+
 export const hazardFiltersSchema = z.object({
   categories: z.array(z.enum(HAZARD_CATEGORIES)).optional(),
   minSeverity: z.enum(SEVERITIES).optional(),
   withinDays: z.coerce.number().int().positive().max(365).optional(),
+  bbox: bboxSchema.optional(),
 });
 
 /** Body for a moderation decision. */

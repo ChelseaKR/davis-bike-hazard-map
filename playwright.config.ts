@@ -34,8 +34,11 @@ export default defineConfig({
     // SW disabled for e2e so offline/online transitions are deterministic; the
     // offline capture→sync DoD is fully exercised without it (the SW still
     // ships in production builds).
+    // ALLOW_INMEMORY lets this production-mode server boot without a database
+    // (e2e uses a throwaway in-memory store).
     command:
       'cross-env PWA_DISABLE=true npm run build && cross-env NODE_ENV=production ' +
+      'ALLOW_INMEMORY=true ' +
       `MODERATION_TOKEN=e2e-token PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,
     timeout: 120_000,
