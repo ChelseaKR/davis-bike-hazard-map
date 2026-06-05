@@ -89,6 +89,16 @@ Then in the app: file a report → open **Moderate**, sign in with your
   human VoiceOver/NVDA pass ([`screen-reader-walkthrough.md`](./docs/audits/screen-reader-walkthrough.md))
   and the equity-reviewer sign-off on the coverage view.
 
+## CI notes (two non-blocking jobs)
+
+- **WebKit e2e** is non-blocking: WebKit-on-Linux fails to render headlessly in
+  CI (a tooling issue, not a product bug — Chromium + Firefox are the required
+  gate). Real Safari/iOS coverage is the manual device pass before public launch.
+- **CodeQL** runs but its result upload needs **GitHub Advanced Security**,
+  which private repos lack by default. Enable it under *Settings → Code security
+  → Code scanning* (or when the repo goes public) to surface results, then make
+  the job required.
+
 ## Rollback
 
 ```bash
