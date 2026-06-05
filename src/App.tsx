@@ -17,6 +17,7 @@ import { ListView } from './components/ListView.tsx';
 import { ReportForm } from './components/ReportForm.tsx';
 import { MyReports } from './components/MyReports.tsx';
 import { ModerationPanel } from './components/ModerationPanel.tsx';
+import { CoverageView } from './components/CoverageView.tsx';
 import { StatusBanner } from './components/StatusBanner.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { FeedFreshness } from './components/FeedFreshness.tsx';
@@ -31,6 +32,7 @@ const MapView = lazy(() =>
 const TABS: { id: Tab; label: string }[] = [
   { id: 'map', label: 'Map' },
   { id: 'list', label: 'List' },
+  { id: 'coverage', label: 'Coverage' },
   { id: 'report', label: 'Report' },
   { id: 'mine', label: 'My reports' },
   { id: 'moderate', label: 'Moderate' },
@@ -40,7 +42,7 @@ export default function App() {
   const [{ tab, filters, focusHazard, statusKey }, dispatch] = useViewState();
   const online = useOnline();
 
-  const { hazards, loading, error, lastUpdatedAt, refresh } = useHazards(filters);
+  const { hazards, all, loading, error, lastUpdatedAt, refresh } = useHazards(filters);
 
   // Drain the offline queue in the background; refresh the map on any success.
   useEffect(() => {
@@ -140,6 +142,8 @@ export default function App() {
               />
             </div>
           )}
+
+          {tab === 'coverage' && <CoverageView hazards={all} />}
 
           {tab === 'report' && (
             <>

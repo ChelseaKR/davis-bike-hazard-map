@@ -621,6 +621,35 @@ textarea {
   flex-wrap: wrap;
 }
 
+/* --- Coverage-by-area --- */
+.coverage-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+}
+.coverage-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) 2fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.coverage-area {
+  font-weight: 600;
+}
+.coverage-bar {
+  height: 0.6rem;
+  min-width: 2px;
+  background: var(--brand);
+  border-radius: var(--radius);
+}
+.coverage-count {
+  color: var(--ink-soft);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Loading skeletons --- */
 .skeleton {
   background: var(--line);

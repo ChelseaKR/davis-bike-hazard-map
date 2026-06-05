@@ -10,7 +10,7 @@
 import { useReducer, type Dispatch } from 'react';
 import type { Hazard, HazardFilters } from '../../shared/types.ts';
 
-export type Tab = 'map' | 'list' | 'report' | 'mine' | 'moderate';
+export type Tab = 'map' | 'list' | 'coverage' | 'report' | 'mine' | 'moderate';
 
 export interface ViewState {
   tab: Tab;

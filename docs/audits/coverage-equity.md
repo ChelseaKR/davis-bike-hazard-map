@@ -22,9 +22,10 @@ failure modes:
 - **Surface, don't infer.** Each hazard is labelled *community-reported, not
   verified by the city* (transparency), and we never infer attributes about
   reporters (no accounts, no profiling).
-- **Coverage view (planned).** A reports-per-area overlay that makes coverage
-  gaps visible rather than letting absence masquerade as safety. Tracked as a
-  follow-up (see ROADMAP §12 / Could-have).
+- **Coverage view (shipped).** A "Reports by area" tab (`CoverageView` /
+  `src/lib/areas.ts`) buckets reports into Davis areas and lists every area —
+  including zero-report ones — with explicit "under-reported, not safe" framing,
+  so absence can't masquerade as safety.
 
 ## Segments to monitor post-launch
 
@@ -35,6 +36,6 @@ failure modes:
 
 - [x] "No reports ≠ safe" framing present in UI — **auto-gated** (list/map copy test).
 - [x] No inference of reporter attributes — **review-gated** (design: no accounts/PII).
-- [ ] Coverage-by-area view — **review-gated** (planned; equity reviewer sign-off).
+- [x] Coverage-by-area view — **auto-gated** (`areas` + `CoverageView` tests); equity reviewer sign-off pending pre-launch.
 
 **Last verified: 2026-05-31 · Recheck cadence: per release / quarterly post-launch.**
