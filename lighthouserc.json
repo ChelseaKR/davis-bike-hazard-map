@@ -1,0 +1,24 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "cross-env NODE_ENV=production ALLOW_INMEMORY=true SESSION_SECRET=lhci-secret PORT=4178 API_PORT=4178 tsx server/index.ts",
+      "startServerReadyPattern": "Server listening",
+      "startServerReadyTimeout": 30000,
+      "url": ["http://localhost:4178/"],
+      "numberOfRuns": 3,
+      "settings": { "preset": "desktop" }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["warn", { "minScore": 0.8 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:best-practices": ["warn", { "minScore": 0.9 }],
+        "categories:seo": "off",
+        "first-contentful-paint": ["warn", { "maxNumericValue": 2000 }],
+        "interactive": ["warn", { "maxNumericValue": 3500 }],
+        "total-byte-weight": ["warn", { "maxNumericValue": 600000 }]
+      }
+    },
+    "upload": { "target": "temporary-public-storage" }
+  }
+}

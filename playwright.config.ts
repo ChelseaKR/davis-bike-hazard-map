@@ -10,6 +10,16 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = 8788;
 const BASE_URL = `http://localhost:${PORT}`;
 
+// Local runs use Chromium only (fast, one browser to install). CI sets
+// E2E_ALL_BROWSERS to fan out across Firefox and WebKit as well.
+const projects = [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }];
+if (process.env.E2E_ALL_BROWSERS) {
+  projects.push(
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  );
+}
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
@@ -28,7 +38,7 @@ export default defineConfig({
     locale: 'en-US',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects,
 
   webServer: {
     // SW disabled for e2e so offline/online transitions are deterministic; the
