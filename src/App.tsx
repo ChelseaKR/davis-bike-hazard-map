@@ -4,11 +4,12 @@
  * parity (accessibility gate), and a background sync loop drains the offline
  * queue whenever the device is online.
  */
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import type { Hazard, HazardFilters } from '../shared/types.ts';
+import { lazy, Suspense, useCallback, useEffect } from 'react';
+import type { Hazard } from '../shared/types.ts';
 import { useHazards } from './hooks/useHazards.ts';
 import { useOnline } from './hooks/useOnline.ts';
 import { useRefreshOnReconnect } from './hooks/useRefreshOnReconnect.ts';
+import { useViewState, type Tab } from './hooks/useViewState.ts';
 import { startSync } from './lib/sync.ts';
 import { confirmHazard } from './lib/api.ts';
 import { Filters } from './components/Filters.tsx';
@@ -25,8 +26,6 @@ const MapView = lazy(() =>
   import('./components/MapView.tsx').then((m) => ({ default: m.MapView })),
 );
 
-type Tab = 'map' | 'list' | 'report' | 'mine' | 'moderate';
-
 const TABS: { id: Tab; label: string }[] = [
   { id: 'map', label: 'Map' },
   { id: 'list', label: 'List' },
@@ -36,10 +35,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('map');
-  const [filters, setFilters] = useState<HazardFilters>({});
-  const [focusHazard, setFocusHazard] = useState<Hazard | null>(null);
-  const [statusKey, setStatusKey] = useState(0);
+  const [{ tab, filters, focusHazard, statusKey }, dispatch] = useViewState();
   const online = useOnline();
 
   const { hazards, loading, error, refresh } = useHazards(filters);
@@ -49,10 +45,10 @@ export default function App() {
     return startSync((result) => {
       if (result.synced > 0) {
         void refresh();
-        setStatusKey((k) => k + 1);
+        dispatch({ type: 'bumpStatus' });
       }
     });
-  }, [refresh]);
+  }, [refresh, dispatch]);
 
   // Also pull a fresh feed whenever we reconnect or the app is foregrounded,
   // so the map isn't stuck on data cached from before we went offline.
@@ -70,15 +66,15 @@ export default function App() {
     [refresh],
   );
 
-  const showOnMap = useCallback((hazard: Hazard) => {
-    setFocusHazard(hazard);
-    setTab('map');
-  }, []);
+  const showOnMap = useCallback(
+    (hazard: Hazard) => dispatch({ type: 'focusOnMap', hazard }),
+    [dispatch],
+  );
 
   const onSubmitted = useCallback(() => {
-    setStatusKey((k) => k + 1);
+    dispatch({ type: 'bumpStatus' });
     void refresh();
-  }, [refresh]);
+  }, [refresh, dispatch]);
 
   return (
     <div className="app">
@@ -96,7 +92,7 @@ export default function App() {
             type="button"
             className={`tab ${tab === t.id ? 'tab-active' : ''}`}
             aria-current={tab === t.id ? 'page' : undefined}
-            onClick={() => setTab(t.id)}
+            onClick={() => dispatch({ type: 'setTab', tab: t.id })}
           >
             {t.label}
           </button>
@@ -110,7 +106,11 @@ export default function App() {
             when the user navigates to another tab — the shell stays usable. */}
         <ErrorBoundary key={tab} source={`view:${tab}`}>
           {(tab === 'map' || tab === 'list') && (
-            <Filters value={filters} onChange={setFilters} resultCount={hazards.length} />
+            <Filters
+              value={filters}
+              onChange={(filters) => dispatch({ type: 'setFilters', filters })}
+              resultCount={hazards.length}
+            />
           )}
 
           {tab === 'map' && (
@@ -142,7 +142,7 @@ export default function App() {
             </>
           )}
 
-          {tab === 'mine' && <MyReports onChange={() => setStatusKey((k) => k + 1)} />}
+          {tab === 'mine' && <MyReports onChange={() => dispatch({ type: 'bumpStatus' })} />}
 
           {tab === 'moderate' && <ModerationPanel />}
         </ErrorBoundary>
