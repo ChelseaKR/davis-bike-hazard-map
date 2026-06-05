@@ -31,8 +31,11 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 
   webServer: {
+    // SW disabled for e2e so offline/online transitions are deterministic; the
+    // offline capture→sync DoD is fully exercised without it (the SW still
+    // ships in production builds).
     command:
-      'npm run build && cross-env NODE_ENV=production ' +
+      'cross-env PWA_DISABLE=true npm run build && cross-env NODE_ENV=production ' +
       `MODERATION_TOKEN=e2e-token PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,
     timeout: 120_000,

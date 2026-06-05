@@ -18,8 +18,11 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
       // 'self'-safe) so the app doesn't import the virtual module directly.
       injectRegister: 'script-defer',
       // Generate the service worker only for production builds so the dev
-      // server and unit tests are never intercepted by a stale cache.
-      disable: process.env.NODE_ENV === 'test',
+      // server and unit tests are never intercepted by a stale cache. The e2e
+      // suite also opts out via PWA_DISABLE so offline/online transitions are
+      // deterministic (the SW still ships in real production builds).
+      disable:
+        process.env.NODE_ENV === 'test' || process.env.PWA_DISABLE === 'true',
       includeAssets: ['favicon.svg', 'robots.txt', 'icons/*.png'],
       manifest: {
         name: 'Davis Bike Hazard Map',

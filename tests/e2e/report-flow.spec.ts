@@ -35,24 +35,22 @@ test('offline: a report is saved, then syncs when back online', async ({
 }) => {
   const desc = 'E2E offline: glass on the Russell path';
   await page.goto('/');
-  await context.setOffline(true);
 
+  // Fill the form while online (interactions need no network)...
   await openTab(page, 'Report');
   await page.getByRole('button', { name: /use my location/i }).click();
   await page.getByLabel('Type').selectOption('glass_debris');
   await page.getByPlaceholder(/deep pothole/i).fill(desc);
+  await expect(page.getByRole('button', { name: /submit report/i })).toBeEnabled();
 
-  const submit = page.getByRole('button', { name: /submit report/i });
-  await expect(submit).toBeEnabled();
-  await submit.click();
-
-  // Saved locally with an explicit offline acknowledgement.
+  // ...then go offline ONLY for the submit, so the report is captured locally.
+  await context.setOffline(true);
+  await page.getByRole('button', { name: /submit report/i }).click();
   await expect(page.getByText(/saved offline/i)).toBeVisible();
 
-  // Back online: reopening the app (as a cyclist would on reconnect) runs the
-  // sync loop's immediate tick, draining the IndexedDB queue to the server.
+  // Reconnect and reopen the app; the sync loop drains the IndexedDB queue.
   await context.setOffline(false);
-  await page.reload();
+  await page.goto('/');
   await waitAndApprove(request, desc);
 
   await page.reload();
