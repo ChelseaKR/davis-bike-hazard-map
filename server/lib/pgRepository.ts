@@ -14,6 +14,7 @@
 import { Pool, type PoolClient } from 'pg';
 import type { StoredHazard, ModerationAction, PhotoRef } from './types.ts';
 import type { BBox, PendingStats, Repository } from './repository.ts';
+import { runMigrations } from './migrate.ts';
 
 interface HazardRow {
   id: string;
@@ -88,32 +89,9 @@ export class PostgresRepository implements Repository {
     this.pool = new Pool({ connectionString });
   }
 
-  /** Create the schema if absent. Idempotent — safe to run on every boot. */
+  /** Apply pending migrations (idempotent). Safe to run on every boot. */
   async init(): Promise<void> {
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS hazards (
-        id            TEXT PRIMARY KEY,
-        client_id     TEXT UNIQUE NOT NULL,
-        category      TEXT NOT NULL,
-        severity      TEXT NOT NULL,
-        description   TEXT,
-        precise_lat   DOUBLE PRECISION NOT NULL,
-        precise_lng   DOUBLE PRECISION NOT NULL,
-        public_lat    DOUBLE PRECISION NOT NULL,
-        public_lng    DOUBLE PRECISION NOT NULL,
-        photo_mime    TEXT,
-        status        TEXT NOT NULL,
-        confirmations INTEGER NOT NULL DEFAULT 0,
-        created_at    BIGINT NOT NULL,
-        updated_at    BIGINT NOT NULL,
-        expires_at    BIGINT NOT NULL,
-        moderation    JSONB NOT NULL DEFAULT '[]'::jsonb
-      );
-      CREATE INDEX IF NOT EXISTS hazards_active_idx
-        ON hazards (status, expires_at);
-      CREATE INDEX IF NOT EXISTS hazards_bbox_idx
-        ON hazards (public_lat, public_lng);
-    `);
+    await runMigrations(this.pool);
   }
 
   async insert(hazard: StoredHazard): Promise<StoredHazard> {

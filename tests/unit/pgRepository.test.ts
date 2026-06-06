@@ -97,6 +97,16 @@ suite('PostgresRepository', () => {
     expect(await repo.ping()).toBe(true);
   });
 
+  it('records applied migrations and is idempotent', async () => {
+    const pool = (repo as unknown as { pool: import('pg').Pool }).pool;
+    const { rows } = await pool.query<{ version: string }>(
+      'SELECT version FROM schema_migrations ORDER BY version',
+    );
+    expect(rows.map((r) => r.version)).toContain('0001_init');
+    const { runMigrations } = await import('../../server/lib/migrate.ts');
+    expect(await runMigrations(pool)).toEqual([]); // nothing new to apply
+  });
+
   it('reports pending-queue stats (count + oldest createdAt)', async () => {
     expect(await repo.pendingStats()).toEqual({ count: 0, oldestCreatedAt: null });
     await repo.insert(hazard({ id: 'p1', clientId: 'p1', status: 'pending', createdAt: 200 }));

@@ -7,6 +7,7 @@
  */
 import { Pool } from 'pg';
 import { hashPassword } from './password.ts';
+import { runMigrations } from './migrate.ts';
 
 /**
  * A fixed, valid hash of a value no one will ever use. Verify a submitted
@@ -47,13 +48,8 @@ export class PostgresModeratorStore implements ModeratorStore {
   constructor(private readonly pool: Pool) {}
 
   async init(): Promise<void> {
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS moderators (
-        username      TEXT PRIMARY KEY,
-        password_hash TEXT NOT NULL,
-        created_at    BIGINT NOT NULL
-      );
-    `);
+    // Idempotent — the moderators table lives in the shared migration set.
+    await runMigrations(this.pool);
   }
 
   async findByUsername(username: string): Promise<Moderator | undefined> {
