@@ -12,6 +12,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export interface SessionPayload {
   /** Subject: the moderator's username. */
   sub: string;
+  /** Token version at issue time — compared to the account's current version
+   *  for revocation (a bump invalidates older sessions). */
+  ver: number;
   /** Issued-at (epoch ms). */
   iat: number;
   /** Expiry (epoch ms). */
@@ -26,9 +29,15 @@ function sign(data: string, secret: string): string {
   return b64url(createHmac('sha256', secret).update(data).digest());
 }
 
-/** Issue a signed session token for `username`, valid for `ttlMs`. */
-export function issueToken(username: string, secret: string, ttlMs: number, now: number): string {
-  const payload: SessionPayload = { sub: username, iat: now, exp: now + ttlMs };
+/** Issue a signed session token for `username` at token version `ver`. */
+export function issueToken(
+  username: string,
+  secret: string,
+  ttlMs: number,
+  now: number,
+  ver = 0,
+): string {
+  const payload: SessionPayload = { sub: username, ver, iat: now, exp: now + ttlMs };
   const body = b64url(Buffer.from(JSON.stringify(payload)));
   return `${body}.${sign(body, secret)}`;
 }
