@@ -128,6 +128,13 @@ describe('metrics', () => {
     expect(res.body).toContain('dbhm_moderation_queue_depth 0');
     expect(res.body).toContain('dbhm_oldest_pending_age_seconds 0');
   });
+
+  it('includes RED request-duration + Node default metrics', async () => {
+    await app.inject({ method: 'GET', url: '/api/health' }); // generate one observation
+    const res = await app.inject({ method: 'GET', url: '/api/metrics' });
+    expect(res.body).toContain('http_request_duration_seconds');
+    expect(res.body).toMatch(/process_cpu_seconds_total|nodejs_/);
+  });
 });
 
 describe('client error sink', () => {

@@ -74,8 +74,12 @@ Then in the app: file a report → open **Moderate**, sign in with your
   the queue within the **48 h SLA**. Wire the example alerts in
   [`docs/ops/prometheus-alerts.yml`](./docs/ops/prometheus-alerts.yml) if you
   have a Prometheus.
-- **Errors** — client crashes beacon to `POST /api/client-errors` and land in
-  the app logs (`fly logs`), alongside server errors.
+- **Errors** — set `SENTRY_DSN` to aggregate errors in Sentry: server errors
+  and client crashes (beaconed to `/api/client-errors`, forwarded server-side so
+  the PWA bundle stays lean) both land there. Without a DSN they go to the app
+  logs (`fly logs`).
+- **Metrics** — `GET /api/metrics` now serves full Prometheus output (RED
+  request rate/errors/latency + Node defaults, plus the backlog gauges).
 - **Health** — `GET /api/health` behind an uptime check.
 
 ## 6. Beta data & privacy notes

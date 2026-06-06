@@ -53,6 +53,9 @@ export const serverConfig = {
   gogovWebhookUrl: process.env.GOGOV_WEBHOOK_URL ?? '',
   gogovApiKey: process.env.GOGOV_API_KEY ?? '',
 
+  /** Optional Sentry DSN for server-side error reporting. Empty => disabled. */
+  sentryDsn: process.env.SENTRY_DSN ?? '',
+
   /** CORS allow-list for the dev client. Empty in prod (same-origin). */
   corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:4173')
     .split(',')

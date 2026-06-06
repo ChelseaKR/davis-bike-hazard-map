@@ -34,6 +34,8 @@ import {
 } from './lib/moderators.ts';
 import { verifyPassword } from './lib/password.ts';
 import { issueToken, verifyToken } from './lib/token.ts';
+import { createMetrics } from './lib/metrics.ts';
+import { captureError, captureClientError } from './lib/sentry.ts';
 import {
   confirmHazard,
   createHazard,
@@ -89,6 +91,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('x-request-id', req.id);
   });
 
+  // RED metrics: observe every request's duration, labelled by the route
+  // *pattern* (bounded cardinality) and status.
+  const metrics = createMetrics();
+  app.addHook('onResponse', async (req, reply) => {
+    metrics.httpDuration.observe(
+      {
+        method: req.method,
+        route: req.routeOptions?.url ?? 'unknown',
+        status: String(reply.statusCode),
+      },
+      reply.elapsedTime / 1000,
+    );
+  });
+
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -133,6 +149,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       });
     }
     app.log.error(err);
+    captureError(err, { reqId: _req.id });
     return reply.status(500).send({ error: 'internal_error', message: 'Something went wrong.' });
   });
 
@@ -163,21 +180,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }
   });
 
-  // --- Metrics (Prometheus text format) ---
-  // Moderation backlog is the operational signal to watch against the 48 h SLA;
-  // scrape this and alert on depth / oldest-pending age (see docs/ops).
+  // --- Metrics (Prometheus) ---
+  // RED + Node defaults (prom-client) plus the moderation-backlog gauges that
+  // drive the 48 h SLA alerts (see docs/ops). Scrape with Prometheus.
   app.get('/api/metrics', async (_req, reply) => {
     const { count, oldestCreatedAt } = await repo.pendingStats();
-    const oldestAgeSeconds = oldestCreatedAt === null ? 0 : Math.max(0, (now() - oldestCreatedAt) / 1000);
-    const lines = [
-      '# HELP dbhm_moderation_queue_depth Reports awaiting moderation.',
-      '# TYPE dbhm_moderation_queue_depth gauge',
-      `dbhm_moderation_queue_depth ${count}`,
-      '# HELP dbhm_oldest_pending_age_seconds Age of the oldest unmoderated report.',
-      '# TYPE dbhm_oldest_pending_age_seconds gauge',
-      `dbhm_oldest_pending_age_seconds ${Math.round(oldestAgeSeconds)}`,
-    ];
-    return reply.header('content-type', 'text/plain; version=0.0.4').send(lines.join('\n') + '\n');
+    metrics.queueDepth.set(count);
+    metrics.oldestPending.set(
+      oldestCreatedAt === null ? 0 : Math.max(0, Math.round((now() - oldestCreatedAt) / 1000)),
+    );
+    return reply.header('content-type', metrics.registry.contentType).send(await metrics.registry.metrics());
   });
 
   // --- Client error sink (privacy-safe, best-effort telemetry) ---
@@ -187,6 +199,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.post('/api/client-errors', async (req, reply) => {
     const report = clientErrorSchema.parse(req.body);
     app.log.warn({ clientError: report }, 'client error reported');
+    captureClientError(report); // forward to Sentry (no-op without a DSN)
     return reply.status(204).send();
   });
 
