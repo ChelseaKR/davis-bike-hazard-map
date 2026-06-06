@@ -68,7 +68,7 @@ async function main() {
     databaseUrl: serverConfig.databaseUrl,
     dataFile: serverConfig.databaseUrl ? undefined : dataFile,
   });
-  const photos = createPhotoStore(serverConfig.databaseUrl ? '' : dataFile);
+  const photos = createPhotoStore({ dataFile: serverConfig.databaseUrl ? '' : dataFile });
   const now = Date.now();
 
   let created = 0;

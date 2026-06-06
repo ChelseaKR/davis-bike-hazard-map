@@ -127,9 +127,8 @@ jobs:
   lighthouse:
     name: Lighthouse performance budget
     runs-on: ubuntu-latest
-    # Non-blocking for now (perf scores are noisy in CI); accessibility is the
-    # hard gate via the axe e2e job. Promote to required once budgets settle.
-    continue-on-error: true
+    # Blocking now: accessibility is an error-level assertion (hard gate);
+    # performance/FCP/TTI/byte-weight stay warn-level (advisory, noise-tolerant).
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

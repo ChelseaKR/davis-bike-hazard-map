@@ -531,7 +531,7 @@ describe('legacy inline-photo migration', () => {
     const migrated = await migrateInlinePhotos(r, photos);
     expect(migrated).toBe(1);
     expect((await r.findById('leg-1'))!.photo).toEqual({ mime: 'image/jpeg' });
-    expect(Array.from(photos.get('leg-1')!)).toEqual([1, 2, 3]);
+    expect(Array.from((await photos.get('leg-1'))!)).toEqual([1, 2, 3]);
     // Idempotent: a second run migrates nothing.
     expect(await migrateInlinePhotos(r, photos)).toBe(0);
   });

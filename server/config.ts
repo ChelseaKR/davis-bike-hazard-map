@@ -56,6 +56,14 @@ export const serverConfig = {
   /** Optional Sentry DSN for server-side error reporting. Empty => disabled. */
   sentryDsn: process.env.SENTRY_DSN ?? '',
 
+  /** Optional S3 / S3-compatible (R2, MinIO) object storage for photos. */
+  s3: {
+    bucket: process.env.S3_BUCKET ?? '',
+    prefix: process.env.S3_PREFIX ?? 'photos/',
+    endpoint: process.env.S3_ENDPOINT ?? '',
+    region: process.env.S3_REGION ?? 'auto',
+  },
+
   /** CORS allow-list for the dev client. Empty in prod (same-origin). */
   corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:4173')
     .split(',')

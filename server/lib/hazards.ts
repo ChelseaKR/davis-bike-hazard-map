@@ -50,8 +50,8 @@ export async function createHazard(
   const processed = report.photo ? await processPhoto(report.photo) : null;
   let photo: PhotoRef | null = null;
   if (processed) {
-    photos.put(id, processed.full);
-    photos.put(thumbKey(id), processed.thumb);
+    await photos.put(id, processed.full);
+    await photos.put(thumbKey(id), processed.thumb);
     photo = { mime: processed.mime };
   }
 
@@ -159,10 +159,10 @@ export function toPublic(h: StoredHazard): Hazard {
  * it, so it is inlined here as a data URL (this response is auth-gated); it is
  * never exposed through the public photo route while the hazard is pending.
  */
-export function toModeration(h: StoredHazard, photos: PhotoStore): Hazard {
+export async function toModeration(h: StoredHazard, photos: PhotoStore): Promise<Hazard> {
   let photoUrl: string | null = null;
   if (h.photo) {
-    const bytes = photos.get(h.id);
+    const bytes = await photos.get(h.id);
     if (bytes) photoUrl = bytesToDataUrl(bytes, h.photo.mime);
   }
   return { ...toPublic(h), photoUrl };
@@ -181,10 +181,10 @@ export async function listModerationQueue(
   photos: PhotoStore,
 ): Promise<Hazard[]> {
   const rows = await repo.all();
-  return rows
+  const pending = rows
     .filter((h) => h.status === 'pending')
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .map((h) => toModeration(h, photos));
+    .sort((a, b) => a.createdAt - b.createdAt);
+  return Promise.all(pending.map((h) => toModeration(h, photos)));
 }
 
 /**
@@ -199,7 +199,7 @@ export async function migrateInlinePhotos(repo: Repository, photos: PhotoStore):
     if (typeof legacy !== 'string') continue;
     try {
       const { bytes, mime } = dataUrlToBytes(legacy);
-      photos.put(h.id, bytes);
+      await photos.put(h.id, bytes);
       await repo.update(h.id, { photo: { mime } });
       migrated++;
     } catch {

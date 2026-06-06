@@ -34,7 +34,13 @@ async function main() {
     databaseUrl: serverConfig.databaseUrl,
     dataFile: serverConfig.dataFile,
   });
-  const photos = createPhotoStore(serverConfig.dataFile);
+  const photos = createPhotoStore({
+    s3Bucket: serverConfig.s3.bucket,
+    s3Prefix: serverConfig.s3.prefix,
+    s3Endpoint: serverConfig.s3.endpoint,
+    s3Region: serverConfig.s3.region,
+    dataFile: serverConfig.dataFile,
+  });
   const moderators = await createModeratorStore(serverConfig.databaseUrl);
   // Move any legacy inline (base64) photos out of the JSON into the blob store.
   const migrated = await migrateInlinePhotos(repo, photos);
