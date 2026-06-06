@@ -93,6 +93,10 @@ suite('PostgresRepository', () => {
     expect(inBox.map((h) => h.id)).toEqual(['b', 'a']); // faraway culled
   });
 
+  it('pings the database for readiness', async () => {
+    expect(await repo.ping()).toBe(true);
+  });
+
   it('reports pending-queue stats (count + oldest createdAt)', async () => {
     expect(await repo.pendingStats()).toEqual({ count: 0, oldestCreatedAt: null });
     await repo.insert(hazard({ id: 'p1', clientId: 'p1', status: 'pending', createdAt: 200 }));

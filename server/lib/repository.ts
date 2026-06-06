@@ -36,6 +36,8 @@ export interface Repository {
   expire(now: number): Promise<number>;
   /** Moderation backlog stats for observability (cheap; no photos loaded). */
   pendingStats(): Promise<PendingStats>;
+  /** Liveness of the backing store (readiness probe). Throws/false if down. */
+  ping(): Promise<boolean>;
   /** Release resources (e.g. a connection pool). Optional. */
   close?(): Promise<void>;
 }
@@ -115,6 +117,10 @@ export class MemoryRepository implements Repository {
       }
     }
     return { count, oldestCreatedAt };
+  }
+
+  async ping(): Promise<boolean> {
+    return true; // in-memory / file store is always "reachable"
   }
 
   /** No-op for the in-memory store; the file store overrides this. */

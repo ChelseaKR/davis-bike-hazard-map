@@ -31,7 +31,8 @@ primary_region = "sjc" # San Jose — closest to Davis, CA
     timeout = "5s"
     grace_period = "10s"
     method = "GET"
-    path = "/api/health"
+    # Readiness (DB-aware) so a machine with a dead database is taken out of rotation.
+    path = "/api/ready"
 
 [[vm]]
   size = "shared-cpu-1x"
