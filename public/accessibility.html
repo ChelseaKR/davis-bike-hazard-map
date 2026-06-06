@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b6e4f" />
+    <title>Accessibility — Davis Bike Hazard Map</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font: 16px/1.6 system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #16241e;
+        background: #f7f8f7;
+      }
+      h1 { color: #0b6e4f; }
+      a { color: #095a40; }
+    </style>
+  </head>
+  <body>
+    <p><a href="/">← Back to the map</a></p>
+    <h1>Accessibility statement</h1>
+    <p>
+      We aim to meet <strong>WCAG 2.2 AA</strong>. Accessibility is a release
+      gate: every build runs automated checks (axe) on components and full pages
+      with zero violations allowed, and keyboard completion of the primary tasks
+      is tested end to end.
+    </p>
+
+    <h2>Key commitments</h2>
+    <ul>
+      <li>The map is never the only way in — an equal, fully keyboard- and
+        screen-reader-operable <strong>List view</strong> shows the same data.</li>
+      <li>Severity is conveyed by shape and text, never colour alone.</li>
+      <li>Visible focus, semantic landmarks, and a skip link throughout.</li>
+      <li><code>prefers-reduced-motion</code> is honoured (animations reduced).</li>
+      <li>“No reports” is framed as under-reported, not “safe” — see the
+        <strong>Coverage</strong> view.</li>
+    </ul>
+
+    <h2>Known limitations</h2>
+    <p>
+      A full screen-reader (VoiceOver/NVDA) sign-off is completed before public
+      launch; the test script is published with the project. WebKit/Safari is
+      covered by manual device testing.
+    </p>
+
+    <h2>Feedback</h2>
+    <p>
+      Found a barrier? Please contact the operator listed in the project README
+      so we can fix it.
+    </p>
+    <p><a href="/privacy.html">Privacy</a></p>
+  </body>
+</html>

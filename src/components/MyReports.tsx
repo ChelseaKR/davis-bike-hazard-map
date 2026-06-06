@@ -10,6 +10,7 @@ import {
   type QueuedReport,
   type QueueState,
 } from '../lib/db.ts';
+import { deleteReport as deleteReportFromServer } from '../lib/api.ts';
 import { syncOnce, isOnline } from '../lib/sync.ts';
 import { timeAgo } from '../lib/format.ts';
 
@@ -40,8 +41,17 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
     setBusy(false);
   };
 
-  const remove = async (clientId: string) => {
-    await deleteReport(clientId);
+  const remove = async (report: QueuedReport) => {
+    // Remove from this device, and — if it reached the server — ask the server
+    // to delete the record + photos too (your clientId is the capability).
+    await deleteReport(report.clientId);
+    if (report.state === 'synced') {
+      try {
+        await deleteReportFromServer(report.clientId);
+      } catch {
+        // Best-effort: the local copy is gone regardless.
+      }
+    }
     await load();
     onChange?.();
   };
@@ -88,9 +98,9 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
             <button
               type="button"
               className="btn btn-small"
-              onClick={() => remove(r.clientId)}
+              onClick={() => remove(r)}
             >
-              Delete from this device
+              {r.state === 'synced' ? 'Delete my report' : 'Delete from this device'}
             </button>
           </li>
         ))}

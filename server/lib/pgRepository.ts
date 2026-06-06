@@ -161,11 +161,18 @@ export class PostgresRepository implements Repository {
 
   async expire(now: number): Promise<number> {
     const res = await this.pool.query(
-      `UPDATE hazards SET status='expired', updated_at=$1
+      `UPDATE hazards
+         SET status='expired', updated_at=$1,
+             precise_lat=public_lat, precise_lng=public_lng
        WHERE status='approved' AND expires_at <= $1`,
       [now],
     );
     return res.rowCount ?? 0;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    const res = await this.pool.query('DELETE FROM hazards WHERE id = $1', [id]);
+    return (res.rowCount ?? 0) > 0;
   }
 
   async pendingStats(): Promise<PendingStats> {

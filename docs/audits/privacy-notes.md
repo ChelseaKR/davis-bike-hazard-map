@@ -31,14 +31,24 @@ street scene; a reporter whose home-adjacent report could reveal where they live
   route 404s for any non-approved hazard.
 - **No PII in logs.** Fastify logger redacts `authorization`; request bodies
   (which carry photos/locations) are not logged.
-- **Minimal retention.** Hazards auto-expire; lazy sweep on every read.
+- **Minimal retention + precise-location coarsening.** Hazards auto-expire
+  (lazy sweep on every read). The precise coordinate is retained only while a
+  hazard is *active*: on reject/resolve/expire it is **overwritten with the
+  public (fuzzed) point**, so we don't keep a reporter's exact spot once it's no
+  longer needed for an optional 311 hand-off.
+- **Reporter deletion.** `DELETE /api/reports/<clientId>` removes a report
+  (record + photo blobs); the clientId is the device-held capability. Exposed in
+  the app's "My reports" and the privacy page.
 
 ## "Open-data export" schema
 
-The public API (`GET /api/hazards`) **is** the open-data surface. It returns the
-public projection only: no precise location, no raw photo bytes, no contact
-info. This is enforced by `toPublic()` and asserted by the server tests
-("fuzzes the public location", "gates the photo behind approval").
+The public API is the open-data surface. `GET /api/hazards` returns the public
+projection only (no precise location, no raw photo bytes, no contact info), and
+`GET /api/hazards/export` serves the same data as **GeoJSON (ODbL)** for reuse.
+Enforced by `toPublic()` and asserted by the server tests ("fuzzes the public
+location", "gates the photo behind approval", "exports GeoJSON", "coarsens …").
+A user-facing **privacy page** (`/privacy.html`) and **accessibility statement**
+(`/accessibility.html`) are linked from the footer.
 
 ## Checklist
 

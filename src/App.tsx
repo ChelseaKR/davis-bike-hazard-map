@@ -164,9 +164,14 @@ export default function App() {
 
       <footer className="app-footer">
         <p>
-          Open data · Map data ©{' '}
+          Map data ©{' '}
           <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>{' '}
           contributors. Community-reported hazards are not verified by the city.
+        </p>
+        <p className="footer-links">
+          <a href="/privacy.html">Privacy</a> ·{' '}
+          <a href="/accessibility.html">Accessibility</a> ·{' '}
+          <a href="/api/hazards/export">Open data (GeoJSON)</a>
         </p>
       </footer>
     </div>
