@@ -2,7 +2,7 @@
 # (which also serves the built client) from a slim production-deps stage.
 
 # --- build ---
-FROM node:22-alpine AS build
+FROM node:22-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -10,7 +10,7 @@ COPY . .
 RUN npm run build
 
 # --- runtime ---
-FROM node:22-alpine AS runtime
+FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8787

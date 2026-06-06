@@ -96,6 +96,8 @@ export interface Hazard {
   location: GeoPoint;
   /** Relative URL of the moderated photo, or null. */
   photoUrl: string | null;
+  /** Relative URL of a small thumbnail (list/map), or null. */
+  thumbnailUrl?: string | null;
   status: HazardStatus;
   /** Count of independent confirmations from other cyclists. */
   confirmations: number;
