@@ -13,8 +13,12 @@ import { createPhotoStore } from './lib/photoStore.ts';
 import { migrateInlinePhotos } from './lib/hazards.ts';
 import { createModeratorStore, bootstrapModerator } from './lib/moderators.ts';
 import { startBackups } from './lib/backup.ts';
+import { initSentry } from './lib/sentry.ts';
 
 async function main() {
+  // Server-side error reporting (no-op without SENTRY_DSN).
+  initSentry(serverConfig.sentryDsn, serverConfig.isProd ? 'production' : 'development');
+
   // Production must use a real database. The one exception is ephemeral
   // throwaway runs (e2e, preview) that opt in explicitly with ALLOW_INMEMORY.
   if (serverConfig.isProd && !serverConfig.databaseUrl && process.env.ALLOW_INMEMORY !== 'true') {
