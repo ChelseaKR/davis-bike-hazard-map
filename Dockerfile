@@ -22,6 +22,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY shared ./shared
+COPY migrations ./migrations
 
 EXPOSE 8787
 # Liveness: the API health endpoint.
