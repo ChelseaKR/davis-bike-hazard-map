@@ -78,6 +78,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: deps.logger ?? (!config.isTest && { redact: ['req.headers.authorization'] }),
     bodyLimit: 6 * 1024 * 1024, // photos arrive as base64; keep a sane ceiling
+    // Honour an upstream X-Request-Id (proxy/CDN) for log correlation; otherwise
+    // Fastify generates one. Echoed back on responses below.
+    requestIdHeader: 'x-request-id',
+  });
+
+  // Surface the request id on every response so clients/proxies can correlate.
+  app.addHook('onSend', async (req, reply) => {
+    reply.header('x-request-id', req.id);
   });
 
   await app.register(helmet, {
@@ -138,8 +146,21 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     (req as AuthedRequest).moderatorUsername = payload.sub;
   };
 
-  // --- Health ---
+  // --- Health (liveness) + readiness ---
+  // Liveness: the process is up. Readiness: dependencies (the DB) are reachable,
+  // so a load balancer can stop routing to an instance with a dead database.
   app.get('/api/health', async () => ({ status: 'ok', time: now() }));
+
+  app.get('/api/ready', async (_req, reply) => {
+    try {
+      const ok = await repo.ping();
+      if (!ok) throw new Error('store not ready');
+      return { status: 'ready', time: now() };
+    } catch (err) {
+      app.log.error(err, 'readiness check failed');
+      return reply.status(503).send({ status: 'not_ready' });
+    }
+  });
 
   // --- Metrics (Prometheus text format) ---
   // Moderation backlog is the operational signal to watch against the 48 h SLA;

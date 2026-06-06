@@ -81,6 +81,34 @@ describe('health', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe('ok');
   });
+
+  it('readiness reports ready when the store pings', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/ready' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('ready');
+  });
+
+  it('readiness returns 503 when the store is down', async () => {
+    // Minimal stub — the readiness route only calls repo.ping().
+    const down = await buildApp({
+      repo: { ping: async () => false } as unknown as typeof repo,
+      config: testConfig,
+      now: () => clock,
+      logger: false,
+    });
+    const res = await down.inject({ method: 'GET', url: '/api/ready' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().status).toBe('not_ready');
+  });
+
+  it('echoes a correlation request id on responses', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { 'x-request-id': 'corr-123' },
+    });
+    expect(res.headers['x-request-id']).toBe('corr-123');
+  });
 });
 
 describe('metrics', () => {

@@ -92,6 +92,34 @@ async function main() {
     (path) => app.log.info(`Data snapshot written: ${path}`),
   );
 
+  // Close the DB pool when the app closes (covers shutdown + tests).
+  app.addHook('onClose', async () => {
+    await repo.close?.();
+  });
+
+  // Graceful shutdown: stop accepting connections, drain in-flight requests,
+  // then close the DB pool — so a Fly/Docker rolling deploy doesn't drop work.
+  let shuttingDown = false;
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      app.log.info(`${signal} received — shutting down gracefully…`);
+      const force = setTimeout(() => {
+        app.log.error('Shutdown timed out; forcing exit.');
+        process.exit(1);
+      }, 10_000);
+      force.unref();
+      app
+        .close()
+        .then(() => process.exit(0))
+        .catch((err) => {
+          app.log.error(err);
+          process.exit(1);
+        });
+    });
+  }
+
   try {
     await app.listen({ port: serverConfig.port, host: serverConfig.host });
   } catch (err) {

@@ -202,6 +202,11 @@ export class PostgresRepository implements Repository {
     };
   }
 
+  async ping(): Promise<boolean> {
+    const res = await this.pool.query('SELECT 1 AS ok');
+    return res.rows[0]?.ok === 1;
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }
