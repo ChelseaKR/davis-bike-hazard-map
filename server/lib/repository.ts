@@ -32,8 +32,14 @@ export interface Repository {
   all(): Promise<StoredHazard[]>;
   /** Approved, not-yet-expired rows (optional bbox pushdown), newest first. */
   listActive(now: number, bbox?: BBox): Promise<StoredHazard[]>;
-  /** Transition approved rows past their TTL to `expired`; return the count. */
+  /**
+   * Transition approved rows past their TTL to `expired`, and coarsen their
+   * precise location to the public (fuzzed) one — it's only needed while a
+   * hazard is actionable. Returns the count expired.
+   */
   expire(now: number): Promise<number>;
+  /** Hard-delete a hazard by id (reporter data deletion). Returns true if found. */
+  deleteById(id: string): Promise<boolean>;
   /** Moderation backlog stats for observability (cheap; no photos loaded). */
   pendingStats(): Promise<PendingStats>;
   /** Liveness of the backing store (readiness probe). Throws/false if down. */
@@ -98,12 +104,24 @@ export class MemoryRepository implements Repository {
     let expired = 0;
     for (const h of this.store.values()) {
       if (h.status === 'approved' && h.expiresAt <= now) {
-        this.store.set(h.id, { ...h, status: 'expired', updatedAt: now });
+        // Coarsen the precise location away once the hazard is no longer active.
+        this.store.set(h.id, {
+          ...h,
+          status: 'expired',
+          updatedAt: now,
+          preciseLocation: h.publicLocation,
+        });
         expired++;
       }
     }
     if (expired) this.persist();
     return expired;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    const existed = this.store.delete(id);
+    if (existed) this.persist();
+    return existed;
   }
 
   async pendingStats(): Promise<PendingStats> {

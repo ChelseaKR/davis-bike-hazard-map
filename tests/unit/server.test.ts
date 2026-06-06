@@ -536,3 +536,54 @@ describe('legacy inline-photo migration', () => {
     expect(await migrateInlinePhotos(r, photos)).toBe(0);
   });
 });
+
+describe('data lifecycle & privacy', () => {
+  it('deletes my report by clientId (record gone)', async () => {
+    await post('/api/reports', baseReport);
+    expect(await repo.findByClientId(baseReport.clientId)).toBeDefined();
+    const del = await app.inject({ method: 'DELETE', url: `/api/reports/${baseReport.clientId}` });
+    expect(del.statusCode).toBe(204);
+    expect(await repo.findByClientId(baseReport.clientId)).toBeUndefined();
+  });
+
+  it('404s deleting an unknown report', async () => {
+    const del = await app.inject({ method: 'DELETE', url: '/api/reports/no-such-id' });
+    expect(del.statusCode).toBe(404);
+  });
+
+  it('exports approved hazards as GeoJSON open data', async () => {
+    const res = await post('/api/reports', baseReport);
+    const id = res.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
+    const exp = await app.inject({ method: 'GET', url: '/api/hazards/export' });
+    expect(exp.headers['content-type']).toContain('geo+json');
+    const gj = exp.json();
+    expect(gj.type).toBe('FeatureCollection');
+    expect(gj.license).toBe('ODbL-1.0');
+    expect(gj.features).toHaveLength(1);
+    expect(gj.features[0].geometry.type).toBe('Point');
+  });
+
+  it('coarsens the precise location once a hazard is resolved', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    // Precise is kept while the report is active...
+    expect((await repo.findById(id))!.preciseLocation).toEqual(baseReport.location);
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
+    await post(`/api/moderation/${id}`, { decision: 'resolve' }, { authorization: `Bearer ${token}` });
+    const after = (await repo.findById(id))!;
+    expect(after.preciseLocation).toEqual(after.publicLocation);
+    expect(after.preciseLocation).not.toEqual(baseReport.location);
+  });
+
+  it('coarsens the precise location when a hazard expires', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
+    clock += 40 * DAY; // past any severity TTL
+    await app.inject({ method: 'GET', url: '/api/hazards' }); // triggers the expiry sweep
+    const after = (await repo.findById(id))!;
+    expect(after.status).toBe('expired');
+    expect(after.preciseLocation).toEqual(after.publicLocation);
+  });
+});

@@ -81,6 +81,19 @@ export async function confirmHazard(id: string): Promise<{ hazard: Hazard }> {
   return request<{ hazard: Hazard }>(`/hazards/${id}/confirm`, { method: 'POST' });
 }
 
+/**
+ * Delete your own report from the server by its clientId (the capability only
+ * your device holds). Treats a 404 as already-gone. Best-effort.
+ */
+export async function deleteReport(clientId: string): Promise<void> {
+  try {
+    await request<void>(`/reports/${clientId}`, { method: 'DELETE' });
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 404) return;
+    throw err;
+  }
+}
+
 export interface Session {
   token: string;
   username: string;

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b6e4f" />
+    <title>Privacy — Davis Bike Hazard Map</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font: 16px/1.6 system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #16241e;
+        background: #f7f8f7;
+      }
+      h1 { color: #0b6e4f; }
+      a { color: #095a40; }
+      code { background: #e7ece9; padding: 0 0.2em; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <p><a href="/">← Back to the map</a></p>
+    <h1>Privacy</h1>
+    <p>
+      The Davis Bike Hazard Map collects as little as possible. There are
+      <strong>no user accounts</strong> for reporters and no third-party
+      analytics or advertising trackers.
+    </p>
+
+    <h2>What a report contains</h2>
+    <ul>
+      <li>A hazard category, severity, and optional description you write.</li>
+      <li>A location. Your <strong>precise</strong> coordinate is used only on
+        the server; the public map shows a point <strong>fuzzed to roughly a
+        70-metre grid</strong> so it can't identify a home or person.</li>
+      <li>An optional photo. Photos are <strong>EXIF-stripped and re-encoded on
+        your device and again on the server</strong> (location/camera metadata
+        removed), and you can blur faces and licence plates before uploading.</li>
+      <li>A random report id generated on your device.</li>
+    </ul>
+
+    <h2>Moderation &amp; retention</h2>
+    <p>
+      Nothing is shown publicly until a moderator approves it. Your precise
+      coordinate is kept only while a hazard is active; once it is rejected,
+      resolved, or expires, the precise point is <strong>coarsened to the public
+      grid</strong>. We don't sell or share personal data.
+    </p>
+
+    <h2>Your choices</h2>
+    <ul>
+      <li><strong>Delete your report.</strong> Your device holds your report id;
+        deleting a report from “My reports” removes it locally, and the app can
+        ask the server to delete it (record and photos) via
+        <code>DELETE /api/reports/&lt;your-report-id&gt;</code>.</li>
+      <li><strong>Open data.</strong> Approved, fuzzed hazards are published as
+        open data (<a href="/api/hazards/export">GeoJSON export</a>, ODbL).</li>
+    </ul>
+
+    <p>
+      Questions or a deletion request you can't complete in the app? Contact the
+      operator listed in the project README.
+    </p>
+    <p><a href="/accessibility.html">Accessibility statement</a></p>
+  </body>
+</html>

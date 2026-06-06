@@ -329,6 +329,43 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   );
 
+  // --- Delete my own report (reporter data deletion) ---
+  // No account: the clientId (a UUID known only to the reporter's device and
+  // the server) is the capability. Removes the record and its photo blobs.
+  app.delete('/api/reports/:clientId', async (req, reply) => {
+    const { clientId } = req.params as { clientId: string };
+    const hazard = await repo.findByClientId(clientId);
+    if (!hazard) {
+      return reply.status(404).send({ error: 'not_found', message: 'No report with that id.' });
+    }
+    await repo.deleteById(hazard.id);
+    photos.delete(hazard.id);
+    photos.delete(thumbKey(hazard.id));
+    return reply.status(204).send();
+  });
+
+  // --- Open-data export (approved, public locations only) as GeoJSON ---
+  app.get('/api/hazards/export', async (_req, reply) => {
+    const hazards = await listPublic(repo, now());
+    const features = hazards.map((h) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [h.location.lng, h.location.lat] },
+      properties: {
+        id: h.id,
+        category: h.category,
+        severity: h.severity,
+        description: h.description,
+        confirmations: h.confirmations,
+        createdAt: h.createdAt,
+        updatedAt: h.updatedAt,
+      },
+    }));
+    return reply
+      .header('content-type', 'application/geo+json')
+      .header('access-control-allow-origin', '*') // open data — readable anywhere
+      .send(JSON.stringify({ type: 'FeatureCollection', license: 'ODbL-1.0', features }));
+  });
+
   // --- Confirm a hazard ("I saw this too") ---
   app.post('/api/hazards/:id/confirm', async (req, reply) => {
     const { id } = req.params as { id: string };

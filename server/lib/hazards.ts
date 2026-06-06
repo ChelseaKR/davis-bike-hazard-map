@@ -90,10 +90,16 @@ export async function moderateHazard(
     decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'resolved';
   const action: ModerationAction = { decision, reason, at: now, by };
 
+  // Once a hazard reaches a terminal state, the precise location is no longer
+  // needed (it was only for an optional 311 hand-off) — coarsen it to the
+  // public grid so we don't retain a reporter's exact spot indefinitely.
+  const coarsen = status !== 'approved';
+
   return repo.update(id, {
     status,
     updatedAt: now,
     moderation: [...hazard.moderation, action],
+    ...(coarsen ? { preciseLocation: hazard.publicLocation } : {}),
   });
 }
 

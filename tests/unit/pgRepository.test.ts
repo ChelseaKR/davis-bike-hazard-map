@@ -115,14 +115,32 @@ suite('PostgresRepository', () => {
     expect(await repo.pendingStats()).toEqual({ count: 2, oldestCreatedAt: 100 });
   });
 
-  it('expire transitions approved rows past their TTL', async () => {
+  it('expire transitions rows past TTL and coarsens their precise location', async () => {
     const now = 5000;
     await repo.insert(hazard({ id: 'live', clientId: 'l', status: 'approved', expiresAt: now + 1 }));
-    await repo.insert(hazard({ id: 'dead', clientId: 'd', status: 'approved', expiresAt: now - 1 }));
+    await repo.insert(
+      hazard({
+        id: 'dead',
+        clientId: 'd',
+        status: 'approved',
+        expiresAt: now - 1,
+        preciseLocation: { lat: 38.5462, lng: -121.7361 },
+        publicLocation: { lat: 38.5455, lng: -121.7355 },
+      }),
+    );
     const n = await repo.expire(now);
     expect(n).toBe(1);
-    expect((await repo.findById('dead'))?.status).toBe('expired');
+    const dead = (await repo.findById('dead'))!;
+    expect(dead.status).toBe('expired');
+    expect(dead.preciseLocation).toEqual(dead.publicLocation); // coarsened
     expect((await repo.findById('live'))?.status).toBe('approved');
+  });
+
+  it('hard-deletes a hazard by id', async () => {
+    await repo.insert(hazard({ id: 'del', clientId: 'del' }));
+    expect(await repo.deleteById('del')).toBe(true);
+    expect(await repo.findById('del')).toBeUndefined();
+    expect(await repo.deleteById('nope')).toBe(false);
   });
 });
 
