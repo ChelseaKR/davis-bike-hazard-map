@@ -41,6 +41,7 @@ import {
   listPublic,
   moderateHazard,
   toPublic,
+  thumbKey,
 } from './lib/hazards.ts';
 import { forwardToGogov } from './lib/gogov.ts';
 
@@ -281,11 +282,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Serve a moderated photo (approved + live only) ---
   app.get('/api/photos/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const { size } = req.query as { size?: string };
     const hazard = await repo.findById(id);
     if (!hazard || !hazard.photo || hazard.status !== 'approved' || hazard.expiresAt <= now()) {
       return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
     }
-    const bytes = photos.get(id);
+    // ?size=thumb serves the small variant, falling back to the full image.
+    const bytes = (size === 'thumb' ? photos.get(thumbKey(id)) : null) ?? photos.get(id);
     if (!bytes) {
       return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
     }

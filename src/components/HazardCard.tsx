@@ -57,7 +57,7 @@ export function HazardCard({
       {hazard.photoUrl && (
         <HazardPhoto
           className="hazard-photo"
-          src={hazard.photoUrl}
+          src={hazard.thumbnailUrl ?? hazard.photoUrl}
           alt={`Reported ${CATEGORY_LABELS[hazard.category].toLowerCase()} hazard`}
         />
       )}

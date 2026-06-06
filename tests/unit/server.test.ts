@@ -6,6 +6,7 @@ import { MemoryModeratorStore } from '../../server/lib/moderators.ts';
 import { hashPassword } from '../../server/lib/password.ts';
 import { serverConfig } from '../../server/config.ts';
 import { bytesToDataUrl, hasExif, dataUrlToBytes } from '../../shared/exif.ts';
+import sharp from 'sharp';
 
 const MOD_USER = 'mod';
 const MOD_PASS = 'correct horse battery staple';
@@ -31,14 +32,15 @@ let repo: MemoryRepository;
 // A session bearer token for the seeded moderator, refreshed each test.
 let token: string;
 
-function jpegWithExif(): string {
-  const bytes = Uint8Array.from([
-    0xff, 0xd8, // SOI
-    0xff, 0xe1, 0x00, 0x0c, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0xde, 0xad, // APP1 Exif
-    0xff, 0xe0, 0x00, 0x04, 0x10, 0x20, // APP0
-    0xff, 0xda, 0x00, 0x03, 0x55, 0x12, 0x34, 0xff, 0xd9, // SOS + data + EOI
-  ]);
-  return bytesToDataUrl(bytes, 'image/jpeg');
+// A real, decodable image as a data URL (the server now re-encodes via sharp,
+// so fixtures must be genuine images, not hand-crafted byte sequences).
+async function realPhoto(format: 'jpeg' | 'png' = 'jpeg'): Promise<string> {
+  // Larger than the thumbnail edge so the full vs. thumb variants differ.
+  const img = sharp({
+    create: { width: 640, height: 480, channels: 3, background: { r: 200, g: 40, b: 40 } },
+  });
+  const buf = await (format === 'png' ? img.png() : img.jpeg()).toBuffer();
+  return `data:image/${format};base64,${buf.toString('base64')}`;
 }
 
 const baseReport = {
@@ -304,8 +306,8 @@ describe('moderator accounts', () => {
 });
 
 describe('photo privacy', () => {
-  it('strips EXIF server-side and gates the photo behind approval', async () => {
-    const res = await post('/api/reports', { ...baseReport, photo: jpegWithExif() });
+  it('re-encodes the photo (EXIF-clean) and gates it behind approval', async () => {
+    const res = await post('/api/reports', { ...baseReport, photo: await realPhoto() });
     const id = res.json().hazard.id;
 
     // Photo is not publicly servable while pending.
@@ -317,12 +319,43 @@ describe('photo privacy', () => {
     const ok = await app.inject({ method: 'GET', url: `/api/photos/${id}` });
     expect(ok.statusCode).toBe(200);
     expect(ok.headers['content-type']).toContain('image/jpeg');
-    // The stored/served photo must be EXIF-clean (server backstop).
+    // The served photo is a valid, metadata-free JPEG (server re-encode).
+    const meta = await sharp(ok.rawPayload).metadata();
+    expect(meta.format).toBe('jpeg');
     expect(hasExif(new Uint8Array(ok.rawPayload))).toBe(false);
   });
 
-  it('inlines the photo (auth-gated) in the moderation queue so it can be reviewed', async () => {
-    await post('/api/reports', { ...baseReport, photo: jpegWithExif() });
+  it('serves a smaller thumbnail variant via ?size=thumb', async () => {
+    const res = await post('/api/reports', { ...baseReport, photo: await realPhoto() });
+    const id = res.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
+
+    const full = await app.inject({ method: 'GET', url: `/api/photos/${id}` });
+    const thumb = await app.inject({ method: 'GET', url: `/api/photos/${id}?size=thumb` });
+    expect(thumb.statusCode).toBe(200);
+    const thumbMeta = await sharp(thumb.rawPayload).metadata();
+    expect(thumbMeta.width).toBeLessThanOrEqual(320);
+    // A different (smaller) byte stream than the full image.
+    expect(thumb.rawPayload.length).not.toBe(full.rawPayload.length);
+  });
+
+  it('normalizes other formats (PNG) to JPEG on intake', async () => {
+    const res = await post('/api/reports', { ...baseReport, photo: await realPhoto('png') });
+    const id = res.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
+    const ok = await app.inject({ method: 'GET', url: `/api/photos/${id}` });
+    expect((await sharp(ok.rawPayload).metadata()).format).toBe('jpeg');
+  });
+
+  it('drops an undecodable "image" rather than storing junk', async () => {
+    const junk = bytesToDataUrl(Uint8Array.from([0xff, 0xd8, 0x00, 0x01, 0x02]), 'image/jpeg');
+    const res = await post('/api/reports', { ...baseReport, photo: junk });
+    const stored = (await repo.findById(res.json().hazard.id))!;
+    expect(stored.photo).toBeNull();
+  });
+
+  it('inlines the full photo (auth-gated) in the moderation queue', async () => {
+    await post('/api/reports', { ...baseReport, photo: await realPhoto() });
     const res = await app.inject({
       method: 'GET',
       url: '/api/moderation/queue',
@@ -334,12 +367,12 @@ describe('photo privacy', () => {
   });
 
   it('keeps photo bytes OUT of the persisted record (only a { mime } ref)', async () => {
-    const res = await post('/api/reports', { ...baseReport, photo: jpegWithExif() });
+    const res = await post('/api/reports', { ...baseReport, photo: await realPhoto() });
     const id = res.json().hazard.id;
     const stored = (await repo.findById(id))!;
     expect(stored.photo).toEqual({ mime: 'image/jpeg' });
-    // The serialized record must not carry the base64 blob.
     expect(JSON.stringify(stored)).not.toContain('base64');
+    expect(stored.publicLocation).not.toEqual(stored.preciseLocation);
   });
 });
 

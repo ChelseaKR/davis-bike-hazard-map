@@ -10,7 +10,7 @@ optional 311 hand-off. Trust boundary at the API; the client is untrusted.
 
 | # | Threat (STRIDE) | Control in place | Residual risk | Owner |
 |---|-----------------|------------------|---------------|-------|
-| R1 | **Tampering/Info** — malicious or oversized image upload | Type + size + base64 validation (`reportSubmissionSchema`); server re-encodes/strips; 6 MB body cap | Low — no image decoding beyond strip; consider a server-side image re-encode lib pre-launch | maintainer |
+| R1 | **Tampering/Info** — malicious or oversized image upload | Type + size + base64 validation (`reportSubmissionSchema`); **authoritative server-side re-encode via sharp** (`server/lib/image.ts`): bounded input pixels (~50 MP bomb guard), EXIF-orientation applied, downscaled, ALL metadata stripped, normalized to JPEG + thumbnail; undecodable inputs dropped; 6 MB body cap | Low — decoding is bounded and isolated; revisit limits if larger formats are added | maintainer |
 | R2 | **Info disclosure** — photo leaks a face/plate | Client blur offered + EXIF strip ×2 + moderation gate | Medium — blur is user-driven; a moderator may miss one. Mitigation: reject-on-doubt policy | moderation |
 | R3 | **Info disclosure** — precise location de-anonymises a reporter | ~70 m deterministic fuzzing; precise point server-only | Low — fuzz grid is a tunable trade-off (`DEFAULT_FUZZ_METERS`) | privacy reviewer |
 | R4 | **Spoofing/DoS** — spam or flooding | Per-IP global + per-hour report rate limits; idempotent writes; out-of-area rejection | Medium — no account/captcha; a determined actor can rotate IPs | maintainer |

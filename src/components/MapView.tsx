@@ -44,7 +44,7 @@ function buildPopup(hazard: Hazard, onConfirm?: (id: string) => void): HTMLEleme
 
   if (hazard.photoUrl) {
     const img = document.createElement('img');
-    img.src = hazard.photoUrl;
+    img.src = hazard.thumbnailUrl ?? hazard.photoUrl;
     img.alt = `Reported ${CATEGORY_LABELS[hazard.category].toLowerCase()}`;
     img.className = 'map-popup-photo';
     img.loading = 'lazy';

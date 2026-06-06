@@ -9,7 +9,8 @@
 import type { Hazard, Severity } from '../../shared/types.ts';
 import type { ValidatedReport } from '../../shared/validation.ts';
 import { fuzzCoordinate } from '../../shared/geo.ts';
-import { dataUrlToBytes, bytesToDataUrl, stripExifBytes } from '../../shared/exif.ts';
+import { dataUrlToBytes, bytesToDataUrl } from '../../shared/exif.ts';
+import { processPhoto } from './image.ts';
 import { newId } from './id.ts';
 import type { BBox, Repository } from './repository.ts';
 import type { PhotoStore } from './photoStore.ts';
@@ -21,22 +22,9 @@ interface CreateOptions {
   ttlDays: Record<Severity, number>;
 }
 
-interface SanitizedPhoto {
-  bytes: Uint8Array;
-  mime: string;
-}
-
-/** Server-side EXIF backstop: re-strip JPEG bytes even though the client did. */
-function sanitizePhoto(photo: string | null): SanitizedPhoto | null {
-  if (!photo) return null;
-  try {
-    const { bytes, mime } = dataUrlToBytes(photo);
-    if (mime !== 'image/jpeg') return { bytes, mime };
-    return { bytes: stripExifBytes(bytes), mime };
-  } catch {
-    // Unparseable photo => drop it rather than store something suspect.
-    return null;
-  }
+/** Storage key for a hazard's thumbnail blob (hyphen keeps the id path-safe). */
+export function thumbKey(id: string): string {
+  return `${id}-thumb`;
 }
 
 function expiryFor(severity: Severity, createdAt: number, ttlDays: Record<Severity, number>): number {
@@ -58,11 +46,13 @@ export async function createHazard(
   if (existing) return existing;
 
   const id = newId();
-  const sanitized = sanitizePhoto(report.photo);
+  // Authoritative server-side re-encode (bounded, metadata-stripped) + thumb.
+  const processed = report.photo ? await processPhoto(report.photo) : null;
   let photo: PhotoRef | null = null;
-  if (sanitized) {
-    photos.put(id, sanitized.bytes);
-    photo = { mime: sanitized.mime };
+  if (processed) {
+    photos.put(id, processed.full);
+    photos.put(thumbKey(id), processed.thumb);
+    photo = { mime: processed.mime };
   }
 
   const stored: StoredHazard = {
@@ -149,6 +139,7 @@ export function toPublic(h: StoredHazard): Hazard {
     description: h.description,
     location: h.publicLocation,
     photoUrl: h.photo ? `/api/photos/${h.id}` : null,
+    thumbnailUrl: h.photo ? `/api/photos/${h.id}?size=thumb` : null,
     status: h.status,
     confirmations: h.confirmations,
     createdAt: h.createdAt,
