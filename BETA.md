@@ -88,7 +88,9 @@ Then in the app: file a report → open **Moderate**, sign in with your
   precise location is fuzzed to ~70 m before anything is public. See
   [`docs/audits/`](./docs/audits/).
 - Postgres holds reports + the precise (internal-only) coordinates; use Fly's
-  managed Postgres backups. Photos live in the app volume / blob store.
+  managed Postgres backups. Photos live in the app volume by default; set
+  `S3_BUCKET` (+ AWS creds / `S3_ENDPOINT` for R2/MinIO) to move them to object
+  storage so app machines stay stateless and you can put a CDN in front.
 - Before a **public** launch, complete the two open review-gated items: the
   human VoiceOver/NVDA pass ([`screen-reader-walkthrough.md`](./docs/audits/screen-reader-walkthrough.md))
   and the equity-reviewer sign-off on the coverage view.

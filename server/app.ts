@@ -339,8 +339,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       return reply.status(404).send({ error: 'not_found', message: 'No report with that id.' });
     }
     await repo.deleteById(hazard.id);
-    photos.delete(hazard.id);
-    photos.delete(thumbKey(hazard.id));
+    await photos.delete(hazard.id);
+    await photos.delete(thumbKey(hazard.id));
     return reply.status(204).send();
   });
 
@@ -385,7 +385,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
     }
     // ?size=thumb serves the small variant, falling back to the full image.
-    const bytes = (size === 'thumb' ? photos.get(thumbKey(id)) : null) ?? photos.get(id);
+    const bytes =
+      (size === 'thumb' ? await photos.get(thumbKey(id)) : null) ?? (await photos.get(id));
     if (!bytes) {
       return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
     }
