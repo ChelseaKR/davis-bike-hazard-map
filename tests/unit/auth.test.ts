@@ -74,4 +74,14 @@ describe('bootstrapModerator', () => {
     expect(await bootstrapModerator(store, undefined, undefined, 1)).toBeNull();
     expect(await store.count()).toBe(0);
   });
+
+  it('bumpTokenVersion increments (for session revocation) and survives re-seed', async () => {
+    const store = new MemoryModeratorStore();
+    await store.upsert({ username: 'a', passwordHash: 'h', createdAt: 1, tokenVersion: 0 });
+    expect(await store.bumpTokenVersion('a')).toBe(1);
+    expect((await store.findByUsername('a'))!.tokenVersion).toBe(1);
+    // Re-seeding (bootstrap/password change) must not reset the version.
+    await store.upsert({ username: 'a', passwordHash: 'h2', createdAt: 2, tokenVersion: 0 });
+    expect((await store.findByUsername('a'))!.tokenVersion).toBe(1);
+  });
 });

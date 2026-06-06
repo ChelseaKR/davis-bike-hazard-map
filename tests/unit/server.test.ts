@@ -61,6 +61,7 @@ beforeEach(async () => {
     username: MOD_USER,
     passwordHash: await hashPassword(MOD_PASS),
     createdAt: clock,
+    tokenVersion: 0,
   });
   app = await buildApp({ repo, moderators, config: testConfig, now: () => clock, logger: false });
   await app.ready();
@@ -309,6 +310,37 @@ describe('moderator accounts', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().username).toBe(MOD_USER);
     expect(typeof res.json().token).toBe('string');
+  });
+
+  it('revoke invalidates every previously issued session', async () => {
+    const before = await app.inject({
+      method: 'GET',
+      url: '/api/moderation/queue',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(before.statusCode).toBe(200);
+
+    const revoke = await post('/api/auth/revoke', {}, { authorization: `Bearer ${token}` });
+    expect(revoke.json().revoked).toBe(true);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/moderation/queue',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(after.statusCode).toBe(401);
+  });
+
+  it('locks an account after repeated failed logins (429)', async () => {
+    for (let i = 0; i < 5; i++) {
+      const r = await post('/api/auth/login', { username: MOD_USER, password: 'wrong' });
+      expect(r.statusCode).toBe(401);
+    }
+    const locked = await post('/api/auth/login', { username: MOD_USER, password: 'wrong' });
+    expect(locked.statusCode).toBe(429);
+    // The correct password is also refused while locked.
+    const stillLocked = await post('/api/auth/login', { username: MOD_USER, password: MOD_PASS });
+    expect(stillLocked.statusCode).toBe(429);
   });
 });
 

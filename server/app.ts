@@ -161,8 +161,21 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await reply.status(401).send({ error: 'unauthorized', message: 'Moderator sign-in required.' });
       return;
     }
+    // Revocation: the token's version must still match the account's current
+    // one (a bump signs everyone out / kills a leaked token).
+    const moderator = await moderators.findByUsername(payload.sub);
+    if (!moderator || (payload.ver ?? 0) !== moderator.tokenVersion) {
+      await reply.status(401).send({ error: 'unauthorized', message: 'Session no longer valid.' });
+      return;
+    }
     (req as AuthedRequest).moderatorUsername = payload.sub;
   };
+
+  // Per-account failed-login throttle (per-process; complements the per-IP rate
+  // limit). After MAX_LOGIN_FAILS misses an account is locked for LOCKOUT_MS.
+  const loginFailures = new Map<string, { count: number; until: number }>();
+  const MAX_LOGIN_FAILS = 5;
+  const LOCKOUT_MS = 15 * 60 * 1000;
 
   // --- Health (liveness) + readiness ---
   // Liveness: the process is up. Readiness: dependencies (the DB) are reachable,
@@ -212,14 +225,38 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     { config: { rateLimit: { max: 10, timeWindow: 15 * 60 * 1000 } } },
     async (req, reply) => {
       const { username, password } = loginSchema.parse(req.body);
+
+      // Per-account lockout after repeated misses.
+      const fail = loginFailures.get(username);
+      if (fail && fail.until > now()) {
+        return reply
+          .status(429)
+          .send({ error: 'too_many_attempts', message: 'Too many attempts. Try again later.' });
+      }
+
       const moderator = await moderators.findByUsername(username);
       const ok = await verifyPassword(password, moderator?.passwordHash ?? DUMMY_PASSWORD_HASH);
       if (!moderator || !ok) {
+        const f = loginFailures.get(username) ?? { count: 0, until: 0 };
+        f.count += 1;
+        if (f.count >= MAX_LOGIN_FAILS) {
+          f.until = now() + LOCKOUT_MS;
+          f.count = 0;
+        }
+        loginFailures.set(username, f);
         return reply
           .status(401)
           .send({ error: 'invalid_credentials', message: 'Wrong username or password.' });
       }
-      const token = issueToken(username, config.sessionSecret, config.sessionTtlMs, now());
+
+      loginFailures.delete(username); // success clears the counter
+      const token = issueToken(
+        username,
+        config.sessionSecret,
+        config.sessionTtlMs,
+        now(),
+        moderator.tokenVersion,
+      );
       return { token, username, expiresAt: now() + config.sessionTtlMs };
     },
   );
@@ -227,8 +264,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // Exchange a still-valid session for a fresh one (sliding expiry).
   app.post('/api/auth/refresh', { preHandler: requireModerator }, async (req) => {
     const username = (req as AuthedRequest).moderatorUsername!;
-    const token = issueToken(username, config.sessionSecret, config.sessionTtlMs, now());
+    const moderator = await moderators.findByUsername(username);
+    const ver = moderator?.tokenVersion ?? 0;
+    const token = issueToken(username, config.sessionSecret, config.sessionTtlMs, now(), ver);
     return { token, username, expiresAt: now() + config.sessionTtlMs };
+  });
+
+  // Sign out everywhere / revoke a leaked token: bump the account's token
+  // version so every previously issued session stops verifying.
+  app.post('/api/auth/revoke', { preHandler: requireModerator }, async (req) => {
+    const username = (req as AuthedRequest).moderatorUsername!;
+    await moderators.bumpTokenVersion(username);
+    return { revoked: true, username };
   });
 
   // --- Public feed ---

@@ -140,14 +140,21 @@ suite('PostgresModeratorStore', () => {
   });
 
   it('upserts and reads back a moderator; updates the hash on conflict', async () => {
-    await store.upsert({ username: 'alice', passwordHash: 'h1', createdAt: 1 });
+    await store.upsert({ username: 'alice', passwordHash: 'h1', createdAt: 1, tokenVersion: 0 });
     expect((await store.findByUsername('alice'))?.passwordHash).toBe('h1');
     expect(await store.count()).toBe(1);
 
-    await store.upsert({ username: 'alice', passwordHash: 'h2', createdAt: 2 });
+    await store.upsert({ username: 'alice', passwordHash: 'h2', createdAt: 2, tokenVersion: 0 });
     expect((await store.findByUsername('alice'))?.passwordHash).toBe('h2');
     expect(await store.count()).toBe(1); // upsert, not a duplicate
 
     expect(await store.findByUsername('ghost')).toBeUndefined();
+  });
+
+  it('bumps the token version for session revocation', async () => {
+    await store.upsert({ username: 'bob', passwordHash: 'h', createdAt: 1, tokenVersion: 0 });
+    expect((await store.findByUsername('bob'))?.tokenVersion).toBe(0);
+    expect(await store.bumpTokenVersion('bob')).toBe(1);
+    expect((await store.findByUsername('bob'))?.tokenVersion).toBe(1);
   });
 });
