@@ -36,6 +36,10 @@ import { verifyPassword } from './lib/password.ts';
 import { issueToken, verifyToken } from './lib/token.ts';
 import { createMetrics } from './lib/metrics.ts';
 import { captureError, captureClientError } from './lib/sentry.ts';
+import { openapiSpec } from './openapi.ts';
+
+/** Current API version (also the prefix `/api/v1` resolves to). */
+const API_VERSION = '1';
 import {
   confirmHazard,
   createHazard,
@@ -84,11 +88,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     // Honour an upstream X-Request-Id (proxy/CDN) for log correlation; otherwise
     // Fastify generates one. Echoed back on responses below.
     requestIdHeader: 'x-request-id',
+    // Versioning: /api/v1/* is an alias for /api/* (rewritten before routing),
+    // so a single set of handlers serves both and clients can pin to v1.
+    rewriteUrl(req) {
+      const url = req.url ?? '/';
+      return url.startsWith('/api/v1/') ? url.replace('/api/v1/', '/api/') : url;
+    },
   });
 
-  // Surface the request id on every response so clients/proxies can correlate.
+  // Surface the request id + API version on every response.
   app.addHook('onSend', async (req, reply) => {
     reply.header('x-request-id', req.id);
+    reply.header('x-api-version', API_VERSION);
   });
 
   // RED metrics: observe every request's duration, labelled by the route
@@ -176,6 +187,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const loginFailures = new Map<string, { count: number; until: number }>();
   const MAX_LOGIN_FAILS = 5;
   const LOCKOUT_MS = 15 * 60 * 1000;
+
+  // --- OpenAPI spec ---
+  app.get('/api/openapi.json', async () => openapiSpec);
 
   // --- Health (liveness) + readiness ---
   // Liveness: the process is up. Readiness: dependencies (the DB) are reachable,

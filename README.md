@@ -59,7 +59,7 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 | Offline → sync | `make e2e` | file offline → syncs → moderated → on the map |
 | Security | CI | `npm audit` (high/critical), gitleaks secret scan |
 
-CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs the same gates on every push/PR.
+CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs the same gates on every push/PR. A **pre-commit hook** (husky + lint-staged) runs ESLint on staged files locally. The HTTP API is described by an **OpenAPI spec** at `GET /api/openapi.json`, and every endpoint is also reachable under the versioned alias `/api/v1/*`.
 
 ## Operations (2 a.m. runbook)
 
