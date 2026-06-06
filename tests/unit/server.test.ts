@@ -104,13 +104,29 @@ describe('health', () => {
     expect(res.json().status).toBe('not_ready');
   });
 
-  it('echoes a correlation request id on responses', async () => {
+  it('echoes a correlation request id + api version on responses', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/health',
       headers: { 'x-request-id': 'corr-123' },
     });
     expect(res.headers['x-request-id']).toBe('corr-123');
+    expect(res.headers['x-api-version']).toBe('1');
+  });
+
+  it('serves an OpenAPI document', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/openapi.json' });
+    expect(res.statusCode).toBe(200);
+    const spec = res.json();
+    expect(spec.openapi).toMatch(/^3\./);
+    expect(spec.paths['/hazards']).toBeDefined();
+    expect(spec.paths['/auth/login']).toBeDefined();
+  });
+
+  it('serves the /api/v1 alias for the same handlers', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/health' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('ok');
   });
 });
 

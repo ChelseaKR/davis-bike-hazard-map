@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "concurrently -n client,server -c cyan,magenta \"npm:dev:client\" \"npm:dev:server\"",
+    "prepare": "husky || true",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build": "tsc --noEmit && vite build",
@@ -26,6 +27,9 @@
     "a11y": "vitest run a11y",
     "e2e": "playwright test",
     "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run build"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs}": "eslint --fix"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
@@ -70,7 +74,9 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "fake-indexeddb": "^6.0.0",
     "globals": "^15.14.0",
+    "husky": "^9.1.7",
     "jsdom": "^25.0.1",
+    "lint-staged": "^15.5.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
     "vite": "^6.0.5",
