@@ -27,3 +27,6 @@ data/
 .vscode/
 *.log
 npm-debug.log*
+
+# runtime-fetched portfolio-standards (never commit)
+.standards/
