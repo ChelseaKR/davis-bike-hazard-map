@@ -1,0 +1,50 @@
+name: E2E WebKit (nightly, non-blocking)
+
+# Advisory WebKit-on-Linux coverage. WebKit fails to render the shell headlessly
+# in CI (tracked tooling issue, not a product bug), so this is non-blocking and
+# must never hold up a merge. Per CI-CD-STANDARD §11 it runs on a nightly
+# schedule + manual dispatch instead of every push/PR, to save Actions minutes.
+# The blocking Chromium + Firefox e2e in ci.yml still gates every PR; real
+# Safari/iOS coverage is the manual SR/device pass before public launch.
+on:
+  schedule:
+    - cron: '0 6 * * *' # daily 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-webkit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-webkit:
+    name: End-to-end (WebKit, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright WebKit
+        run: npx playwright install --with-deps webkit
+      - name: Run e2e (WebKit)
+        env:
+          E2E_BROWSERS: webkit
+        run: npm run e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: playwright-report-webkit
+          path: playwright-report/
+          if-no-files-found: ignore

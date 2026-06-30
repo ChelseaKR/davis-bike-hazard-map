@@ -1,10 +1,11 @@
 name: CodeQL
 
-# Static analysis (SAST) for JS/TS: runs on push/PR to main and weekly so new
-# advisories are caught even without code changes.
+# Static analysis (SAST) for JS/TS: runs on PRs into main and weekly so new
+# advisories are caught even without code changes. The PR run covers what lands
+# on main and the weekly schedule keeps the default-branch baseline fresh, so a
+# redundant push-to-main trigger is omitted to save Actions minutes
+# (CI-CD-STANDARD §11). Never runs on feature-branch pushes.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   schedule:

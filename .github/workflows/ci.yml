@@ -96,33 +96,9 @@ jobs:
           path: playwright-report/
           if-no-files-found: ignore
 
-  e2e-webkit:
-    name: End-to-end (WebKit, non-blocking)
-    runs-on: ubuntu-latest
-    # WebKit-on-Linux currently fails to render the shell in headless CI
-    # (tracked). Kept visible but non-blocking so it never holds up a merge;
-    # real Safari/iOS coverage is the manual SR/device pass before public launch.
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Install Playwright WebKit
-        run: npx playwright install --with-deps webkit
-      - name: Run e2e (WebKit)
-        env:
-          E2E_BROWSERS: webkit
-        run: npm run e2e
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-        with:
-          name: playwright-report-webkit
-          path: playwright-report/
-          if-no-files-found: ignore
+  # WebKit E2E is advisory/non-blocking and moved to a nightly schedule in
+  # e2e-webkit.yml (CI-CD-STANDARD §11) so it no longer burns Actions minutes on
+  # every push/PR. The blocking Chromium + Firefox e2e above still gates PRs.
 
   lighthouse:
     name: Lighthouse performance budget
