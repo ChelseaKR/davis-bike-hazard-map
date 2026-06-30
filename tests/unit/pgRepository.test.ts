@@ -27,6 +27,8 @@ function hazard(over: Partial<StoredHazard> = {}): StoredHazard {
     createdAt: 1000,
     updatedAt: 1000,
     expiresAt: 9_999_999_999_999,
+    resolvedAt: null,
+    handoff: null,
     moderation: [],
     ...over,
   };
@@ -91,6 +93,43 @@ suite('PostgresRepository', () => {
 
     const inBox = await repo.listActive(now, { minLat: 38.5, minLng: -121.8, maxLat: 38.6, maxLng: -121.7 });
     expect(inBox.map((h) => h.id)).toEqual(['b', 'a']); // faraway culled
+  });
+
+  it('round-trips the hand-off jsonb and resolvedAt', async () => {
+    await repo.insert(
+      hazard({
+        id: 'ho',
+        clientId: 'ho',
+        status: 'resolved',
+        resolvedAt: 4242,
+        handoff: {
+          provider: 'gogov',
+          reference: 'ho',
+          externalStatus: 'Closed - Resolved',
+          stage: 'resolved',
+          submittedAt: 100,
+          updatedAt: 200,
+          note: null,
+        },
+      }),
+    );
+    const got = (await repo.findById('ho'))!;
+    expect(got.resolvedAt).toBe(4242);
+    expect(got.handoff?.stage).toBe('resolved');
+    expect(got.handoff?.reference).toBe('ho');
+  });
+
+  it('listRecentlyResolved returns only resolved rows within the window, newest first', async () => {
+    await repo.insert(hazard({ id: 'r-old', clientId: 'r-old', status: 'resolved', resolvedAt: 1000, publicLocation: { lat: 38.54, lng: -121.74 } }));
+    await repo.insert(hazard({ id: 'r-new', clientId: 'r-new', status: 'resolved', resolvedAt: 3000, publicLocation: { lat: 38.55, lng: -121.73 } }));
+    await repo.insert(hazard({ id: 'approved', clientId: 'ap', status: 'approved' }));
+    await repo.insert(hazard({ id: 'r-far', clientId: 'r-far', status: 'resolved', resolvedAt: 3000, publicLocation: { lat: 40.0, lng: -120.0 } }));
+
+    const recent = await repo.listRecentlyResolved(2000);
+    expect(recent.map((h) => h.id)).toEqual(['r-new', 'r-far']); // r-old before the window; approved excluded
+
+    const inBox = await repo.listRecentlyResolved(0, { minLat: 38.5, minLng: -121.8, maxLat: 38.6, maxLng: -121.7 });
+    expect(inBox.map((h) => h.id)).toEqual(['r-new', 'r-old']); // r-far culled; resolved_at desc
   });
 
   it('pings the database for readiness', async () => {

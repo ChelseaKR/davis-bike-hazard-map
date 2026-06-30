@@ -7,10 +7,13 @@
 import { config } from '../config.ts';
 import type {
   ApiError,
+  GeoPoint,
   Hazard,
   HazardFilters,
   ReportSubmission,
 } from '../../shared/types.ts';
+import type { RoutePlan } from '../../shared/routing.ts';
+import type { Watch } from '../../shared/alerts.ts';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -82,12 +85,50 @@ export async function confirmHazard(id: string): Promise<{ hazard: Hazard }> {
 }
 
 /**
+ * Plan a hazard-aware cycling route between two points. Same-origin (the server
+ * proxies the OSRM backend), so the response is service-worker cacheable.
+ */
+export async function fetchRoute(from: GeoPoint, to: GeoPoint): Promise<RoutePlan> {
+  const q = `from=${from.lat},${from.lng}&to=${to.lat},${to.lng}`;
+  const { plan } = await request<{ plan: RoutePlan }>(`/route?${q}`);
+  return plan;
+}
+
+/**
  * Delete your own report from the server by its clientId (the capability only
  * your device holds). Treats a 404 as already-gone. Best-effort.
  */
 export async function deleteReport(clientId: string): Promise<void> {
   try {
     await request<void>(`/reports/${clientId}`, { method: 'DELETE' });
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 404) return;
+    throw err;
+  }
+}
+
+/** A browser PushSubscription's serialisable shape. */
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+/** Register a saved-area/route push subscription. Returns the server-side id. */
+export async function subscribeAlert(
+  subscription: PushSubscriptionPayload,
+  watch: Watch,
+  label?: string,
+): Promise<{ id: string }> {
+  return request<{ id: string }>('/alerts/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({ subscription, watch, label }),
+  });
+}
+
+/** Remove a previously-registered alert subscription. Treats 404 as gone. */
+export async function unsubscribeAlert(id: string): Promise<void> {
+  try {
+    await request<void>(`/alerts/subscribe/${id}`, { method: 'DELETE' });
   } catch (err) {
     if (err instanceof ApiRequestError && err.status === 404) return;
     throw err;

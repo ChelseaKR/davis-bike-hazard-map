@@ -8,6 +8,9 @@
 import {
   CATEGORY_LABELS,
   SEVERITY_LABELS,
+  LIFECYCLE_LABELS,
+  HANDOFF_STAGE_LABELS,
+  lifecycleStage,
   type Hazard,
 } from '../../shared/types.ts';
 import { timeAgo, formatLatLng } from '../lib/format.ts';
@@ -32,8 +35,9 @@ export function HazardCard({
   onFocusOnMap,
   now = Date.now(),
 }: HazardCardProps) {
+  const stage = lifecycleStage(hazard);
   return (
-    <li className="hazard-card">
+    <li className={`hazard-card hazard-stage-${stage}`}>
       <div className="hazard-card-head">
         <span
           className={`severity-badge severity-${hazard.severity}`}
@@ -47,10 +51,26 @@ export function HazardCard({
             , {SEVERITY_LABELS[hazard.severity]} severity
           </span>
         </h3>
+        <span className={`lifecycle-badge lifecycle-${stage}`}>
+          {LIFECYCLE_LABELS[stage]}
+        </span>
         <span className={`severity-text severity-text-${hazard.severity}`}>
           {SEVERITY_LABELS[hazard.severity]}
         </span>
       </div>
+
+      {stage === 'resolved' && (
+        <p className="hazard-resolved-note">
+          Reported fixed{hazard.resolvedAt ? ` ${timeAgo(hazard.resolvedAt, now)}` : ''} — shown
+          briefly so you know it was addressed.
+        </p>
+      )}
+
+      {hazard.handoff && (
+        <p className="hazard-handoff-note">
+          City 311: {HANDOFF_STAGE_LABELS[hazard.handoff.stage]}
+        </p>
+      )}
 
       {hazard.description && <p className="hazard-desc">{hazard.description}</p>}
 
@@ -80,7 +100,7 @@ export function HazardCard({
       <p className="hazard-note">Community-reported — not verified by the city.</p>
 
       <div className="hazard-actions">
-        {onConfirm && (
+        {onConfirm && stage !== 'resolved' && stage !== 'expired' && (
           <button
             type="button"
             className="btn btn-small"

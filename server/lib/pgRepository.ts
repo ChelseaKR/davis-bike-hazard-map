@@ -13,6 +13,7 @@
  */
 import { Pool, type PoolClient } from 'pg';
 import type { StoredHazard, ModerationAction, PhotoRef } from './types.ts';
+import type { HandoffInfo } from '../../shared/types.ts';
 import type { BBox, PendingStats, Repository } from './repository.ts';
 import { runMigrations } from './migrate.ts';
 
@@ -32,6 +33,8 @@ interface HazardRow {
   created_at: string; // bigint comes back as string from pg
   updated_at: string;
   expires_at: string;
+  resolved_at: string | null;
+  handoff: HandoffInfo | null;
   moderation: ModerationAction[];
 }
 
@@ -51,6 +54,8 @@ function rowToHazard(r: HazardRow): StoredHazard {
     createdAt: Number(r.created_at),
     updatedAt: Number(r.updated_at),
     expiresAt: Number(r.expires_at),
+    resolvedAt: r.resolved_at != null ? Number(r.resolved_at) : null,
+    handoff: r.handoff ?? null,
     moderation: r.moderation ?? [],
   };
 }
@@ -58,7 +63,8 @@ function rowToHazard(r: HazardRow): StoredHazard {
 const COLUMNS = `
   id, client_id, category, severity, description,
   precise_lat, precise_lng, public_lat, public_lng, photo_mime,
-  status, confirmations, created_at, updated_at, expires_at, moderation`;
+  status, confirmations, created_at, updated_at, expires_at,
+  resolved_at, handoff, moderation`;
 
 /** Positional parameter values for INSERT/UPDATE, in COLUMNS order (minus id). */
 function writeValues(h: StoredHazard): unknown[] {
@@ -78,6 +84,8 @@ function writeValues(h: StoredHazard): unknown[] {
     h.createdAt,
     h.updatedAt,
     h.expiresAt,
+    h.resolvedAt ?? null,
+    h.handoff ? JSON.stringify(h.handoff) : null,
     JSON.stringify(h.moderation),
   ];
 }
@@ -97,7 +105,7 @@ export class PostgresRepository implements Repository {
   async insert(hazard: StoredHazard): Promise<StoredHazard> {
     await this.pool.query(
       `INSERT INTO hazards (${COLUMNS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       writeValues(hazard),
     );
     return hazard;
@@ -132,7 +140,8 @@ export class PostgresRepository implements Repository {
            client_id=$2, category=$3, severity=$4, description=$5,
            precise_lat=$6, precise_lng=$7, public_lat=$8, public_lng=$9,
            photo_mime=$10, status=$11, confirmations=$12,
-           created_at=$13, updated_at=$14, expires_at=$15, moderation=$16
+           created_at=$13, updated_at=$14, expires_at=$15,
+           resolved_at=$16, handoff=$17, moderation=$18
          WHERE id=$1`,
         writeValues(merged),
       );
@@ -154,6 +163,20 @@ export class PostgresRepository implements Repository {
     }
     const res = await this.pool.query<HazardRow>(
       `SELECT ${COLUMNS} FROM hazards WHERE ${where} ORDER BY updated_at DESC`,
+      params,
+    );
+    return res.rows.map(rowToHazard);
+  }
+
+  async listRecentlyResolved(resolvedAfter: number, bbox?: BBox): Promise<StoredHazard[]> {
+    const params: unknown[] = [resolvedAfter];
+    let where = `status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at >= $1`;
+    if (bbox) {
+      params.push(bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng);
+      where += ` AND public_lat BETWEEN $2 AND $3 AND public_lng BETWEEN $4 AND $5`;
+    }
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards WHERE ${where} ORDER BY resolved_at DESC`,
       params,
     );
     return res.rows.map(rowToHazard);

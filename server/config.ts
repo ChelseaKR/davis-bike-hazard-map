@@ -52,6 +52,37 @@ export const serverConfig = {
   /** Optional 311/GOGov hand-off webhook. Empty => hand-off runs in dry-run. */
   gogovWebhookUrl: process.env.GOGOV_WEBHOOK_URL ?? '',
   gogovApiKey: process.env.GOGOV_API_KEY ?? '',
+  /** Optional 311 status-poll URL (GET {url}/{reference}). Empty => sync dry-runs. */
+  gogovStatusUrl: process.env.GOGOV_STATUS_URL ?? '',
+  /**
+   * Shared secret a 311/GOGov webhook must present (x-gogov-signature header) to
+   * push a status back. Empty => the inbound sync-back webhook is DISABLED (503),
+   * so we never accept unauthenticated status writes.
+   */
+  gogovWebhookSecret: process.env.GOGOV_WEBHOOK_SECRET ?? '',
+
+  /**
+   * OSRM-compatible cycling routing backend, proxied by GET /api/route. Default
+   * is the public OSRM demo server (fine for dev/light use; self-host for prod
+   * — see docs). Empty => the planner serves a straight-line fallback only.
+   */
+  routingUrl:
+    process.env.ROUTING_URL ?? 'https://router.project-osrm.org/route/v1/cycling',
+
+  /** How long a resolved hazard stays visible (greyed) on the public map, in days. */
+  resolvedVisibleDays: int('RESOLVED_VISIBLE_DAYS', 7),
+
+  /**
+   * Web-push alerts for saved areas/routes. OFF by default — needs VAPID keys to
+   * actually deliver; without them (or when disabled) the matcher still runs in
+   * dry-run. See docs for the production checklist.
+   */
+  push: {
+    enabled: process.env.PUSH_ENABLED === 'true',
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+    subject: process.env.VAPID_SUBJECT ?? 'mailto:hazards@davisbikehazardmap.org',
+  },
 
   /** Optional Sentry DSN for server-side error reporting. Empty => disabled. */
   sentryDsn: process.env.SENTRY_DSN ?? '',

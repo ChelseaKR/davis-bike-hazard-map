@@ -82,6 +82,66 @@ export const hazardFiltersSchema = z.object({
   bbox: bboxSchema.optional(),
 });
 
+/**
+ * A hazard-aware route request: a start and end point, both inside Davis. The
+ * planner only routes within the mapped area (and refuses GPS-error inputs).
+ */
+export const routeRequestSchema = z.object({
+  from: davisPointSchema,
+  to: davisPointSchema,
+});
+
+export type ValidatedRouteRequest = z.infer<typeof routeRequestSchema>;
+
+/**
+ * 311 status sync-back webhook body. GOGov/311 (or an integration shim) POSTs
+ * this when a handed-off report changes state; `reference` is the hazard id we
+ * forwarded, `status` is the provider's free-form status string (mapped to our
+ * lifecycle by server/lib/lifecycle.ts).
+ */
+export const handoffStatusSchema = z.object({
+  reference: z.string().trim().min(1).max(200),
+  status: z.string().trim().min(1).max(80),
+  note: z.string().trim().max(300).optional(),
+});
+
+export type ValidatedHandoffStatus = z.infer<typeof handoffStatusSchema>;
+
+/**
+ * Saved-area / saved-route alert subscription (web push). A watch is either a
+ * bounding-box area or a route corridor; the geometry is capped so a single
+ * subscription can't carry an unbounded polyline.
+ */
+const areaWatchSchema = z.object({
+  kind: z.literal('area'),
+  minLat: z.number().gte(-90).lte(90),
+  minLng: z.number().gte(-180).lte(180),
+  maxLat: z.number().gte(-90).lte(90),
+  maxLng: z.number().gte(-180).lte(180),
+});
+
+const routeWatchSchema = z.object({
+  kind: z.literal('route'),
+  corridorMeters: z.number().positive().max(500),
+  geometry: z.array(geoPointSchema).min(2).max(2000),
+});
+
+export const watchSchema = z.discriminatedUnion('kind', [areaWatchSchema, routeWatchSchema]);
+
+export const alertSubscriptionSchema = z.object({
+  subscription: z.object({
+    endpoint: z.string().url().max(1000),
+    keys: z.object({
+      p256dh: z.string().min(1).max(300),
+      auth: z.string().min(1).max(300),
+    }),
+  }),
+  watch: watchSchema,
+  label: z.string().trim().max(80).optional(),
+});
+
+export type ValidatedAlertSubscription = z.infer<typeof alertSubscriptionSchema>;
+
 /** Body for a moderation decision. */
 export const moderationDecisionSchema = z.object({
   decision: z.enum(['approve', 'reject', 'resolve']),

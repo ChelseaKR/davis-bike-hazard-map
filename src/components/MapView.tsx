@@ -15,6 +15,9 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import {
   CATEGORY_LABELS,
   SEVERITY_LABELS,
+  LIFECYCLE_LABELS,
+  HANDOFF_STAGE_LABELS,
+  lifecycleStage,
   type Hazard,
 } from '../../shared/types.ts';
 import { DAVIS_CENTER } from '../../shared/validation.ts';
@@ -35,6 +38,19 @@ function buildPopup(hazard: Hazard, onConfirm?: (id: string) => void): HTMLEleme
   const title = document.createElement('h3');
   title.textContent = `${CATEGORY_LABELS[hazard.category]} · ${SEVERITY_LABELS[hazard.severity]}`;
   el.appendChild(title);
+
+  const stage = lifecycleStage(hazard);
+  const badge = document.createElement('p');
+  badge.className = `map-popup-stage lifecycle-${stage}`;
+  badge.textContent = LIFECYCLE_LABELS[stage];
+  el.appendChild(badge);
+
+  if (hazard.handoff) {
+    const handoff = document.createElement('p');
+    handoff.className = 'map-popup-note';
+    handoff.textContent = `City 311: ${HANDOFF_STAGE_LABELS[hazard.handoff.stage]}`;
+    el.appendChild(handoff);
+  }
 
   if (hazard.description) {
     const desc = document.createElement('p');
@@ -68,7 +84,7 @@ function buildPopup(hazard: Hazard, onConfirm?: (id: string) => void): HTMLEleme
   note.textContent = 'Community-reported — not verified by the city.';
   el.appendChild(note);
 
-  if (onConfirm) {
+  if (onConfirm && stage !== 'resolved' && stage !== 'expired') {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-small';

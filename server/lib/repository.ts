@@ -32,6 +32,8 @@ export interface Repository {
   all(): Promise<StoredHazard[]>;
   /** Approved, not-yet-expired rows (optional bbox pushdown), newest first. */
   listActive(now: number, bbox?: BBox): Promise<StoredHazard[]>;
+  /** Resolved rows fixed at/after `resolvedAfter` (optional bbox), newest first. */
+  listRecentlyResolved(resolvedAfter: number, bbox?: BBox): Promise<StoredHazard[]>;
   /**
    * Transition approved rows past their TTL to `expired`, and coarsen their
    * precise location to the public (fuzzed) one — it's only needed while a
@@ -98,6 +100,13 @@ export class MemoryRepository implements Repository {
       .filter((h) => h.status === 'approved' && h.expiresAt > now)
       .filter((h) => !bbox || inBounds(h.publicLocation, bbox))
       .sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async listRecentlyResolved(resolvedAfter: number, bbox?: BBox): Promise<StoredHazard[]> {
+    return [...this.store.values()]
+      .filter((h) => h.status === 'resolved' && (h.resolvedAt ?? 0) >= resolvedAfter)
+      .filter((h) => !bbox || inBounds(h.publicLocation, bbox))
+      .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0));
   }
 
   async expire(now: number): Promise<number> {

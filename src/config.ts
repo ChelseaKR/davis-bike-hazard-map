@@ -23,4 +23,20 @@ export const config = {
 
   /** How often the sync loop retries the queue while online, in ms. */
   syncIntervalMs: 30_000,
+
+  /**
+   * Public read-only dashboard mode. When `VITE_PUBLIC_DASHBOARD=true` the app
+   * shows only the read-only views (map, list, coverage, route) and hides the
+   * report/my-reports/moderation tabs — the graduation of the private beta into
+   * a public hazard map.
+   */
+  publicDashboard: import.meta.env.VITE_PUBLIC_DASHBOARD === 'true',
+
+  /**
+   * Web-push alerts for saved areas. Off by default — turning it on requires
+   * VAPID keys + a push service worker handler (see docs). When false the
+   * saved-area UI and subscription calls are not rendered, so the PWA's offline
+   * behaviour is unaffected.
+   */
+  pushEnabled: import.meta.env.VITE_PUSH_ENABLED === 'true',
 } as const;

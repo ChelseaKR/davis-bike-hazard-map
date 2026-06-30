@@ -12,12 +12,14 @@ import { useRefreshOnReconnect } from './hooks/useRefreshOnReconnect.ts';
 import { useViewState, type Tab } from './hooks/useViewState.ts';
 import { startSync } from './lib/sync.ts';
 import { confirmHazard } from './lib/api.ts';
+import { config } from './config.ts';
 import { Filters } from './components/Filters.tsx';
 import { ListView } from './components/ListView.tsx';
 import { ReportForm } from './components/ReportForm.tsx';
 import { MyReports } from './components/MyReports.tsx';
 import { ModerationPanel } from './components/ModerationPanel.tsx';
 import { CoverageView } from './components/CoverageView.tsx';
+import { RoutePlanner } from './components/RoutePlanner.tsx';
 import { StatusBanner } from './components/StatusBanner.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { FeedFreshness } from './components/FeedFreshness.tsx';
@@ -29,14 +31,23 @@ const MapView = lazy(() =>
   import('./components/MapView.tsx').then((m) => ({ default: m.MapView })),
 );
 
-const TABS: { id: Tab; label: string }[] = [
+/** Read-only views available in the public dashboard. */
+const PUBLIC_TABS: Tab[] = ['map', 'list', 'coverage', 'route'];
+
+const ALL_TABS: { id: Tab; label: string }[] = [
   { id: 'map', label: 'Map' },
   { id: 'list', label: 'List' },
   { id: 'coverage', label: 'Coverage' },
+  { id: 'route', label: 'Route' },
   { id: 'report', label: 'Report' },
   { id: 'mine', label: 'My reports' },
   { id: 'moderate', label: 'Moderate' },
 ];
+
+// In public-dashboard mode the report/my-reports/moderation tabs are removed.
+const TABS = config.publicDashboard
+  ? ALL_TABS.filter((t) => PUBLIC_TABS.includes(t.id))
+  : ALL_TABS;
 
 export default function App() {
   const [{ tab, filters, focusHazard, statusKey }, dispatch] = useViewState();
@@ -103,6 +114,16 @@ export default function App() {
         ))}
       </nav>
 
+      {config.publicDashboard && (
+        <p className="public-banner" role="note">
+          Public read-only view — reporting and moderation are disabled. See the{' '}
+          <a href="https://www.cityofdavis.org/city-hall/public-works-utilities-and-operations">
+            city's 311
+          </a>{' '}
+          to file an official request.
+        </p>
+      )}
+
       <StatusBanner refreshKey={statusKey} />
 
       <main className="app-main">
@@ -145,7 +166,9 @@ export default function App() {
 
           {tab === 'coverage' && <CoverageView hazards={all} />}
 
-          {tab === 'report' && (
+          {tab === 'route' && <RoutePlanner />}
+
+          {!config.publicDashboard && tab === 'report' && (
             <>
               {!online && (
                 <p className="hint offline-hint">
@@ -156,9 +179,11 @@ export default function App() {
             </>
           )}
 
-          {tab === 'mine' && <MyReports onChange={() => dispatch({ type: 'bumpStatus' })} />}
+          {!config.publicDashboard && tab === 'mine' && (
+            <MyReports onChange={() => dispatch({ type: 'bumpStatus' })} />
+          )}
 
-          {tab === 'moderate' && <ModerationPanel />}
+          {!config.publicDashboard && tab === 'moderate' && <ModerationPanel />}
         </ErrorBoundary>
       </main>
 
