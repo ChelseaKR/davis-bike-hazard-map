@@ -1,0 +1,45 @@
+name: Container scan
+
+# Builds the production image (the same Dockerfile the Fly.io deploy ships) and
+# scans it for known CVEs with Trivy. Fails the build on *fixable*
+# HIGH/CRITICAL vulnerabilities (ignore-unfixed) so a green run means there is a
+# patch available that we are not yet applying. Runs on push/PR to main and
+# weekly, so new advisories against the base image are caught even without code
+# changes (mirrors the CodeQL schedule). Backlog #11 / SECURITY-AND-SUPPLY-CHAIN.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 7 * * 1' # Mondays 07:00 UTC
+
+# Least privilege: build + scan only need to read the repo. No write scope is
+# granted to GITHUB_TOKEN.
+permissions:
+  contents: read
+
+concurrency:
+  group: container-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy:
+    name: Trivy image CVE scan (HIGH,CRITICAL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - name: Build production image
+        run: docker build -t davis-bike-hazard-map:scan .
+      - name: Trivy vulnerability scan (fails on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: davis-bike-hazard-map:scan
+          scan-type: image
+          vuln-type: os,library
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
