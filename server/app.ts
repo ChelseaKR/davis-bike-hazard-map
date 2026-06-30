@@ -366,6 +366,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   );
 
+  // --- Reporter-facing status of my own report (the feedback loop) ---
+  // No account: the clientId (a UUID known only to the reporter's device and
+  // the server) is the capability — the same one DELETE uses. Returns the
+  // reporter's own report in whatever state it is in (including `pending` and
+  // `rejected`, which the public feed never carries) so the device can show a
+  // *reported → in review → on the map → handed to city → fixed* trail. The
+  // projection is the public one (fuzzed location, no moderation notes), so it
+  // leaks nothing the reporter didn't already submit.
+  app.get('/api/reports/:clientId', async (req, reply) => {
+    const { clientId } = req.params as { clientId: string };
+    const hazard = await repo.findByClientId(clientId);
+    if (!hazard) {
+      return reply.status(404).send({ error: 'not_found', message: 'No report with that id.' });
+    }
+    return { hazard: toPublic(hazard) };
+  });
+
   // --- Delete my own report (reporter data deletion) ---
   // No account: the clientId (a UUID known only to the reporter's device and
   // the server) is the capability. Removes the record and its photo blobs.

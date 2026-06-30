@@ -175,7 +175,11 @@ export default function App() {
                   You're offline — your report will be saved and synced later.
                 </p>
               )}
-              <ReportForm onSubmitted={onSubmitted} />
+              <ReportForm
+                onSubmitted={onSubmitted}
+                nearbyHazards={all}
+                onConfirmExisting={onConfirm}
+              />
             </>
           )}
 

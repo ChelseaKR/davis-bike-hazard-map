@@ -35,6 +35,12 @@ describe('reportSubmissionSchema', () => {
     ).toBe(false);
   });
 
+  it('accepts the near-miss / close-call category (research roadmap E1)', () => {
+    expect(
+      reportSubmissionSchema.safeParse({ ...valid, category: 'near_miss' }).success,
+    ).toBe(true);
+  });
+
   it('rejects an over-long description', () => {
     expect(
       reportSubmissionSchema.safeParse({ ...valid, description: 'x'.repeat(501) })

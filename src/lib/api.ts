@@ -95,6 +95,22 @@ export async function fetchRoute(from: GeoPoint, to: GeoPoint): Promise<RoutePla
 }
 
 /**
+ * Fetch the server-side status of your own report by its clientId (the
+ * capability only your device holds), so "My reports" can show how it's
+ * progressing — in review, on the map, handed to the city, fixed. Returns null
+ * if the server has no record (e.g. it never synced, or you deleted it).
+ */
+export async function fetchReportStatus(clientId: string): Promise<Hazard | null> {
+  try {
+    const { hazard } = await request<{ hazard: Hazard }>(`/reports/${clientId}`);
+    return hazard;
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
  * Delete your own report from the server by its clientId (the capability only
  * your device holds). Treats a 404 as already-gone. Best-effort.
  */
