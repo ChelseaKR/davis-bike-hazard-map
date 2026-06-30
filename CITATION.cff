@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: Davis Bike Hazard Map
+message: "If you use this work, please cite it."
+type: software
+authors:
+  - family-names: Kelly-Reif
+    given-names: Chelsea
+    email: ckellyreif@gmail.com
+    alias: ChelseaKR
+version: 0.1.0
+date-released: 2026-06-30
+license: MIT
+repository-code: "https://github.com/ChelseaKR/davis-bike-hazard-map"
+url: "https://github.com/ChelseaKR/davis-bike-hazard-map"
+abstract: >-
+  Crowdsourced, offline-first cycling-hazard map for Davis, CA — an installable
+  PWA. Report a pothole, broken glass, blocked lane, or dangerous intersection
+  from a phone (photo + location + category + severity), see a live map, route
+  around hazards, and optionally hand reports off to the city's 311/GOGov system.
+keywords:
+  - civic-tech
+  - cycling
+  - pwa
+  - offline-first
+  - crowdsourcing
+  - hazard-map
+  - davis
