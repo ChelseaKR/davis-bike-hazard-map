@@ -13,8 +13,11 @@ Davis cyclists hit the same hazards repeatedly; the city's 311 is underused and 
 - **Report in seconds:** category, severity, photo (EXIF stripped, faces/plates blurrable), auto-location; works offline and syncs later.
 - **Live hazard map:** clustered, filterable by type/severity/recency; lightweight enough for mobile data.
 - **Map + list parity:** a fully accessible, non-map list view shows the exact same data.
+- **Hazard-avoiding route planner:** pick a start + end and get a cycling route that steers around reported hazards (weighted by severity + recency), as both a map polyline and an equivalent turn-by-turn list. Routes via an OSRM cycling backend, proxied through our API so the browser stays same-origin and the plan is offline-cacheable; degrades to a straight-line fallback with no connection.
+- **Lifecycle + 311 status sync-back:** hazards move through *reported → confirmed → resolved* (surfaced as a badge on the map/list), and a report handed off to GOGov/311 carries its status back — when the city marks it fixed, the hazard resolves and lingers briefly (greyed) so a fix is *visible*, not just an absence.
 - **311 hand-off (optional):** forward an approved report to Davis's GOGov/311 with the same payload.
-- **Lifecycle:** hazards can be confirmed, marked resolved, and expire, so the map stays trustworthy.
+- **Saved-route push alerts (flagged):** save an area or route and get a web-push notification when a new hazard appears on it (server matcher + subscription API are complete; turning on delivery needs VAPID keys — see below).
+- **Public read-only dashboard:** a no-auth, read-only deployment mode (map/list/coverage/route only) for graduating the private beta — `VITE_PUBLIC_DASHBOARD=true`.
 
 ## Quickstart
 
@@ -72,6 +75,10 @@ CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs the same gate
 - **Moderator accounts:** each moderator signs in with a username + password (Moderate tab) and gets an expiring session token; the audit trail records who approved/rejected each report. Rotate `SESSION_SECRET` to invalidate all sessions; change a password by re-seeding `MODERATOR_PASSWORD` (or via the DB).
 - **311 down?** Hand-off degrades gracefully (returns a dry-run result, never throws) — the app keeps working; retry later.
 - **Map tiles:** OpenStreetMap. If tile usage gets heavy, self-host tiles and set `VITE_TILE_URL`.
+- **Routing backend:** the planner proxies an OSRM cycling server (`ROUTING_URL`, default the public OSRM demo). The demo server is rate-limited and best-effort — **self-host `osrm-backend` for production** and point `ROUTING_URL` at it. With no backend reachable the API returns a straight-line fallback (no turn-by-turn) so the feature never hard-fails.
+- **311 status sync-back:** two paths, both graceful/dry-run by default. Pull — a moderator hits *Sync* (`POST /api/moderation/:id/handoff/sync`), which polls `GOGOV_STATUS_URL`. Push — 311 (or a shim) POSTs `/api/handoff/webhook` with the hazard's reference + status, authenticated by `GOGOV_WEBHOOK_SECRET` (the webhook is **disabled with 503** until that secret is set). A "fixed/closed" status resolves the hazard and coarsens its stored location.
+- **Push alerts:** server-side matching, subscription storage (in-memory; a Postgres table is the documented next step), and dry-run delivery ship behind `PUSH_ENABLED`. To actually deliver: generate a VAPID pair (`npx web-push generate-vapid-keys`), set `PUSH_ENABLED=true` + `VAPID_*`, add a `push`/`notificationclick` handler to the service worker, and wire the `web-push` transport into `server/lib/pushNotify.ts` (`PushSender`). Until then subscriptions are accepted only when enabled and matches are logged, not sent.
+- **Public dashboard:** deploy with `VITE_PUBLIC_DASHBOARD=true` for a read-only public map (no report/moderation UI). Seed demo data first so the map isn't empty: `DATABASE_PATH=./data/hazards.json make seed` (or run `make seed` against your `DATABASE_URL`); seeds are clearly fictional (see `scripts/seed.ts`).
 
 ## For Claude Code
 - **Build entrypoint:** [`docs/ROADMAP.md`](./docs/ROADMAP.md) → *Implementation Plan*; what was built is in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).

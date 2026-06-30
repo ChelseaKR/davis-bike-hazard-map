@@ -100,3 +100,32 @@ These record where the build deviated from the roadmap, and why.
   by default.** Rationale: least privilege and spam-resistance — only an
   approved hazard is forwarded, by a moderator, and with no webhook configured
   the adapter degrades to a dry run so the system never depends on a live 311.
+- **ADR-5 — Route planning proxies an OSRM backend server-side; hazard
+  avoidance is a re-ranking layer, not a custom router.** Rationale: bundling a
+  road graph for true offline routing is far too heavy for a mobile PWA, and
+  hitting an external router from the browser would break the `'self'` CSP and
+  the offline cache. So the server proxies OSRM (`/api/route`), and the
+  *hazard-aware* part lives in a small, pure re-ranking module
+  (`shared/routing.ts`): fetch OSRM's candidate routes, score each by proximity
+  to reported hazards (severity × recency × confirmations, falling off across a
+  corridor), and pick the lowest-cost one. With no backend reachable it returns
+  a straight-line fallback so the feature degrades instead of failing. *Rejected
+  a self-hosted full offline router* (bundle size) *and a direct browser→OSRM
+  call* (CSP + cache).
+- **ADR-6 — Lifecycle is a derived projection; resolved hazards linger; 311
+  status syncs back over an authenticated webhook.** Rationale: the public
+  *reported → confirmed → resolved* stage is computed from the existing
+  moderation `status` + confirmation count (`lifecycleStage`), so the moderation
+  gate's invariants and tests are untouched — no new enum to keep consistent.
+  Recently-resolved hazards stay briefly visible (greyed) so a *fix* is shown,
+  not just an absence. Status sync-back is graceful/dry-run by default, with the
+  inbound webhook disabled until a shared secret is set (never accept
+  unauthenticated status writes).
+- **ADR-7 — Saved-route push alerts: real matcher + subscription API now,
+  flagged delivery.** Rationale: the testable, civic-valuable core — geometric
+  matching of a new hazard against saved areas/route corridors, plus
+  subscription storage and a moderation-approval hook — is implemented and
+  tested. Actual Web Push needs VAPID keys, a service-worker `push` handler, and
+  the `web-push` transport, which are operational infra, so delivery ships
+  behind `PUSH_ENABLED` and dry-runs (logging matches) until wired. *Rejected
+  shipping a half-working push path* that would degrade the PWA's offline story.
