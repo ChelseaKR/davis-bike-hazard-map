@@ -20,3 +20,21 @@ export function timeAgo(timestamp: number, now: number = Date.now()): string {
 export function formatLatLng(lat: number, lng: number): string {
   return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 }
+
+/** Human distance: metres under 1 km, else kilometres with one decimal. */
+export function formatDistance(meters: number): string {
+  if (!Number.isFinite(meters) || meters < 0) return '—';
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+/** Human duration: "<1 min", "N min", or "Hh Mm" for longer rides. */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '—';
+  if (seconds < 60) return '<1 min';
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
+}

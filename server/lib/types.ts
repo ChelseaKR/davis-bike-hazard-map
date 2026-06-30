@@ -5,6 +5,7 @@
  */
 import type {
   GeoPoint,
+  HandoffInfo,
   HazardCategory,
   HazardStatus,
   Severity,
@@ -44,5 +45,9 @@ export interface StoredHazard {
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
+  /** Epoch ms the hazard was resolved (fixed), or null/undefined. */
+  resolvedAt?: number | null;
+  /** 311 hand-off record + synced-back status, or null/undefined. */
+  handoff?: HandoffInfo | null;
   moderation: ModerationAction[];
 }

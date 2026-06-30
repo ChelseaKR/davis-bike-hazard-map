@@ -99,6 +99,7 @@ export async function moderateHazard(
     status,
     updatedAt: now,
     moderation: [...hazard.moderation, action],
+    ...(status === 'resolved' ? { resolvedAt: now } : {}),
     ...(coarsen ? { preciseLocation: hazard.publicLocation } : {}),
   });
 }
@@ -151,6 +152,8 @@ export function toPublic(h: StoredHazard): Hazard {
     createdAt: h.createdAt,
     updatedAt: h.updatedAt,
     expiresAt: h.expiresAt,
+    resolvedAt: h.resolvedAt ?? null,
+    handoff: h.handoff ?? null,
   };
 }
 
@@ -173,6 +176,28 @@ export async function listPublic(repo: Repository, now: number, bbox?: BBox): Pr
   await repo.expire(now);
   const rows = await repo.listActive(now, bbox);
   return rows.map(toPublic);
+}
+
+/**
+ * The public map/list feed: live (approved) hazards PLUS recently-resolved ones,
+ * which stay visible for `resolvedVisibleMs` so cyclists can see a hazard was
+ * fixed (the client renders them greyed via their `resolved` lifecycle stage).
+ * Routing and the open-data export deliberately use the approved-only
+ * `listPublic` instead — you don't route around, or publish, a fixed hazard.
+ */
+export async function listPublicFeed(
+  repo: Repository,
+  now: number,
+  resolvedVisibleMs: number,
+  bbox?: BBox,
+): Promise<Hazard[]> {
+  await repo.expire(now);
+  const active = await repo.listActive(now, bbox);
+  const resolved =
+    resolvedVisibleMs > 0
+      ? await repo.listRecentlyResolved(now - resolvedVisibleMs, bbox)
+      : [];
+  return [...active, ...resolved].map(toPublic);
 }
 
 /** The moderation queue: everything still pending review, oldest first. */

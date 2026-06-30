@@ -14,6 +14,8 @@ import { CATEGORY_LABELS, SEVERITY_LABELS } from '../../shared/types.ts';
 export interface GogovConfig {
   webhookUrl: string;
   apiKey: string;
+  /** Optional status-poll endpoint (GET {statusUrl}/{reference}). */
+  statusUrl?: string;
 }
 
 /** The exact contract we forward to 311. Documented and minimal. */
@@ -90,5 +92,41 @@ export async function forwardToGogov(
       payload,
       error: err instanceof Error ? err.message : 'hand-off failed',
     };
+  }
+}
+
+export interface GogovStatusResult {
+  dryRun: boolean;
+  /** The provider's raw status string, when one was fetched. */
+  status?: string;
+  note?: string;
+  error?: string;
+}
+
+/**
+ * Poll 311 for the current status of a forwarded report. Like the hand-off
+ * itself, it DEGRADES GRACEFULLY: with no status URL configured it returns a
+ * dry-run result (no network), and it never throws.
+ */
+export async function fetchGogovStatus(
+  reference: string,
+  config: GogovConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<GogovStatusResult> {
+  if (!config.statusUrl) return { dryRun: true };
+  try {
+    const url = `${config.statusUrl.replace(/\/$/, '')}/${encodeURIComponent(reference)}`;
+    const res = await fetchImpl(url, {
+      headers: {
+        accept: 'application/json',
+        ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
+      },
+    });
+    if (!res.ok) return { dryRun: false, error: `311 status responded ${res.status}` };
+    const body = (await res.json()) as { status?: string; note?: string };
+    if (!body.status) return { dryRun: false, error: '311 status response had no status' };
+    return { dryRun: false, status: body.status, note: body.note };
+  } catch (err) {
+    return { dryRun: false, error: err instanceof Error ? err.message : 'status poll failed' };
   }
 }

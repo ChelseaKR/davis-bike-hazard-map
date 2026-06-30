@@ -4,11 +4,17 @@ import {
   fetchHazards,
   submitReport,
   confirmHazard,
+  fetchRoute,
+  subscribeAlert,
+  unsubscribeAlert,
   fetchModerationQueue,
   decideModeration,
+  login,
+  deleteReport,
   ApiRequestError,
 } from '../../src/lib/api.ts';
 import type { ReportSubmission } from '../../shared/types.ts';
+import type { Watch } from '../../shared/alerts.ts';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -93,6 +99,67 @@ describe('confirmHazard', () => {
       '/api/hazards/h1/confirm',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+});
+
+describe('login + deleteReport', () => {
+  it('logs in and returns the session', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ token: 't', username: 'mod', expiresAt: 9 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const session = await login('mod', 'pw');
+    expect(session.token).toBe('t');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/login');
+  });
+
+  it('deletes a report and treats 404 as already gone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 } as Response));
+    await expect(deleteReport('cid')).resolves.toBeUndefined();
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'not_found', message: 'gone' }, 404)));
+    await expect(deleteReport('cid')).resolves.toBeUndefined();
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'boom', message: 'server' }, 500)));
+    await expect(deleteReport('cid')).rejects.toBeInstanceOf(ApiRequestError);
+  });
+});
+
+describe('fetchRoute', () => {
+  it('encodes from/to as lat,lng query params and returns the plan', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ plan: { source: 'osrm' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const plan = await fetchRoute({ lat: 38.54, lng: -121.74 }, { lat: 38.55, lng: -121.73 });
+    expect(plan).toEqual({ source: 'osrm' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/route?from=38.54,-121.74&to=38.55,-121.73');
+  });
+});
+
+describe('alerts api', () => {
+  const watch: Watch = { kind: 'area', minLat: 38.5, minLng: -121.8, maxLat: 38.6, maxLng: -121.7 };
+
+  it('POSTs a subscription and returns the id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: 'sub-1' }, 201));
+    vi.stubGlobal('fetch', fetchMock);
+    const out = await subscribeAlert(
+      { endpoint: 'https://push/x', keys: { p256dh: 'p', auth: 'a' } },
+      watch,
+      'commute',
+    );
+    expect(out.id).toBe('sub-1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/alerts/subscribe');
+    expect(JSON.parse(init.body).label).toBe('commute');
+  });
+
+  it('DELETEs a subscription and treats 404 as already gone', async () => {
+    const ok = vi.fn().mockResolvedValue({ ok: true, status: 204 } as Response);
+    vi.stubGlobal('fetch', ok);
+    await expect(unsubscribeAlert('sub-1')).resolves.toBeUndefined();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ error: 'not_found', message: 'gone' }, 404)),
+    );
+    await expect(unsubscribeAlert('sub-1')).resolves.toBeUndefined();
   });
 });
 

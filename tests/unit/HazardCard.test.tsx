@@ -65,4 +65,44 @@ describe('HazardCard', () => {
     expect(img).toHaveAttribute('src', '/api/photos/h1');
     expect(img.getAttribute('alt')).toMatch(/pothole/i);
   });
+
+  it('shows a "Confirmed" lifecycle badge once confirmed', () => {
+    renderCard({ hazard: hazard({ confirmations: 2 }), now: NOW });
+    expect(screen.getByText('Confirmed', { selector: '.lifecycle-badge' })).toBeInTheDocument();
+  });
+
+  it('shows "Reported" before any confirmation', () => {
+    renderCard({ hazard: hazard({ confirmations: 0 }), now: NOW });
+    expect(screen.getByText('Reported', { selector: '.lifecycle-badge' })).toBeInTheDocument();
+  });
+
+  it('marks a resolved hazard, notes the fix, and hides the confirm action', () => {
+    const onConfirm = vi.fn();
+    renderCard({
+      hazard: hazard({ status: 'resolved', resolvedAt: NOW - 1000 }),
+      onConfirm,
+      now: NOW,
+    });
+    expect(screen.getByText('Resolved', { selector: '.lifecycle-badge' })).toBeInTheDocument();
+    expect(screen.getByText(/reported fixed/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /i saw this too/i })).toBeNull();
+  });
+
+  it('surfaces the synced-back 311 hand-off status', () => {
+    renderCard({
+      hazard: hazard({
+        handoff: {
+          provider: 'gogov',
+          reference: 'h1',
+          externalStatus: 'In Progress',
+          stage: 'in_progress',
+          submittedAt: NOW - 5000,
+          updatedAt: NOW - 1000,
+          note: null,
+        },
+      }),
+      now: NOW,
+    });
+    expect(screen.getByText(/city 311: city crew assigned/i)).toBeInTheDocument();
+  });
 });

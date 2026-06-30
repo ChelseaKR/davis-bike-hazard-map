@@ -20,7 +20,9 @@ export const openapiSpec = {
   tags: [
     { name: 'public' },
     { name: 'reports' },
+    { name: 'routing' },
     { name: 'moderation' },
+    { name: 'alerts' },
     { name: 'auth' },
     { name: 'ops' },
   ],
@@ -50,6 +52,20 @@ export const openapiSpec = {
           createdAt: { type: 'integer' },
           updatedAt: { type: 'integer' },
           expiresAt: { type: 'integer' },
+          resolvedAt: { type: 'integer', nullable: true },
+          handoff: {
+            type: 'object',
+            nullable: true,
+            description: '311/GOGov hand-off + synced-back status',
+            properties: {
+              provider: { type: 'string' },
+              reference: { type: 'string' },
+              externalStatus: { type: 'string' },
+              stage: { type: 'string', enum: ['submitted', 'acknowledged', 'in_progress', 'resolved', 'closed', 'rejected'] },
+              submittedAt: { type: 'integer' },
+              updatedAt: { type: 'integer' },
+            },
+          },
         },
       },
       ReportSubmission: {
@@ -95,6 +111,20 @@ export const openapiSpec = {
       },
     },
     '/hazards/export': { get: { tags: ['public'], summary: 'Open-data export (GeoJSON, ODbL)', responses: { '200': { description: 'FeatureCollection' } } } },
+    '/route': {
+      get: {
+        tags: ['routing'],
+        summary: 'Hazard-aware cycling route plan (proxies OSRM, re-ranks to avoid hazards)',
+        parameters: [
+          { name: 'from', in: 'query', required: true, schema: { type: 'string' }, description: 'lat,lng (within Davis)' },
+          { name: 'to', in: 'query', required: true, schema: { type: 'string' }, description: 'lat,lng (within Davis)' },
+        ],
+        responses: {
+          '200': { description: 'a RoutePlan (chosen route geometry + turn-by-turn steps + hazards on route)' },
+          '400': { description: 'endpoints missing or outside Davis' },
+        },
+      },
+    },
     '/hazards/{id}/confirm': {
       post: { tags: ['public'], summary: 'Confirm a hazard ("I saw this too")', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'updated' }, '404': { description: 'not active' } } },
     },
@@ -123,7 +153,19 @@ export const openapiSpec = {
       post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: 'Approve / reject / resolve', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'updated' }, '404': { description: 'not found' } } },
     },
     '/moderation/{id}/handoff': {
-      post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: '311/GOGov hand-off (dry-run by default)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'result' } } },
+      post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: '311/GOGov hand-off (dry-run by default)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'result + updated hazard' } } },
+    },
+    '/moderation/{id}/handoff/sync': {
+      post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: 'Poll 311 for status and reflect it (resolving the hazard if fixed)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'sync result + updated hazard' }, '409': { description: 'never handed off' } } },
+    },
+    '/handoff/webhook': {
+      post: { tags: ['moderation'], summary: '311 status sync-back webhook (shared-secret auth via x-gogov-signature)', responses: { '200': { description: 'applied' }, '401': { description: 'bad signature' }, '503': { description: 'webhook disabled (no secret configured)' } } },
+    },
+    '/alerts/subscribe': {
+      post: { tags: ['alerts'], summary: 'Subscribe a saved area/route to new-hazard push alerts (feature-flagged)', responses: { '201': { description: 'subscription id' }, '400': { description: 'invalid' }, '503': { description: 'push disabled' } } },
+    },
+    '/alerts/subscribe/{id}': {
+      delete: { tags: ['alerts'], summary: 'Remove a saved alert subscription', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '204': { description: 'removed' }, '404': { description: 'not found' }, '503': { description: 'push disabled' } } },
     },
   },
 } as const;

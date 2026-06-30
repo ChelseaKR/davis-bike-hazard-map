@@ -20,6 +20,12 @@ const testConfig = {
   sessionTtlMs: 12 * 60 * 60 * 1000,
   gogovWebhookUrl: '',
   gogovApiKey: '',
+  gogovStatusUrl: '',
+  gogovWebhookSecret: '',
+  // Empty routing backend ⇒ the planner serves a deterministic straight-line
+  // fallback (no network) in tests.
+  routingUrl: '',
+  resolvedVisibleDays: 7,
   corsOrigins: [],
   serveClient: false,
   rateLimit: { max: 10_000, windowMs: 60_000, reportsPerHour: 10_000 },
@@ -76,6 +82,32 @@ function post(url: string, body: unknown, headers: Record<string, string> = {}) 
     payload: body as object,
     headers: { 'content-type': 'application/json', ...headers },
   });
+}
+
+const auth = () => ({ authorization: `Bearer ${token}` });
+
+/** Build a second app (custom config / fetch) with a logged-in moderator. */
+async function buildAppWithModerator(
+  config: typeof serverConfig,
+  fetchImpl?: typeof fetch,
+): Promise<{ app: FastifyInstance; token: string; repo: MemoryRepository }> {
+  const r = new MemoryRepository();
+  const moderators = new MemoryModeratorStore();
+  await moderators.upsert({
+    username: MOD_USER,
+    passwordHash: await hashPassword(MOD_PASS),
+    createdAt: clock,
+    tokenVersion: 0,
+  });
+  const a = await buildApp({ repo: r, moderators, config, now: () => clock, fetchImpl, logger: false });
+  await a.ready();
+  const login = await a.inject({
+    method: 'POST',
+    url: '/api/auth/login',
+    payload: { username: MOD_USER, password: MOD_PASS },
+    headers: { 'content-type': 'application/json' },
+  });
+  return { app: a, token: login.json().token, repo: r };
 }
 
 describe('health', () => {
@@ -601,5 +633,231 @@ describe('data lifecycle & privacy', () => {
     const after = (await repo.findById(id))!;
     expect(after.status).toBe('expired');
     expect(after.preciseLocation).toEqual(after.publicLocation);
+  });
+});
+
+describe('hazard-aware route planner', () => {
+  it('plans a route and detects a hazard sitting on it (fallback, no network)', async () => {
+    const rep = await post('/api/reports', baseReport);
+    const id = rep.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+    // Read the hazard's PUBLISHED (fuzzed) location and route straight through it.
+    const pub = (await app.inject({ method: 'GET', url: '/api/hazards' })).json().hazards[0];
+    const { lat, lng } = pub.location;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/route?from=${lat},${lng - 0.002}&to=${lat},${lng + 0.002}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const plan = res.json().plan;
+    expect(plan.source).toBe('fallback');
+    expect(plan.route.geometry).toHaveLength(2);
+    expect(plan.route.steps.length).toBeGreaterThan(0);
+    expect(plan.alternativesConsidered).toBe(1);
+    expect(plan.nearby.map((n: { hazard: { id: string } }) => n.hazard.id)).toContain(id);
+  });
+
+  it('rejects a route outside Davis (400)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/route?from=40.0,-120.0&to=40.1,-119.9' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects a malformed point (400)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/route?from=garbage&to=38.5449,-121.74' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('uses an OSRM backend when one is configured (mocked fetch)', async () => {
+    const fetchMock: typeof fetch = (async () =>
+      ({
+        ok: true,
+        json: async () => ({
+          routes: [
+            {
+              distance: 1200,
+              duration: 300,
+              geometry: { coordinates: [[-121.745, 38.5449], [-121.736, 38.5449]] },
+              legs: [{ steps: [{ distance: 1200, name: '5th St', maneuver: { type: 'depart', location: [-121.745, 38.5449] } }] }],
+            },
+          ],
+        }),
+      }) as Response) as unknown as typeof fetch;
+    const { app: a } = await buildAppWithModerator(
+      { ...testConfig, routingUrl: 'https://osrm.test/route/v1/cycling' },
+      fetchMock,
+    );
+    const res = await a.inject({ method: 'GET', url: '/api/route?from=38.5449,-121.745&to=38.5449,-121.736' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().plan.source).toBe('osrm');
+    await a.close();
+  });
+});
+
+describe('311 status sync-back', () => {
+  async function handOff(): Promise<string> {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+    await post(`/api/moderation/${id}/handoff`, {}, auth());
+    return id;
+  }
+
+  it('records a hand-off record on the hazard', async () => {
+    const id = await handOff();
+    const stored = (await repo.findById(id))!;
+    expect(stored.handoff?.stage).toBe('submitted');
+    expect(stored.handoff?.reference).toBe(id);
+  });
+
+  it('sync dry-runs (and changes nothing) without a status URL', async () => {
+    const id = await handOff();
+    const res = await post(`/api/moderation/${id}/handoff/sync`, {}, auth());
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.dryRun).toBe(true);
+    expect((await repo.findById(id))!.status).toBe('approved');
+  });
+
+  it('409s syncing a hazard that was never handed off', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+    const res = await post(`/api/moderation/${id}/handoff/sync`, {}, auth());
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('the moderator poll applies a fetched status (mocked 311)', async () => {
+    const fetchMock: typeof fetch = (async () =>
+      ({ ok: true, json: async () => ({ status: 'In Progress' }) }) as Response) as unknown as typeof fetch;
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(
+      { ...testConfig, gogovStatusUrl: 'https://311.test/status' },
+      fetchMock,
+    );
+    const rep = await a.inject({ method: 'POST', url: '/api/reports', payload: baseReport, headers: { 'content-type': 'application/json' } });
+    const id = rep.json().hazard.id;
+    const h = { 'content-type': 'application/json', authorization: `Bearer ${tok}` };
+    await a.inject({ method: 'POST', url: `/api/moderation/${id}`, payload: { decision: 'approve' }, headers: h });
+    await a.inject({ method: 'POST', url: `/api/moderation/${id}/handoff`, payload: {}, headers: h });
+    const sync = await a.inject({ method: 'POST', url: `/api/moderation/${id}/handoff/sync`, payload: {}, headers: h });
+    expect(sync.json().result.status).toBe('In Progress');
+    expect((await r.findById(id))!.handoff?.stage).toBe('in_progress');
+    await a.close();
+  });
+
+  it('the inbound webhook is disabled (503) without a configured secret', async () => {
+    const res = await post('/api/handoff/webhook', { reference: 'x', status: 'Resolved' });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('the inbound webhook requires the shared secret and resolves on a fixed status', async () => {
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator({
+      ...testConfig,
+      gogovWebhookSecret: 'shh',
+    });
+    const rep = await a.inject({ method: 'POST', url: '/api/reports', payload: baseReport, headers: { 'content-type': 'application/json' } });
+    const id = rep.json().hazard.id;
+    const h = { 'content-type': 'application/json', authorization: `Bearer ${tok}` };
+    await a.inject({ method: 'POST', url: `/api/moderation/${id}`, payload: { decision: 'approve' }, headers: h });
+    await a.inject({ method: 'POST', url: `/api/moderation/${id}/handoff`, payload: {}, headers: h });
+
+    // Wrong signature → 401.
+    const bad = await a.inject({
+      method: 'POST',
+      url: '/api/handoff/webhook',
+      payload: { reference: id, status: 'Resolved' },
+      headers: { 'content-type': 'application/json', 'x-gogov-signature': 'nope' },
+    });
+    expect(bad.statusCode).toBe(401);
+
+    // Correct signature + a "fixed" status → resolves the hazard.
+    const ok = await a.inject({
+      method: 'POST',
+      url: '/api/handoff/webhook',
+      payload: { reference: id, status: 'Closed - Resolved' },
+      headers: { 'content-type': 'application/json', 'x-gogov-signature': 'shh' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().resolved).toBe(true);
+    expect((await r.findById(id))!.status).toBe('resolved');
+    await a.close();
+  });
+});
+
+describe('saved-route push alerts (feature-flagged)', () => {
+  const subEndpoint = 'https://push.example/sub/abc';
+  const subBody = {
+    subscription: { endpoint: subEndpoint, keys: { p256dh: 'p256', auth: 'authkey' } },
+    watch: { kind: 'area', minLat: 38.52, minLng: -121.82, maxLat: 38.59, maxLng: -121.68 },
+    label: 'All of Davis',
+  };
+
+  it('refuses subscriptions when push is disabled (503)', async () => {
+    const res = await post('/api/alerts/subscribe', subBody);
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('accepts a subscription and dry-run-notifies on a matching approval', async () => {
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator({
+      ...testConfig,
+      push: { enabled: true, vapidPublicKey: '', vapidPrivateKey: '', subject: 'mailto:a@b.c' },
+    });
+    const sub = await a.inject({
+      method: 'POST',
+      url: '/api/alerts/subscribe',
+      payload: subBody,
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(sub.statusCode).toBe(201);
+    const id = sub.json().id;
+    expect(typeof id).toBe('string');
+
+    // Approving a hazard inside the watch area runs the matcher (dry-run send).
+    const rep = await a.inject({ method: 'POST', url: '/api/reports', payload: baseReport, headers: { 'content-type': 'application/json' } });
+    const hid = rep.json().hazard.id;
+    const decided = await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${hid}`,
+      payload: { decision: 'approve' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+    expect(decided.statusCode).toBe(200);
+    expect((await r.findById(hid))!.status).toBe('approved');
+
+    // Unsubscribe.
+    const del = await a.inject({ method: 'DELETE', url: `/api/alerts/subscribe/${id}` });
+    expect(del.statusCode).toBe(204);
+    await a.close();
+  });
+
+  it('validates the subscription body (400 on a bad watch)', async () => {
+    const { app: a } = await buildAppWithModerator({
+      ...testConfig,
+      push: { enabled: true, vapidPublicKey: '', vapidPrivateKey: '', subject: '' },
+    });
+    const res = await a.inject({
+      method: 'POST',
+      url: '/api/alerts/subscribe',
+      payload: { subscription: { endpoint: 'not-a-url', keys: { p256dh: 'p', auth: 'a' } }, watch: { kind: 'area' } },
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(res.statusCode).toBe(400);
+    await a.close();
+  });
+});
+
+describe('resolved hazards stay briefly visible on the feed', () => {
+  it('keeps a resolved hazard (greyed) then drops it after the window', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+    await post(`/api/moderation/${id}`, { decision: 'resolve' }, auth());
+
+    const feed1 = (await app.inject({ method: 'GET', url: '/api/hazards' })).json().hazards;
+    expect(feed1).toHaveLength(1);
+    expect(feed1[0].status).toBe('resolved');
+    expect(feed1[0].resolvedAt).toBeGreaterThan(0);
+
+    clock += 8 * DAY; // past resolvedVisibleDays (7)
+    const feed2 = (await app.inject({ method: 'GET', url: '/api/hazards' })).json().hazards;
+    expect(feed2).toHaveLength(0);
   });
 });

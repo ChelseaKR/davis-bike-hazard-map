@@ -55,6 +55,65 @@ export const SEVERITY_LABELS: Record<Severity, string> = {
   high: 'High',
 };
 
+/**
+ * Public-facing lifecycle stage, surfaced on the map and list.
+ *
+ * This is a *derived projection* of the moderation `status` (+ confirmations),
+ * NOT a separate stored field — so the moderation gate's invariants are
+ * untouched. A live hazard starts `reported`, becomes `confirmed` once another
+ * cyclist confirms it, and ends `resolved` (fixed) or `expired` (timed out).
+ */
+export const LIFECYCLE_STAGES = ['reported', 'confirmed', 'resolved', 'expired'] as const;
+export type LifecycleStage = (typeof LIFECYCLE_STAGES)[number];
+
+export const LIFECYCLE_LABELS: Record<LifecycleStage, string> = {
+  reported: 'Reported',
+  confirmed: 'Confirmed',
+  resolved: 'Resolved',
+  expired: 'Expired',
+};
+
+/**
+ * State of a 311/GOGov hand-off, synced back from the city.
+ *
+ * `submitted` → we forwarded it; `acknowledged`/`in_progress` → the city is
+ * working it; `resolved`/`closed` → fixed (which also resolves our hazard);
+ * `rejected` → the city declined it (the hazard stays on our map).
+ */
+export const HANDOFF_STAGES = [
+  'submitted',
+  'acknowledged',
+  'in_progress',
+  'resolved',
+  'closed',
+  'rejected',
+] as const;
+export type HandoffStage = (typeof HANDOFF_STAGES)[number];
+
+export const HANDOFF_STAGE_LABELS: Record<HandoffStage, string> = {
+  submitted: 'Sent to city 311',
+  acknowledged: 'Acknowledged by city',
+  in_progress: 'City crew assigned',
+  resolved: 'Fixed by city',
+  closed: 'Closed by city',
+  rejected: 'Declined by city',
+};
+
+/** 311 hand-off record attached to a hazard once it is forwarded to the city. */
+export interface HandoffInfo {
+  /** Integration provider, e.g. "gogov". */
+  provider: string;
+  /** The reference we forwarded (equals the hazard id). */
+  reference: string;
+  /** The provider's raw status string (pre-mapping), for transparency. */
+  externalStatus: string;
+  /** Our normalized stage (see HANDOFF_STAGES). */
+  stage: HandoffStage;
+  submittedAt: number;
+  updatedAt: number;
+  note?: string | null;
+}
+
 /** A geographic point. Longitude/latitude in WGS84 decimal degrees. */
 export interface GeoPoint {
   lat: number;
@@ -105,6 +164,23 @@ export interface Hazard {
   updatedAt: number;
   /** Epoch ms after which the hazard auto-expires off the public map. */
   expiresAt: number;
+  /** Epoch ms the hazard was marked resolved, or null. */
+  resolvedAt?: number | null;
+  /** 311 hand-off + its synced-back status, or null if never forwarded. */
+  handoff?: HandoffInfo | null;
+}
+
+/**
+ * Derive the public lifecycle stage from a hazard's moderation status and
+ * confirmation count. Pure and total so it can run on the client and server.
+ */
+export function lifecycleStage(
+  hazard: Pick<Hazard, 'status' | 'confirmations'>,
+): LifecycleStage {
+  if (hazard.status === 'resolved') return 'resolved';
+  if (hazard.status === 'expired') return 'expired';
+  if (hazard.confirmations > 0) return 'confirmed';
+  return 'reported';
 }
 
 /** Filters the map/list views apply client-side and the API accepts. */

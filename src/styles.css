@@ -727,3 +727,168 @@ textarea {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* --- Lifecycle badges (reported → confirmed → resolved) --- */
+.lifecycle-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.lifecycle-badge.lifecycle-confirmed {
+  background: #e6f4ee;
+  color: var(--brand-dark);
+  border-color: var(--brand);
+}
+.lifecycle-badge.lifecycle-resolved {
+  background: #eef1f0;
+  color: var(--ink-soft);
+}
+.lifecycle-badge.lifecycle-expired {
+  background: #f3eaea;
+  color: var(--danger);
+}
+
+/* Recently-resolved cards read as "done", not "active". */
+.hazard-stage-resolved {
+  opacity: 0.78;
+}
+.hazard-resolved-note {
+  margin: 0.3rem 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.hazard-handoff-note {
+  margin: 0.3rem 0;
+  font-size: 0.85rem;
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+.map-popup-stage {
+  margin: 0.2rem 0;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* --- Public read-only dashboard banner --- */
+.public-banner {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: #eef4f1;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* --- Route planner --- */
+.route-planner {
+  padding: 0.25rem 0;
+}
+.route-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.route-endpoint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.route-endpoint > label {
+  flex: 0 0 5.5rem;
+  font-weight: 700;
+}
+.route-endpoint select {
+  flex: 1 1 12rem;
+  min-height: var(--tap);
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1rem;
+}
+.route-endpoint-coord {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.route-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0.5rem 0;
+}
+.route-summary dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.route-summary dd {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.route-hazards {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.route-hazard {
+  padding: 0.4rem 0.6rem;
+  border-left: 4px solid var(--line);
+  background: var(--surface);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.92rem;
+}
+.route-hazard.severity-text-low {
+  border-left-color: var(--sev-low);
+}
+.route-hazard.severity-text-moderate {
+  border-left-color: var(--sev-moderate);
+}
+.route-hazard.severity-text-high {
+  border-left-color: var(--sev-high);
+}
+.route-steps {
+  margin: 0.5rem 0;
+  padding-left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.route-step-distance {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.route-map {
+  margin-top: 1rem;
+}
+.route-endpoint-icon span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}

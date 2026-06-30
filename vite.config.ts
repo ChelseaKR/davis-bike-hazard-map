@@ -78,6 +78,19 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          {
+            // Planned routes — network-first so a re-plan with a connection is
+            // fresh, but the last plan for a given start/end stays available
+            // offline (the planner falls back to a straight line otherwise).
+            urlPattern: /\/api\/route.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'route-api',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
       devOptions: { enabled: false },
@@ -134,6 +147,11 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
         // covered by the Playwright + axe e2e pass, not jsdom unit tests.
         'src/components/MapView.tsx',
         'src/components/LocationPicker.tsx',
+        'src/components/RouteMap.tsx',
+        // Web Push transport glue: needs a real PushManager/Service Worker, so
+        // it is covered by manual/e2e testing, not jsdom unit tests. The pure
+        // helpers in it are still unit-tested in push.test.ts.
+        'src/lib/push.ts',
       ],
       thresholds: { lines: 80, functions: 80, statements: 80, branches: 75 },
     },
