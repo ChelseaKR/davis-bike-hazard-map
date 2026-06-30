@@ -42,6 +42,41 @@ describe('reportError', () => {
   });
 });
 
+describe('reportError without sendBeacon', () => {
+  beforeEach(() => {
+    resetTelemetryForTest();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('falls back to fetch with keepalive when sendBeacon is unavailable', () => {
+    const fetchMock = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', {}); // no sendBeacon
+    vi.stubGlobal('fetch', fetchMock);
+
+    reportError(new Error('boom'), { source: 'manual' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/\/client-errors$/);
+    expect(opts.method).toBe('POST');
+    expect(opts.keepalive).toBe(true);
+    expect(opts.headers['content-type']).toBe('application/json');
+    // Privacy: payload carries no query string, only the path.
+    expect(JSON.parse(opts.body).path).not.toContain('?');
+  });
+
+  it('swallows a transport that has neither sendBeacon nor fetch (never throws)', () => {
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('fetch', undefined);
+    expect(() => reportError(new Error('x'), { source: 's' })).not.toThrow();
+  });
+});
+
 describe('installGlobalErrorHandlers', () => {
   let beacon: ReturnType<typeof vi.fn>;
 

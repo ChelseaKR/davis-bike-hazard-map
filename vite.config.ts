@@ -153,7 +153,13 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
         // helpers in it are still unit-tested in push.test.ts.
         'src/lib/push.ts',
       ],
-      thresholds: { lines: 80, functions: 80, statements: 80, branches: 75 },
+      // Honest, achieved coverage (text reporter shows ~91.5% lines/stmts,
+      // ~87.7% functions, ~85.5% branches). Set a few points below the measured
+      // numbers so deterministic runs stay green without padding. These clear
+      // the 85 standard (branches ≥80) even with the DB-only Postgres adapter
+      // and migration runner still measured (they are integration-gated on
+      // TEST_DATABASE_URL, exercised by pgRepository.test.ts in the DB CI job).
+      thresholds: { lines: 89, functions: 86, statements: 89, branches: 84 },
     },
   },
 };
