@@ -14,7 +14,7 @@ import Fastify, {
 import rateLimit from '@fastify/rate-limit';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { ZodError } from 'zod';
 import {
   reportSubmissionSchema,
@@ -574,8 +574,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (!config.gogovWebhookSecret) {
       return reply.status(503).send({ error: 'disabled', message: '311 sync-back webhook is not configured.' });
     }
-    const signature = req.headers['x-gogov-signature'];
-    if (signature !== config.gogovWebhookSecret) {
+    const header = req.headers['x-gogov-signature'];
+    const signature = Array.isArray(header) ? '' : header ?? '';
+    if (!constantTimeEqual(signature, config.gogovWebhookSecret)) {
       return reply.status(401).send({ error: 'unauthorized', message: 'Invalid webhook signature.' });
     }
     const { reference, status, note } = handoffStatusSchema.parse(req.body);
@@ -590,6 +591,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   return app;
+}
+
+/**
+ * Constant-time string comparison for shared secrets (e.g. the 311 webhook
+ * signature), consistent with token/password verification elsewhere. Returns
+ * false for unequal lengths without leaking *where* a same-length value differs.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
 }
 
 /** Parse a "lat,lng" query value into a point (or undefined if malformed). */
