@@ -10,9 +10,17 @@ import * as Sentry from '@sentry/node';
 
 let enabled = false;
 
-export function initSentry(dsn: string, environment: string): void {
+/**
+ * Initialise Sentry (no-op without a DSN).
+ *
+ * `tracesSampleRate` is non-zero by default so performance traces flow
+ * (OBSERVABILITY-STANDARD flags a `0` rate); callers pass the env-configured
+ * value. `sendDefaultPii` stays `false` so Sentry never auto-attaches request
+ * headers, cookies, or user IP — our privacy invariant extends to error reports.
+ */
+export function initSentry(dsn: string, environment: string, tracesSampleRate = 0.1): void {
   if (!dsn) return;
-  Sentry.init({ dsn, environment, tracesSampleRate: 0 });
+  Sentry.init({ dsn, environment, tracesSampleRate, sendDefaultPii: false });
   enabled = true;
 }
 

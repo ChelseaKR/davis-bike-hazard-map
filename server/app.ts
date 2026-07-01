@@ -10,6 +10,7 @@ import Fastify, {
   type FastifyInstance,
   type FastifyReply,
   type FastifyRequest,
+  type FastifyServerOptions,
 } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import cors from '@fastify/cors';
@@ -39,6 +40,7 @@ import {
 import { verifyPassword } from './lib/password.ts';
 import { issueToken, verifyToken } from './lib/token.ts';
 import { createMetrics } from './lib/metrics.ts';
+import { buildLoggerOptions } from './lib/logger.ts';
 import { captureError, captureClientError } from './lib/sentry.ts';
 import { openapiSpec } from './openapi.ts';
 
@@ -73,7 +75,13 @@ export interface AppDeps {
   now?: () => number;
   config?: typeof serverConfig;
   fetchImpl?: typeof fetch;
-  logger?: boolean;
+  /**
+   * Override the logger. `false`/`true` toggle it (tests pass `false`); a Pino
+   * options object lets a test inject a capture stream to assert redaction.
+   * When omitted, the logger is derived from `config` (structured JSON in
+   * prod/dev, off in tests).
+   */
+  logger?: FastifyServerOptions['logger'];
 }
 
 /** A request that has passed the moderator session check. */
@@ -99,7 +107,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const subscriptions = deps.subscriptions ?? new MemorySubscriptionStore();
 
   const app = Fastify({
-    logger: deps.logger ?? (!config.isTest && { redact: ['req.headers.authorization'] }),
+    // Structured JSON logs with a redaction allow-list (never emit precise
+    // coords, auth headers, tokens, secrets). See server/lib/logger.ts.
+    logger: deps.logger ?? buildLoggerOptions(config),
     bodyLimit: 6 * 1024 * 1024, // photos arrive as base64; keep a sane ceiling
     // Honour an upstream X-Request-Id (proxy/CDN) for log correlation; otherwise
     // Fastify generates one. Echoed back on responses below.
@@ -220,6 +230,28 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     } catch (err) {
       app.log.error(err, 'readiness check failed');
       return reply.status(503).send({ status: 'not_ready' });
+    }
+  });
+
+  // --- Kubernetes-style probes (OBSERVABILITY-STANDARD §6) ---
+  // Distinct paths, distinct semantics. Both are unauthenticated and outside
+  // `/api/` (so the rate-limit allow-list already exempts them). `logLevel`
+  // keeps routine probes out of the access log — the 503 branch still logs.
+  //
+  // /livez — the process is alive and not deadlocked. NO dependency calls.
+  app.get('/livez', { logLevel: 'silent' }, async () => ({ status: 'ok' }));
+
+  // /readyz — ready for traffic, INCLUDING the backing store. Fail-closed: a
+  // ping that returns false OR throws yields 503, so a load balancer stops
+  // sending traffic to an instance whose store is unreachable.
+  app.get('/readyz', { logLevel: 'warn' }, async (req, reply) => {
+    try {
+      const ok = await repo.ping();
+      if (!ok) throw new Error('store not ready');
+      return { status: 'ok', checks: { store: 'ok' } };
+    } catch (err) {
+      req.log.error({ err }, 'readiness check failed');
+      return reply.status(503).send({ status: 'error', checks: { store: 'error' } });
     }
   });
 
