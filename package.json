@@ -20,13 +20,14 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:css": "stylelint \"src/**/*.css\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
     "a11y": "vitest run a11y",
     "e2e": "playwright test",
-    "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run build"
+    "verify": "npm run lint && npm run lint:css && npm run typecheck && npm run test:unit && npm run build"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": "eslint --fix"
@@ -77,6 +78,8 @@
     "husky": "^9.1.7",
     "jsdom": "^25.0.1",
     "lint-staged": "^15.5.2",
+    "stylelint": "16.26.1",
+    "stylelint-use-logical": "2.1.3",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
     "vite": "^6.0.5",
