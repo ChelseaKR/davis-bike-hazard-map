@@ -50,6 +50,8 @@ jobs:
       - run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Lint CSS — logical properties (i18n G10, INTERNATIONALIZATION-STANDARD §4/§8)
+        run: npm run lint:css
       - name: Typecheck
         run: npm run typecheck
       - name: Unit + integration tests (coverage-gated)

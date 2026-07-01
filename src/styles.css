@@ -64,7 +64,7 @@ a {
 
 .skip-link {
   position: absolute;
-  left: -999px;
+  inset-inline-start: -999px;
   top: 0;
   background: var(--brand);
   color: var(--brand-ink);
@@ -72,7 +72,7 @@ a {
   z-index: 1000;
 }
 .skip-link:focus {
-  left: 0;
+  inset-inline-start: 0;
 }
 
 .visually-hidden {
@@ -351,7 +351,7 @@ textarea {
 .moderation-item {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-left-width: 6px;
+  border-inline-start-width: 6px;
   border-radius: var(--radius);
   padding: 0.75rem;
 }
@@ -364,13 +364,13 @@ textarea {
   font-size: 1.2rem;
 }
 .severity-low {
-  border-left-color: var(--sev-low);
+  border-inline-start-color: var(--sev-low);
 }
 .severity-moderate {
-  border-left-color: var(--sev-moderate);
+  border-inline-start-color: var(--sev-moderate);
 }
 .severity-high {
-  border-left-color: var(--sev-high);
+  border-inline-start-color: var(--sev-high);
 }
 .severity-badge.severity-low {
   color: var(--sev-low-ink);
@@ -475,13 +475,13 @@ textarea {
   outline-offset: 2px;
 }
 .severity-chip.severity-low {
-  border-left-color: var(--sev-low);
+  border-inline-start-color: var(--sev-low);
 }
 .severity-chip.severity-moderate {
-  border-left-color: var(--sev-moderate);
+  border-inline-start-color: var(--sev-moderate);
 }
 .severity-chip.severity-high {
-  border-left-color: var(--sev-high);
+  border-inline-start-color: var(--sev-high);
 }
 .location-row {
   display: flex;
@@ -851,23 +851,28 @@ textarea {
 }
 .route-hazard {
   padding: 0.4rem 0.6rem;
-  border-left: 4px solid var(--line);
+  border-inline-start: 4px solid var(--line);
   background: var(--surface);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  /* Round only the inline-end corners so the accent border edge stays flat;
+     logical corners keep this paired with the logical border above under RTL. */
+  border-start-start-radius: 0;
+  border-start-end-radius: var(--radius);
+  border-end-end-radius: var(--radius);
+  border-end-start-radius: 0;
   font-size: 0.92rem;
 }
 .route-hazard.severity-text-low {
-  border-left-color: var(--sev-low);
+  border-inline-start-color: var(--sev-low);
 }
 .route-hazard.severity-text-moderate {
-  border-left-color: var(--sev-moderate);
+  border-inline-start-color: var(--sev-moderate);
 }
 .route-hazard.severity-text-high {
-  border-left-color: var(--sev-high);
+  border-inline-start-color: var(--sev-high);
 }
 .route-steps {
   margin: 0.5rem 0;
-  padding-left: 1.4rem;
+  padding-inline-start: 1.4rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
