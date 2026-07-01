@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../i18n-render.tsx';
 import { PhotoEditor } from '../../src/components/PhotoEditor.tsx';
 import { checkA11y } from '../axe.ts';
 

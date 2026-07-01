@@ -10,13 +10,14 @@
  * never the only way to read the route.
  */
 import { lazy, Suspense, useState } from 'react';
+import { FormattedMessage, useIntl } from 'react-intl';
 import type { GeoPoint } from '../../shared/types.ts';
-import { CATEGORY_LABELS, SEVERITY_LABELS } from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import { fetchRoute } from '../lib/api.ts';
 import { DAVIS_LANDMARKS, landmarkByName } from '../lib/landmarks.ts';
 import { getCurrentLocation, GeolocationError } from '../lib/geolocation.ts';
 import { formatDistance, formatDuration, formatLatLng } from '../lib/format.ts';
+import { useLabels } from '../i18n/labels.ts';
 
 const RouteMap = lazy(() => import('./RouteMap.tsx').then((m) => ({ default: m.RouteMap })));
 
@@ -29,6 +30,8 @@ const DEFAULT_START: Endpoint = { label: DAVIS_LANDMARKS[0].name, point: DAVIS_L
 const DEFAULT_END: Endpoint = { label: DAVIS_LANDMARKS[1].name, point: DAVIS_LANDMARKS[1].point };
 
 export function RoutePlanner() {
+  const intl = useIntl();
+  const labels = useLabels();
   const [start, setStart] = useState<Endpoint>(DEFAULT_START);
   const [end, setEnd] = useState<Endpoint>(DEFAULT_END);
   const [plan, setPlan] = useState<RoutePlan | null>(null);
@@ -43,7 +46,11 @@ export function RoutePlanner() {
     try {
       setPlan(await fetchRoute(start.point, end.point));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not plan a route.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : intl.formatMessage({ id: 'route.error.plan', defaultMessage: 'Could not plan a route.' }),
+      );
       setPlan(null);
     } finally {
       setLoading(false);
@@ -63,14 +70,26 @@ export function RoutePlanner() {
     setError(null);
     try {
       const point = await getCurrentLocation();
-      const ep = { label: 'My location', point };
+      const ep = {
+        label: intl.formatMessage({ id: 'route.myLocation', defaultMessage: 'My location' }),
+        point,
+      };
       if (which === 'start') setStart(ep);
       else setEnd(ep);
     } catch (err) {
       setError(
         err instanceof GeolocationError
-          ? `Couldn't use your location: ${err.message}`
-          : 'Location is unavailable.',
+          ? intl.formatMessage(
+              {
+                id: 'route.error.location',
+                defaultMessage: "Couldn't use your location: {reason}",
+              },
+              { reason: err.message },
+            )
+          : intl.formatMessage({
+              id: 'route.error.locationUnavailable',
+              defaultMessage: 'Location is unavailable.',
+            }),
       );
     } finally {
       setLocating(null);
@@ -80,13 +99,22 @@ export function RoutePlanner() {
   const hazardsOnRoute = plan?.nearby.length ?? 0;
 
   return (
-    <section className="route-planner" aria-label="Bike route planner">
+    <section
+      className="route-planner"
+      aria-label={intl.formatMessage({ id: 'route.aria', defaultMessage: 'Bike route planner' })}
+    >
       <form className="route-form" onSubmit={onPlan}>
         {(['start', 'end'] as const).map((which) => {
           const ep = which === 'start' ? start : end;
           return (
             <div className="route-endpoint" key={which}>
-              <label htmlFor={`route-${which}`}>{which === 'start' ? 'Start' : 'Destination'}</label>
+              <label htmlFor={`route-${which}`}>
+                {which === 'start' ? (
+                  <FormattedMessage id="route.start" defaultMessage="Start" />
+                ) : (
+                  <FormattedMessage id="route.destination" defaultMessage="Destination" />
+                )}
+              </label>
               <select
                 id={`route-${which}`}
                 value={landmarkByName(ep.label) ? ep.label : ''}
@@ -105,7 +133,11 @@ export function RoutePlanner() {
                 onClick={() => void pickMyLocation(which)}
                 disabled={locating === which}
               >
-                {locating === which ? 'Locating…' : 'Use my location'}
+                {locating === which ? (
+                  <FormattedMessage id="common.locating" defaultMessage="Locating…" />
+                ) : (
+                  <FormattedMessage id="common.useMyLocation" defaultMessage="Use my location" />
+                )}
               </button>
               <span className="route-endpoint-coord">{formatLatLng(ep.point.lat, ep.point.lng)}</span>
             </div>
@@ -113,7 +145,11 @@ export function RoutePlanner() {
         })}
 
         <button type="submit" className="btn" disabled={loading}>
-          {loading ? 'Planning…' : 'Plan a safer route'}
+          {loading ? (
+            <FormattedMessage id="route.planning" defaultMessage="Planning…" />
+          ) : (
+            <FormattedMessage id="route.plan" defaultMessage="Plan a safer route" />
+          )}
         </button>
       </form>
 
@@ -127,53 +163,83 @@ export function RoutePlanner() {
 
       {plan && (
         <div className="route-result">
-          <h3>Your route</h3>
+          <h3>
+            <FormattedMessage id="route.result.heading" defaultMessage="Your route" />
+          </h3>
           <dl className="route-summary">
             <div>
-              <dt>Distance</dt>
+              <dt>
+                <FormattedMessage id="route.summary.distance" defaultMessage="Distance" />
+              </dt>
               <dd>{formatDistance(plan.route.distanceMeters)}</dd>
             </div>
             <div>
-              <dt>Est. time</dt>
+              <dt>
+                <FormattedMessage id="route.summary.time" defaultMessage="Est. time" />
+              </dt>
               <dd>{formatDuration(plan.route.durationSeconds)}</dd>
             </div>
             <div>
-              <dt>Hazards on route</dt>
+              <dt>
+                <FormattedMessage id="route.summary.hazards" defaultMessage="Hazards on route" />
+              </dt>
               <dd>{hazardsOnRoute}</dd>
             </div>
           </dl>
 
           {plan.source === 'fallback' ? (
             <p className="hint">
-              Showing a <strong>direct line</strong> — live turn-by-turn routing is
-              unavailable (offline or the routing service is down). The hazard list
-              below still reflects what's been reported near this line.
+              <FormattedMessage
+                id="route.fallbackNote"
+                defaultMessage="Showing a <strong>direct line</strong> — live turn-by-turn routing is unavailable (offline or the routing service is down). The hazard list below still reflects what's been reported near this line."
+                values={{ strong: (chunks) => <strong>{chunks}</strong> }}
+              />
             </p>
           ) : (
             <p className="hint">
-              Chosen from {plan.alternativesConsidered} candidate route
-              {plan.alternativesConsidered === 1 ? '' : 's'} to avoid reported hazards.
+              <FormattedMessage
+                id="route.candidates"
+                defaultMessage="{count, plural, one {Chosen from # candidate route to avoid reported hazards.} other {Chosen from # candidate routes to avoid reported hazards.}}"
+                values={{ count: plan.alternativesConsidered }}
+              />
             </p>
           )}
 
           {hazardsOnRoute > 0 && (
             <>
-              <h4>Hazards still on this route</h4>
+              <h4>
+                <FormattedMessage
+                  id="route.hazards.heading"
+                  defaultMessage="Hazards still on this route"
+                />
+              </h4>
               <ul className="route-hazards">
                 {plan.nearby.map((n) => (
                   <li key={n.hazard.id} className={`route-hazard severity-text-${n.hazard.severity}`}>
-                    {CATEGORY_LABELS[n.hazard.category]} · {SEVERITY_LABELS[n.hazard.severity]} ·{' '}
-                    {Math.round(n.distanceMeters)} m from your route
+                    <FormattedMessage
+                      id="route.hazards.item"
+                      defaultMessage="{category} · {severity} · {distance} m from your route"
+                      values={{
+                        category: labels.category(n.hazard.category),
+                        severity: labels.severity(n.hazard.severity),
+                        distance: Math.round(n.distanceMeters),
+                      }}
+                    />
                   </li>
                 ))}
               </ul>
               <p className="hint">
-                No hazard-free route was found — ride these stretches with extra care.
+                <FormattedMessage
+                  id="route.hazards.warning"
+                  defaultMessage="No hazard-free route was found — ride these stretches with extra care."
+                />
               </p>
             </>
           )}
 
-          <h4>Turn-by-turn directions</h4>
+          <h4>
+            <FormattedMessage id="route.steps.heading" defaultMessage="Turn-by-turn directions" />
+          </h4>
           {plan.route.steps.length > 0 ? (
             <ol className="route-steps">
               {plan.route.steps.map((step, i) => (
@@ -186,10 +252,21 @@ export function RoutePlanner() {
               ))}
             </ol>
           ) : (
-            <p className="hint">Turn-by-turn directions are unavailable for this route.</p>
+            <p className="hint">
+              <FormattedMessage
+                id="route.steps.unavailable"
+                defaultMessage="Turn-by-turn directions are unavailable for this route."
+              />
+            </p>
           )}
 
-          <Suspense fallback={<p className="hint">Loading map…</p>}>
+          <Suspense
+            fallback={
+              <p className="hint">
+                <FormattedMessage id="common.loadingMap" defaultMessage="Loading map…" />
+              </p>
+            }
+          >
             <RouteMap route={plan.route} from={plan.from} to={plan.to} nearby={plan.nearby} />
           </Suspense>
         </div>

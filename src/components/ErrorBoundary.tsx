@@ -5,6 +5,7 @@
  * their offline-queued reports live in IndexedDB and are never at risk here.
  */
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { FormattedMessage } from 'react-intl';
 import { reportError } from '../lib/telemetry.ts';
 
 interface Props {
@@ -38,13 +39,17 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="error-boundary" role="alert">
-          <h2>Something went wrong</h2>
+          <h2>
+            <FormattedMessage id="error.heading" defaultMessage="Something went wrong" />
+          </h2>
           <p>
-            This view hit an unexpected error. Anything you saved on this device
-            is safe. You can try again, or switch to another tab.
+            <FormattedMessage
+              id="error.body"
+              defaultMessage="This view hit an unexpected error. Anything you saved on this device is safe. You can try again, or switch to another tab."
+            />
           </p>
           <button type="button" className="btn btn-primary" onClick={this.reset}>
-            Try again
+            <FormattedMessage id="error.retry" defaultMessage="Try again" />
           </button>
         </div>
       );

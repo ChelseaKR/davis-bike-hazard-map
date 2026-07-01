@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../i18n-render.tsx';
 import { ListView } from '../../src/components/ListView.tsx';
 import type { Hazard } from '../../shared/types.ts';
 

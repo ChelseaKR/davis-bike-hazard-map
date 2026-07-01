@@ -27,7 +27,17 @@
     "test:coverage": "vitest run --coverage",
     "a11y": "vitest run a11y",
     "e2e": "playwright test",
-    "verify": "npm run lint && npm run lint:css && npm run typecheck && npm run test:unit && npm run build"
+    "e2e:i18n": "node scripts/i18n/gen-pseudo.mjs && playwright test --config playwright.i18n.config.ts",
+    "i18n:extract": "formatjs extract 'src/**/*.{ts,tsx}' --out-file src/i18n/locales/en.json --throws --format simple && node scripts/i18n/sync-es-skeleton.mjs",
+    "i18n:utf8": "node scripts/i18n/check-utf8.mjs",
+    "i18n:no-hardcoded": "node scripts/i18n/check-no-hardcoded.mjs",
+    "i18n:extract:check": "node scripts/i18n/check-extract.mjs",
+    "i18n:bcp47": "node scripts/i18n/check-bcp47.mjs",
+    "i18n:parity": "node scripts/i18n/check-parity.mjs",
+    "i18n:cldr": "node scripts/i18n/check-cldr-pin.mjs",
+    "i18n:pseudo:gen": "node scripts/i18n/gen-pseudo.mjs",
+    "i18n:gates": "npm run i18n:utf8 && npm run i18n:extract:check && npm run i18n:no-hardcoded && npm run i18n:bcp47 && npm run i18n:parity && npm run i18n:cldr",
+    "verify": "npm run lint && npm run lint:css && npm run i18n:gates && npm run typecheck && npm run test:unit && npm run build"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": "eslint --fix"
@@ -38,6 +48,7 @@
     "@fastify/helmet": "^12.0.1",
     "@fastify/rate-limit": "^10.1.1",
     "@fastify/static": "^8.0.3",
+    "@formatjs/intl": "^3.1.8",
     "@sentry/node": "^8.55.2",
     "fastify": "^5.1.0",
     "idb": "^8.0.0",
@@ -47,6 +58,7 @@
     "prom-client": "^15.1.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-intl": "^7.1.14",
     "react-leaflet": "^4.2.1",
     "sharp": "^0.33.5",
     "tsx": "^4.19.2",
@@ -55,6 +67,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
     "@eslint/js": "^9.17.0",
+    "@formatjs/cli": "^6.16.11",
     "@playwright/test": "^1.49.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
@@ -71,6 +84,7 @@
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
     "eslint": "^9.17.0",
+    "eslint-plugin-formatjs": "^6.4.16",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "fake-indexeddb": "^6.0.0",

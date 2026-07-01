@@ -2,15 +2,15 @@
  * Filter controls shared by the map and list views, so both always present the
  * same dataset (map/list parity is an accessibility gate).
  */
+import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 import {
-  CATEGORY_LABELS,
   HAZARD_CATEGORIES,
   SEVERITIES,
-  SEVERITY_LABELS,
   type HazardCategory,
   type HazardFilters,
   type Severity,
 } from '../../shared/types.ts';
+import { useLabels } from '../i18n/labels.ts';
 
 interface FiltersProps {
   value: HazardFilters;
@@ -18,14 +18,23 @@ interface FiltersProps {
   resultCount: number;
 }
 
+const recencyMessages = defineMessages({
+  any: { id: 'filters.recency.any', defaultMessage: 'Any time' },
+  week: { id: 'filters.recency.week', defaultMessage: 'Past week' },
+  month: { id: 'filters.recency.month', defaultMessage: 'Past month' },
+  quarter: { id: 'filters.recency.quarter', defaultMessage: 'Past 3 months' },
+});
+
 const RECENCY_OPTIONS = [
-  { label: 'Any time', value: undefined },
-  { label: 'Past week', value: 7 },
-  { label: 'Past month', value: 30 },
-  { label: 'Past 3 months', value: 90 },
+  { key: 'any', label: recencyMessages.any, value: undefined },
+  { key: 'week', label: recencyMessages.week, value: 7 },
+  { key: 'month', label: recencyMessages.month, value: 30 },
+  { key: 'quarter', label: recencyMessages.quarter, value: 90 },
 ] as const;
 
 export function Filters({ value, onChange, resultCount }: FiltersProps) {
+  const intl = useIntl();
+  const labels = useLabels();
   const toggleCategory = (cat: HazardCategory) => {
     const current = new Set(value.categories ?? []);
     if (current.has(cat)) current.delete(cat);
@@ -34,9 +43,11 @@ export function Filters({ value, onChange, resultCount }: FiltersProps) {
   };
 
   return (
-    <section className="filters" aria-label="Filter hazards">
+    <section className="filters" aria-label={intl.formatMessage({ id: 'filters.aria', defaultMessage: 'Filter hazards' })}>
       <fieldset className="filter-group">
-        <legend>Type</legend>
+        <legend>
+          <FormattedMessage id="filters.type" defaultMessage="Type" />
+        </legend>
         <div className="chip-row">
           {HAZARD_CATEGORIES.map((cat) => {
             const active = value.categories?.includes(cat) ?? false;
@@ -48,7 +59,7 @@ export function Filters({ value, onChange, resultCount }: FiltersProps) {
                   checked={active}
                   onChange={() => toggleCategory(cat)}
                 />
-                {CATEGORY_LABELS[cat]}
+                {labels.category(cat)}
               </label>
             );
           })}
@@ -56,7 +67,9 @@ export function Filters({ value, onChange, resultCount }: FiltersProps) {
       </fieldset>
 
       <div className="filter-row">
-        <label htmlFor="minSeverity">Minimum severity</label>
+        <label htmlFor="minSeverity">
+          <FormattedMessage id="filters.minSeverity" defaultMessage="Minimum severity" />
+        </label>
         <select
           id="minSeverity"
           value={value.minSeverity ?? ''}
@@ -67,15 +80,20 @@ export function Filters({ value, onChange, resultCount }: FiltersProps) {
             })
           }
         >
-          <option value="">Any</option>
+          <option value="">{intl.formatMessage({ id: 'filters.severity.any', defaultMessage: 'Any' })}</option>
           {SEVERITIES.map((s) => (
             <option key={s} value={s}>
-              {SEVERITY_LABELS[s]}+
+              {intl.formatMessage(
+                { id: 'filters.severity.atLeast', defaultMessage: '{severity}+' },
+                { severity: labels.severity(s) },
+              )}
             </option>
           ))}
         </select>
 
-        <label htmlFor="withinDays">Reported</label>
+        <label htmlFor="withinDays">
+          <FormattedMessage id="filters.reported" defaultMessage="Reported" />
+        </label>
         <select
           id="withinDays"
           value={value.withinDays ?? ''}
@@ -87,15 +105,19 @@ export function Filters({ value, onChange, resultCount }: FiltersProps) {
           }
         >
           {RECENCY_OPTIONS.map((o) => (
-            <option key={o.label} value={o.value ?? ''}>
-              {o.label}
+            <option key={o.key} value={o.value ?? ''}>
+              {intl.formatMessage(o.label)}
             </option>
           ))}
         </select>
       </div>
 
       <p className="filter-count" role="status" aria-live="polite">
-        {resultCount} hazard{resultCount === 1 ? '' : 's'} shown
+        <FormattedMessage
+          id="filters.count"
+          defaultMessage="{count, plural, one {# hazard shown} other {# hazards shown}}"
+          values={{ count: resultCount }}
+        />
       </p>
     </section>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../i18n-render.tsx';
 import userEvent from '@testing-library/user-event';
 import { FeedFreshness } from '../../src/components/FeedFreshness.tsx';
 

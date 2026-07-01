@@ -52,6 +52,8 @@ jobs:
         run: npm run lint
       - name: Lint CSS — logical properties (i18n G10, INTERNATIONALIZATION-STANDARD §4/§8)
         run: npm run lint:css
+      - name: i18n gates — G1 utf8 · G2 extract+no-hardcoded · G3 bcp47 · G5/G6 parity · G12 cldr-pin
+        run: npm run i18n:gates
       - name: Typecheck
         run: npm run typecheck
       - name: Unit + integration tests (coverage-gated)
@@ -94,6 +96,8 @@ jobs:
         env:
           E2E_BROWSERS: chromium,firefox
         run: npm run e2e
+      - name: G9 pseudolocale overflow (en-XA, desktop + mobile — INTERNATIONALIZATION-STANDARD §4/§8)
+        run: npm run e2e:i18n
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4

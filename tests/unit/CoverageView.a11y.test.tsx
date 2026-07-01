@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../i18n-render.tsx';
 import { CoverageView } from '../../src/components/CoverageView.tsx';
 import { checkA11y } from '../axe.ts';
 import type { Hazard } from '../../shared/types.ts';
