@@ -37,10 +37,12 @@ describe('server Sentry gate', () => {
 
   it('initSentry with a DSN enables exception forwarding (with optional context)', () => {
     initSentry('https://key@example.ingest/1', 'production');
+    // Default trace sampling is non-zero (traces flow) and PII scrubbing stays on.
     expect(Sentry.init).toHaveBeenCalledWith({
       dsn: 'https://key@example.ingest/1',
       environment: 'production',
-      tracesSampleRate: 0,
+      tracesSampleRate: 0.1,
+      sendDefaultPii: false,
     });
 
     const err = new Error('boom');
@@ -50,6 +52,13 @@ describe('server Sentry gate', () => {
     // No context -> no `extra` wrapper.
     captureError(err);
     expect(Sentry.captureException).toHaveBeenLastCalledWith(err, undefined);
+  });
+
+  it('honours an env-configured trace sample rate (still non-zero)', () => {
+    initSentry('https://key@example.ingest/2', 'production', 0.25);
+    expect(Sentry.init).toHaveBeenCalledWith(
+      expect.objectContaining({ tracesSampleRate: 0.25, sendDefaultPii: false }),
+    );
   });
 
   it('captureClientError forwards a tagged, origin-marked message', () => {

@@ -86,6 +86,16 @@ export const serverConfig = {
 
   /** Optional Sentry DSN for server-side error reporting. Empty => disabled. */
   sentryDsn: process.env.SENTRY_DSN ?? '',
+  /**
+   * Fraction (0..1) of transactions Sentry captures as performance traces.
+   * Non-zero by default so traces actually flow (OBSERVABILITY-STANDARD flags a
+   * `0` rate). Override with SENTRY_TRACES_SAMPLE_RATE; out-of-range => 0.1.
+   */
+  sentryTracesSampleRate: (() => {
+    const raw = process.env.SENTRY_TRACES_SAMPLE_RATE;
+    const n = raw !== undefined && raw !== '' ? Number(raw) : NaN;
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.1;
+  })(),
 
   /** Optional S3 / S3-compatible (R2, MinIO) object storage for photos. */
   s3: {

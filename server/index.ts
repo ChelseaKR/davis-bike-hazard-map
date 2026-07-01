@@ -14,19 +14,25 @@ import { migrateInlinePhotos } from './lib/hazards.ts';
 import { createModeratorStore, bootstrapModerator } from './lib/moderators.ts';
 import { startBackups } from './lib/backup.ts';
 import { initSentry } from './lib/sentry.ts';
+import { logBootFatal } from './lib/logger.ts';
 
 async function main() {
-  // Server-side error reporting (no-op without SENTRY_DSN).
-  initSentry(serverConfig.sentryDsn, serverConfig.isProd ? 'production' : 'development');
+  // Server-side error reporting (no-op without SENTRY_DSN). Traces sampled at
+  // the env-configured rate (non-zero by default) so performance data flows.
+  initSentry(
+    serverConfig.sentryDsn,
+    serverConfig.isProd ? 'production' : 'development',
+    serverConfig.sentryTracesSampleRate,
+  );
 
   // Production must use a real database. The one exception is ephemeral
   // throwaway runs (e2e, preview) that opt in explicitly with ALLOW_INMEMORY.
   if (serverConfig.isProd && !serverConfig.databaseUrl && process.env.ALLOW_INMEMORY !== 'true') {
-    console.error('DATABASE_URL is required in production. Refusing to start.');
+    logBootFatal('DATABASE_URL is required in production. Refusing to start.');
     process.exit(1);
   }
   if (serverConfig.isProd && !serverConfig.sessionSecret) {
-    console.error('SESSION_SECRET is required in production. Refusing to start.');
+    logBootFatal('SESSION_SECRET is required in production. Refusing to start.');
     process.exit(1);
   }
 
