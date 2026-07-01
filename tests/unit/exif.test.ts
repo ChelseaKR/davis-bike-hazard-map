@@ -82,6 +82,25 @@ describe('stripExifBytes', () => {
     const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
     expect(stripExifBytes(png)).toEqual(png);
   });
+
+  // Robustness: a corrupt/truncated upload must never crash the privacy gate and
+  // must never silently drop image bytes it could not classify.
+  it('copies the remainder verbatim when the stream is misaligned (no crash)', () => {
+    // After SOI a non-0xFF byte appears where a marker was expected.
+    const bytes = Uint8Array.from([0xff, 0xd8, 0x00, 0x42, 0x43, 0x44]);
+    expect(Array.from(stripExifBytes(bytes))).toEqual([0xff, 0xd8, 0x00, 0x42, 0x43, 0x44]);
+  });
+
+  it('stops cleanly and preserves trailing bytes on a truncated segment', () => {
+    // APP1 claims a 0xFFFF-byte payload the buffer does not contain.
+    const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff, 0x45]);
+    expect(Array.from(stripExifBytes(bytes))).toEqual([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff, 0x45]);
+  });
+
+  it('breaks safely when a segment header is cut off before its length', () => {
+    const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, 0x00]);
+    expect(Array.from(stripExifBytes(bytes))).toEqual([0xff, 0xd8, 0xff, 0xe1, 0x00]);
+  });
 });
 
 describe('data URL round-tripping', () => {

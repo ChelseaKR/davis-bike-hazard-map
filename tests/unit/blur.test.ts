@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   clampRegion,
   pixelateRegion,
@@ -94,8 +94,36 @@ describe('pixelateRegions', () => {
 });
 
 describe('detectFacesIfAvailable', () => {
+  afterEach(() => {
+    delete (globalThis as { FaceDetector?: unknown }).FaceDetector;
+  });
+
   it('returns [] when the FaceDetector API is absent (never throws)', async () => {
     const fakeSource = {} as CanvasImageSource;
     await expect(detectFacesIfAvailable(fakeSource)).resolves.toEqual([]);
+  });
+
+  it('pads each detected box 15% outward so hairline/jaw are covered', async () => {
+    (globalThis as { FaceDetector?: unknown }).FaceDetector = class {
+      detect() {
+        return Promise.resolve([{ boundingBox: { x: 100, y: 200, width: 50, height: 80 } }]);
+      }
+    };
+    const [region] = await detectFacesIfAvailable({} as CanvasImageSource);
+    expect(region).toEqual({
+      x: 100 - 50 * 0.15, // 92.5
+      y: 200 - 80 * 0.15, // 188
+      w: 50 * 1.3, // 65
+      h: 80 * 1.3, // 104
+    });
+  });
+
+  it('returns [] when detection throws — manual blur remains the guarantee', async () => {
+    (globalThis as { FaceDetector?: unknown }).FaceDetector = class {
+      detect(): Promise<never> {
+        return Promise.reject(new Error('detector blew up'));
+      }
+    };
+    await expect(detectFacesIfAvailable({} as CanvasImageSource)).resolves.toEqual([]);
   });
 });
