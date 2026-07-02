@@ -22,6 +22,7 @@ import {
   hazardFiltersSchema,
   moderationDecisionSchema,
   clientErrorSchema,
+  webVitalSchema,
   loginSchema,
   routeRequestSchema,
   handoffStatusSchema,
@@ -300,6 +301,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const report = clientErrorSchema.parse(req.body);
     app.log.warn({ clientError: report }, 'client error reported');
     captureClientError(report); // forward to Sentry (no-op without a DSN)
+    return reply.status(204).send();
+  });
+
+  // --- Core Web Vitals RUM sink (cookieless, log-only) ---
+  // The client beacons field LCP/INP/CLS here (src/lib/vitals.ts). We keep no
+  // storage backend and capture no cookies, IPs or identifiers: the validated
+  // sample is emitted as one structured log line and acknowledged with 204,
+  // per OBSERVABILITY-STANDARD section 8.
+  app.post('/api/metrics/web-vitals', async (req, reply) => {
+    const vital = webVitalSchema.parse(req.body);
+    app.log.info(
+      { webVital: { name: vital.name, value: vital.value, rating: vital.rating, path: vital.path } },
+      'web vital reported',
+    );
     return reply.status(204).send();
   });
 

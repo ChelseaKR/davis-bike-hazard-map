@@ -4,10 +4,14 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { IntlProviderShell } from './i18n/IntlProviderShell.tsx';
 import { installGlobalErrorHandlers } from './lib/telemetry.ts';
+import { reportWebVitals } from './lib/vitals.ts';
 import './styles.css';
 
 // Report uncaught errors and unhandled rejections, not just React render errors.
 installGlobalErrorHandlers();
+
+// Cookieless Core Web Vitals RUM (field LCP/INP/CLS) — best-effort.
+reportWebVitals();
 
 // The service worker registration is injected automatically by vite-plugin-pwa
 // (injectRegister: 'script-defer') as /registerSW.js, so there is no virtual
