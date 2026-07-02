@@ -167,6 +167,15 @@ items; where one builds on an existing ID it says so. Effort tiers:
 ## FIX-08 — URL/navigation state: permalinks, history, deep links
 **Pitch:** give tabs, filters, and individual hazards real URLs.
 
+**Status: ✅ DONE (2026-07-02, branch `roadmap/fix-08-url-navigation-state-permalinks-h`).**
+`useViewState` now mirrors tab/filters/focused hazard into `location.hash`
+(`#/map?severity=high`, `/#/hazard/:id` deep links resolve to focus-on-map via
+`pendingHazardId`), back/forward rehydrate via popstate/hashchange, and
+`buildAlertPayload().url` deep-links to the hazard. Covered by
+`tests/unit/useViewState.hash.test.ts` and `tests/e2e/permalinks.spec.ts`
+(cold deep link, back/forward, copied filter URL). PWA `navigateFallback`
+needs no change — hash routes never reach the server/service worker router.
+
 - **Why it matters:** all view state is in-memory
   (`src/hooks/useViewState.ts`); the back button does nothing (an
   accessibility and basic-web-expectations failure the axe gates can't see),

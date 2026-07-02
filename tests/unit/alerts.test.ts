@@ -139,9 +139,10 @@ describe('notifyForHazard', () => {
     expect(res.sent).toBe(0); // default sender is a stub until web-push is wired
   });
 
-  it('buildAlertPayload describes the hazard', () => {
+  it('buildAlertPayload describes the hazard and deep-links to it', () => {
     const p = buildAlertPayload(hazard());
     expect(p.title).toMatch(/saved route/i);
     expect(p.body).toMatch(/high pothole/i);
+    expect(p.url).toBe('/#/hazard/h1');
   });
 });

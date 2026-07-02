@@ -33,7 +33,9 @@ export function buildAlertPayload(hazard: Hazard): AlertPayload {
     title: 'New bike hazard on a saved route',
     body: `${SEVERITY_LABELS[hazard.severity]} ${CATEGORY_LABELS[hazard.category].toLowerCase()} reported near you.`,
     hazardId: hazard.id,
-    url: '/',
+    // Hash deep link resolved by the client shell (src/hooks/useViewState.ts):
+    // opening the notification lands focused on the hazard, not the bare map.
+    url: `/#/hazard/${encodeURIComponent(hazard.id)}`,
   };
 }
 

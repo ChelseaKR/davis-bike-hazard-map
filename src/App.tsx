@@ -54,10 +54,22 @@ const TABS = config.publicDashboard
 
 export default function App() {
   const intl = useIntl();
-  const [{ tab, filters, focusHazard, statusKey }, dispatch] = useViewState();
+  const [{ tab, filters, focusHazard, pendingHazardId, statusKey }, dispatch] = useViewState();
   const online = useOnline();
 
   const { hazards, all, loading, error, lastUpdatedAt, refresh } = useHazards(filters);
+
+  // Resolve a /#/hazard/:id deep link once the feed arrives: focus the hazard
+  // on the map, or drop the pending id if the hazard is gone (expired/removed).
+  useEffect(() => {
+    if (!pendingHazardId) return;
+    const match = all.find((h) => h.id === pendingHazardId);
+    if (match) {
+      dispatch({ type: 'focusOnMap', hazard: match });
+    } else if (!loading) {
+      dispatch({ type: 'clearPendingHazard' });
+    }
+  }, [pendingHazardId, all, loading, dispatch]);
 
   // Drain the offline queue in the background; refresh the map on any success.
   useEffect(() => {
