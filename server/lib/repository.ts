@@ -12,7 +12,14 @@
  *   - JsonFileRepository — single-process dev/MVP persistence (atomic writes).
  *   - MemoryRepository   — tests and zero-config dev.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import type { StoredHazard } from './types.ts';
 
@@ -154,15 +161,113 @@ export class MemoryRepository implements Repository {
   protected persist(): void {}
 }
 
+/** Whether a process with the given pid is currently running. */
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0); // signal 0 = existence check, no signal delivered
+    return true;
+  } catch (err) {
+    // EPERM means the process exists but belongs to another user.
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
 /**
  * JSON-file-backed store. Loads once on construction and writes the whole set
  * atomically (temp file + rename) after each mutation so a crash mid-write
- * never corrupts the data file. SINGLE-PROCESS ONLY (see server/config.ts).
+ * never corrupts the data file. SINGLE-PROCESS ONLY (see server/config.ts) —
+ * enforced by an advisory pid lock file (`{path}.lock`) acquired on
+ * construction, so a second process fails loudly instead of corrupting data.
  */
 export class JsonFileRepository extends MemoryRepository {
+  /**
+   * Lock paths held by live instances in THIS process. A duplicate instance in
+   * the same process records the same pid, so the pid check alone can't tell
+   * it apart from a stale lock left by a crashed predecessor with a reused pid.
+   */
+  private static readonly heldLocks = new Set<string>();
+
+  private readonly lockPath: string;
+  private lockHeld = false;
+  private readonly releaseOnExit = () => this.releaseLock();
+
   constructor(private readonly path: string) {
     super();
+    this.lockPath = `${this.path}.lock`;
+    this.acquireLock();
     this.load();
+  }
+
+  /**
+   * Acquire the advisory lock, or throw if another live process holds it.
+   * A stale lock (dead holder, our own pid from a crashed predecessor with a
+   * reused pid, or unparsable content) is reclaimed with one retry.
+   */
+  private acquireLock(): void {
+    if (JsonFileRepository.heldLocks.has(this.lockPath)) {
+      throw new Error(
+        `Data file ${this.path} is locked by pid ${process.pid} (another live ` +
+          `repository instance in this process); the JSON store is ` +
+          `single-process (see README § Operations).`,
+      );
+    }
+    const dir = dirname(this.path);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        // 'wx' fails with EEXIST if the file exists — atomic take-if-free.
+        writeFileSync(this.lockPath, String(process.pid), { flag: 'wx' });
+        this.lockHeld = true;
+        JsonFileRepository.heldLocks.add(this.lockPath);
+        process.once('exit', this.releaseOnExit);
+        return;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+        const holder = this.readLockPid();
+        const stale = holder === undefined || holder === process.pid || !isPidAlive(holder);
+        if (attempt === 0 && stale) {
+          try {
+            unlinkSync(this.lockPath);
+          } catch {
+            // Already removed (e.g. the dying holder cleaned up); retry anyway.
+          }
+          continue;
+        }
+        throw new Error(
+          `Data file ${this.path} is locked by pid ${holder ?? '<unknown>'}; ` +
+            `the JSON store is single-process (see README § Operations). ` +
+            `Remove ${this.lockPath} if that process is dead.`,
+        );
+      }
+    }
+  }
+
+  /** The pid recorded in the lock file, or undefined if missing/unparsable. */
+  private readLockPid(): number | undefined {
+    try {
+      const pid = Number.parseInt(readFileSync(this.lockPath, 'utf8').trim(), 10);
+      return Number.isInteger(pid) && pid > 0 ? pid : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Remove the lock file, but only if we hold it and it still records our pid. */
+  private releaseLock(): void {
+    if (!this.lockHeld) return;
+    this.lockHeld = false;
+    JsonFileRepository.heldLocks.delete(this.lockPath);
+    process.removeListener('exit', this.releaseOnExit);
+    try {
+      if (this.readLockPid() === process.pid) unlinkSync(this.lockPath);
+    } catch {
+      // Lock already gone — nothing to release.
+    }
+  }
+
+  /** Release the advisory lock so another process (or instance) can take over. */
+  async close(): Promise<void> {
+    this.releaseLock();
   }
 
   private load(): void {

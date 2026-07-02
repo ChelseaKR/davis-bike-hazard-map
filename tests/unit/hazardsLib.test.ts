@@ -90,8 +90,11 @@ describe('createRepository', () => {
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
 
-    // A fresh store over the same file sees the persisted record.
+    // Release the advisory lock (the store is single-process, FIX-13) so a
+    // fresh store over the same file can construct and see the record.
+    await repo.close();
     const reloaded = new JsonFileRepository(path);
     expect((await reloaded.findById(h.id))?.id).toBe(h.id);
+    await reloaded.close();
   });
 });
