@@ -31,7 +31,14 @@ import {
 } from '../shared/validation.ts';
 import { SEVERITY_RANK, type Hazard, type Severity } from '../shared/types.ts';
 import type { ValidatedHazardFilters } from '../shared/validation.ts';
-import { rankRoutes, findFastestAlternative, type RoutePlan } from '../shared/routing.ts';
+import {
+  rankRoutes,
+  findFastestAlternative,
+  isDarkAt,
+  DAVIS_LAT,
+  DAVIS_LNG,
+  type RoutePlan,
+} from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
 import { TOMBSTONE_TTL_MS, type Repository } from './lib/repository.ts';
 import type { StoredHazard } from './lib/types.ts';
@@ -581,11 +588,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       to: parsePoint(q.to),
     });
 
-    const hazards = await listPublic(repo, now());
+    const at = now();
+    const hazards = await listPublic(repo, at);
     const { routes, source } = await fetchRoutes(from, to, { routingUrl: config.routingUrl }, fetchImpl);
+    // After civil twilight, weight poor-visibility hazards higher — an unlit
+    // path matters more in the dark. Derived from the request time + Davis
+    // location so it's honest and needs no external API.
+    const isDark = isDarkAt(at, DAVIS_LAT, DAVIS_LNG);
     // Corridor slightly wider than the privacy fuzz grid (~70 m cells) so a
     // hazard published a cell away from the true spot still influences scoring.
-    const ranked = rankRoutes(routes, hazards, { now: now(), corridorMeters: 45 });
+    const ranked = rankRoutes(routes, hazards, {
+      now: at,
+      corridorMeters: 45,
+      conditions: { isDark },
+    });
     const best = ranked[0];
 
     const plan: RoutePlan = {
@@ -596,6 +612,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       nearby: best.nearby,
       alternativesConsidered: routes.length,
       fastestAlternative: findFastestAlternative(ranked),
+      ...(isDark ? { nightWeighting: true } : {}),
     };
     return { plan };
   });
