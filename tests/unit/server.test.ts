@@ -5,6 +5,7 @@ import { MemoryRepository } from '../../server/lib/repository.ts';
 import { MemoryModeratorStore } from '../../server/lib/moderators.ts';
 import { hashPassword } from '../../server/lib/password.ts';
 import { serverConfig } from '../../server/config.ts';
+import { signWebhookBody } from '../../server/lib/webhookAuth.ts';
 import { bytesToDataUrl, hasExif, dataUrlToBytes } from '../../shared/exif.ts';
 import sharp from 'sharp';
 
@@ -612,6 +613,39 @@ describe('data lifecycle & privacy', () => {
     expect(gj.features[0].geometry.type).toBe('Point');
   });
 
+  it('never leaks the reporter clientId in any unauthenticated response (FIX-01)', async () => {
+    // clientId is the reporter's deletion capability (DELETE /api/reports/:clientId).
+    // Publishing it would let anyone scrape the feed and delete every report, so
+    // it must be absent from the feed, the export, and the create/confirm bodies.
+    const create = await post('/api/reports', baseReport);
+    const id = create.json().hazard.id;
+    expect(create.json().hazard).not.toHaveProperty('clientId');
+    expect(create.payload).not.toContain(baseReport.clientId);
+
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+
+    const feed = await app.inject({ method: 'GET', url: '/api/hazards' });
+    expect(feed.payload).not.toContain(baseReport.clientId);
+    for (const h of feed.json().hazards) {
+      expect(h).not.toHaveProperty('clientId');
+    }
+
+    const confirm = await post(`/api/hazards/${id}/confirm`, {});
+    expect(confirm.json().hazard).not.toHaveProperty('clientId');
+    expect(confirm.payload).not.toContain(baseReport.clientId);
+
+    const exp = await app.inject({ method: 'GET', url: '/api/hazards/export' });
+    expect(exp.payload).not.toContain(baseReport.clientId);
+    for (const f of exp.json().features) {
+      expect(f.properties).not.toHaveProperty('clientId');
+    }
+
+    // The reporter still holds their clientId locally, so their own deletion
+    // capability is intact.
+    const del = await app.inject({ method: 'DELETE', url: `/api/reports/${baseReport.clientId}` });
+    expect(del.statusCode).toBe(204);
+  });
+
   it('coarsens the precise location once a hazard is resolved', async () => {
     const r = await post('/api/reports', baseReport);
     const id = r.json().hazard.id;
@@ -748,36 +782,87 @@ describe('311 status sync-back', () => {
     expect(res.statusCode).toBe(503);
   });
 
-  it('the inbound webhook requires the shared secret and resolves on a fixed status', async () => {
+  it('the inbound webhook rejects a call with no signature (401)', async () => {
+    const { app: a } = await buildAppWithModerator({ ...testConfig, gogovWebhookSecret: 'shh' });
+    const res = await a.inject({
+      method: 'POST',
+      url: '/api/handoff/webhook',
+      payload: JSON.stringify({ reference: 'x', status: 'Resolved' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(res.statusCode).toBe(401);
+    await a.close();
+  });
+
+  it('the inbound webhook enforces HMAC, freshness, replay and hand-off (FIX-02)', async () => {
+    const secret = 'shared-311-secret';
+    // Sign the EXACT body bytes we will send, so the HMAC matches byte-for-byte.
+    const signedWebhook = (body: unknown, ts: number) => {
+      const raw = JSON.stringify(body);
+      return {
+        payload: raw,
+        headers: {
+          'content-type': 'application/json',
+          'x-gogov-timestamp': String(ts),
+          'x-gogov-signature': signWebhookBody(secret, ts, raw),
+        },
+      };
+    };
+
     const { app: a, token: tok, repo: r } = await buildAppWithModerator({
       ...testConfig,
-      gogovWebhookSecret: 'shh',
+      gogovWebhookSecret: secret,
     });
     const rep = await a.inject({ method: 'POST', url: '/api/reports', payload: baseReport, headers: { 'content-type': 'application/json' } });
     const id = rep.json().hazard.id;
     const h = { 'content-type': 'application/json', authorization: `Bearer ${tok}` };
     await a.inject({ method: 'POST', url: `/api/moderation/${id}`, payload: { decision: 'approve' }, headers: h });
+
+    const body = { reference: id, status: 'Closed - Resolved' };
+
+    // A perfectly-signed call BEFORE the hazard is handed off → 409 (a secret
+    // holder must not be able to resolve a hazard that was never handed off).
+    const preHandoff = await a.inject({ method: 'POST', url: '/api/handoff/webhook', ...signedWebhook(body, clock) });
+    expect(preHandoff.statusCode).toBe(409);
+    expect(preHandoff.json().error).toBe('not_handed_off');
+
     await a.inject({ method: 'POST', url: `/api/moderation/${id}/handoff`, payload: {}, headers: h });
 
-    // Wrong signature → 401.
-    const bad = await a.inject({
+    // The OLD scheme (raw static secret in the signature header) → 401.
+    const staticSecret = await a.inject({
       method: 'POST',
       url: '/api/handoff/webhook',
-      payload: { reference: id, status: 'Resolved' },
-      headers: { 'content-type': 'application/json', 'x-gogov-signature': 'nope' },
+      payload: JSON.stringify(body),
+      headers: { 'content-type': 'application/json', 'x-gogov-timestamp': String(clock), 'x-gogov-signature': secret },
     });
-    expect(bad.statusCode).toBe(401);
+    expect(staticSecret.statusCode).toBe(401);
 
-    // Correct signature + a "fixed" status → resolves the hazard.
-    const ok = await a.inject({
+    // A valid signature lifted onto a DIFFERENT body → 401 (body-bound HMAC).
+    const forged = signedWebhook({ reference: id, status: 'In Progress' }, clock);
+    const forgedReq = await a.inject({
       method: 'POST',
       url: '/api/handoff/webhook',
-      payload: { reference: id, status: 'Closed - Resolved' },
-      headers: { 'content-type': 'application/json', 'x-gogov-signature': 'shh' },
+      payload: JSON.stringify(body), // not the body that was signed
+      headers: forged.headers,
     });
+    expect(forgedReq.statusCode).toBe(401);
+
+    // A correctly-signed but STALE request (timestamp outside the window) → 401.
+    const stale = await a.inject({ method: 'POST', url: '/api/handoff/webhook', ...signedWebhook(body, clock - 10 * 60 * 1000) });
+    expect(stale.statusCode).toBe(401);
+
+    // Correct HMAC + fresh timestamp → 200, resolves the hazard.
+    const signed = signedWebhook(body, clock);
+    const ok = await a.inject({ method: 'POST', url: '/api/handoff/webhook', ...signed });
     expect(ok.statusCode).toBe(200);
     expect(ok.json().resolved).toBe(true);
     expect((await r.findById(id))!.status).toBe('resolved');
+
+    // Replaying the identical signed request → 409 (already processed).
+    const replay = await a.inject({ method: 'POST', url: '/api/handoff/webhook', ...signed });
+    expect(replay.statusCode).toBe(409);
+    expect(replay.json().error).toBe('replayed');
+
     await a.close();
   });
 });

@@ -25,3 +25,24 @@ keywords:
   - crowdsourcing
   - hazard-map
   - davis
+# The published open-data snapshots (EXP-07) are a distinct, citable dataset.
+# Cite a specific dated, checksummed snapshot with the reference below: pin the
+# snapshotDate AND the verified sha256 (see docs/OPEN-DATA.md), because the
+# deletion-propagation policy means a snapshot's bytes can change if a reporter
+# later withdraws their report.
+references:
+  - type: data
+    title: "Davis Bike Hazard Map — open-data snapshots (ODbL)"
+    authors:
+      - family-names: Kelly-Reif
+        given-names: Chelsea
+        alias: ChelseaKR
+    license: ODbL-1.0
+    url: "https://github.com/ChelseaKR/davis-bike-hazard-map/blob/main/docs/OPEN-DATA.md"
+    notes: >-
+      Dated, checksummed GeoJSON FeatureCollection snapshots of approved,
+      privacy-fuzzed cycling hazards, described by a DCAT/schema.org catalog at
+      /api/exports/catalog.jsonld. When citing, record the snapshotDate and the
+      SHA-256 you verified (shasum -a 256 -c). Snapshots are regenerated from
+      current data, so reporter deletions propagate to previously published
+      dates — cite by date + checksum for reproducibility.

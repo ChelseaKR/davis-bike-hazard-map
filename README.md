@@ -18,6 +18,7 @@ Davis cyclists hit the same hazards repeatedly; the city's 311 is underused and 
 - **311 hand-off (optional):** forward an approved report to Davis's GOGov/311 with the same payload.
 - **Saved-route push alerts (flagged):** save an area or route and get a web-push notification when a new hazard appears on it (server matcher + subscription API are complete; turning on delivery needs VAPID keys — see below).
 - **Public read-only dashboard:** a no-auth, read-only deployment mode (map/list/coverage/route only) for graduating the private beta — `VITE_PUBLIC_DASHBOARD=true`.
+- **Open data, versioned & citable:** approved hazards publish as ODbL-licensed GeoJSON — a live export plus dated, checksummed snapshots and a DCAT/schema.org catalog (`/api/exports`), so a published figure stays reproducible. See [`docs/OPEN-DATA.md`](./docs/OPEN-DATA.md).
 
 ## Quickstart
 

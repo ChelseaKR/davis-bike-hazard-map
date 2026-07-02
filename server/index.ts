@@ -10,9 +10,10 @@ import { buildApp } from './app.ts';
 import { serverConfig } from './config.ts';
 import { createRepository } from './lib/repository.ts';
 import { createPhotoStore } from './lib/photoStore.ts';
-import { migrateInlinePhotos } from './lib/hazards.ts';
+import { migrateInlinePhotos, listPublic } from './lib/hazards.ts';
 import { createModeratorStore, bootstrapModerator } from './lib/moderators.ts';
 import { startBackups } from './lib/backup.ts';
+import { startSnapshotScheduler } from './lib/snapshots.ts';
 import { initSentry } from './lib/sentry.ts';
 import { logBootFatal } from './lib/logger.ts';
 
@@ -106,6 +107,23 @@ async function main() {
     },
     serverConfig.backup.intervalHours * 60 * 60 * 1000,
     (path) => app.log.info(`Data snapshot written: ${path}`),
+  );
+
+  // Versioned open-data snapshots (EXP-07): dated, checksummed, ODbL GeoJSON +
+  // a DCAT/schema.org catalog. Regenerated from current data each run so
+  // reporter deletions propagate (no-op in-memory). See docs/OPEN-DATA.md.
+  startSnapshotScheduler(
+    {
+      dir: serverConfig.snapshot.dir,
+      retain: serverConfig.snapshot.retain,
+      intervalMs: serverConfig.snapshot.intervalMs,
+      loadHazards: (nowMs) => listPublic(repo, nowMs),
+    },
+    (entries) => {
+      if (entries.length) {
+        app.log.info(`Open-data snapshots regenerated: ${entries.length} date(s).`);
+      }
+    },
   );
 
   // Close the DB pool when the app closes (covers shutdown + tests).

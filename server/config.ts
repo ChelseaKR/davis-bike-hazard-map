@@ -137,4 +137,16 @@ export const serverConfig = {
     intervalHours: int('BACKUP_INTERVAL_HOURS', 6),
     retain: int('BACKUP_RETAIN', 14),
   },
+
+  /**
+   * Versioned open-data snapshots (EXP-07): dated, checksummed, ODbL GeoJSON
+   * exports + a DCAT/schema.org catalog, so published figures stay citable.
+   * Disabled when running in-memory. Defaults to an `exports/` dir beside the
+   * data file. `snapshotRetain` is a count of trailing calendar days.
+   */
+  snapshot: {
+    dir: process.env.SNAPSHOT_DIR ?? (dataFile ? join(dirname(dataFile), 'exports') : ''),
+    intervalMs: int('SNAPSHOT_INTERVAL_MS', 24 * 60 * 60 * 1000),
+    retain: int('SNAPSHOT_RETAIN', 30),
+  },
 } as const;

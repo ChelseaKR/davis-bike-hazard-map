@@ -38,9 +38,10 @@ export const openapiSpec = {
       },
       Hazard: {
         type: 'object',
+        // Note: `clientId` is intentionally NOT exposed here — it is the
+        // reporter's deletion capability and never appears in the public feed.
         properties: {
           id: { type: 'string' },
-          clientId: { type: 'string', format: 'uuid' },
           category: { type: 'string' },
           severity: { type: 'string', enum: ['low', 'moderate', 'high'] },
           description: { type: 'string', nullable: true },
@@ -111,6 +112,31 @@ export const openapiSpec = {
       },
     },
     '/hazards/export': { get: { tags: ['public'], summary: 'Open-data export (GeoJSON, ODbL)', responses: { '200': { description: 'FeatureCollection' } } } },
+    '/exports': {
+      get: {
+        tags: ['public'],
+        summary: 'List versioned open-data snapshots (EXP-07)',
+        description: 'Dated, checksummed, ODbL-licensed GeoJSON snapshots + a catalog URL. CORS *.',
+        responses: { '200': { description: 'snapshot index (dates + geojson/sha256/catalog URLs)' } },
+      },
+    },
+    '/exports/catalog.jsonld': {
+      get: {
+        tags: ['public'],
+        summary: 'DCAT/schema.org Dataset catalog (JSON-LD)',
+        description: 'Machine-readable Dataset listing each snapshot distribution with contentUrl, encodingFormat, sha256, and dateModified. CORS *.',
+        responses: { '200': { description: 'application/ld+json Dataset' }, '404': { description: 'no catalog yet' } },
+      },
+    },
+    '/exports/{name}': {
+      get: {
+        tags: ['public'],
+        summary: 'A dated snapshot (YYYY-MM-DD.geojson) or its checksum (…​.geojson.sha256)',
+        description: 'Verify with `shasum -a 256 -c YYYY-MM-DD.geojson.sha256`. CORS *.',
+        parameters: [{ name: 'name', in: 'path', required: true, schema: { type: 'string' }, description: 'e.g. 2026-07-02.geojson or 2026-07-02.geojson.sha256' }],
+        responses: { '200': { description: 'GeoJSON FeatureCollection or plain-text checksum' }, '404': { description: 'no such snapshot' } },
+      },
+    },
     '/route': {
       get: {
         tags: ['routing'],
@@ -159,7 +185,27 @@ export const openapiSpec = {
       post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: 'Poll 311 for status and reflect it (resolving the hazard if fixed)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'sync result + updated hazard' }, '409': { description: 'never handed off' } } },
     },
     '/handoff/webhook': {
-      post: { tags: ['moderation'], summary: '311 status sync-back webhook (shared-secret auth via x-gogov-signature)', responses: { '200': { description: 'applied' }, '401': { description: 'bad signature' }, '503': { description: 'webhook disabled (no secret configured)' } } },
+      post: {
+        tags: ['moderation'],
+        summary: '311 status sync-back webhook (HMAC-SHA256 over the raw body + signed timestamp; replay-protected)',
+        description:
+          'Send `x-gogov-timestamp` (epoch ms) and `x-gogov-signature` = hex ' +
+          'HMAC-SHA256, keyed by the shared secret, over the string ' +
+          '`{timestamp}.{rawBody}`. The timestamp must be within 5 minutes of ' +
+          'server time and each signature is accepted at most once. The ' +
+          'referenced hazard must already have a 311 hand-off record.',
+        parameters: [
+          { name: 'x-gogov-timestamp', in: 'header', required: true, schema: { type: 'string' }, description: 'epoch ms; folded into the signed message' },
+          { name: 'x-gogov-signature', in: 'header', required: true, schema: { type: 'string' }, description: 'hex HMAC-SHA256 of `{timestamp}.{rawBody}`' },
+        ],
+        responses: {
+          '200': { description: 'applied' },
+          '401': { description: 'missing/forged signature, or stale timestamp' },
+          '404': { description: 'no hazard for that reference' },
+          '409': { description: 'replayed signature, or hazard never handed off' },
+          '503': { description: 'webhook disabled (no secret configured)' },
+        },
+      },
     },
     '/alerts/subscribe': {
       post: { tags: ['alerts'], summary: 'Subscribe a saved area/route to new-hazard push alerts (feature-flagged)', responses: { '201': { description: 'subscription id' }, '400': { description: 'invalid' }, '503': { description: 'push disabled' } } },

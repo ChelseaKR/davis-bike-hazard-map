@@ -24,7 +24,6 @@ const DOWNTOWN = { lat: 38.5447, lng: -121.7405 };
 function hazard(loc = DOWNTOWN, over: Partial<Hazard> = {}): Hazard {
   return {
     id: 'h1',
-    clientId: 'c1',
     category: 'pothole',
     severity: 'high',
     description: null,
