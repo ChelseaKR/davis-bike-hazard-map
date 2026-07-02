@@ -522,6 +522,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     // unless push is configured). Best-effort: never let it fail moderation.
     if (decision === 'approve') {
       try {
+        // TTL enforcement (FIX-10): drop expired subscriptions before matching
+        // so a lapsed watch can never fire — or linger in storage.
+        await subscriptions.prune(now());
         const result = await notifyForHazard(
           toPublic(updated),
           await subscriptions.all(),
@@ -559,6 +562,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       return reply.status(503).send({ error: 'disabled', message: 'Push alerts are not enabled.' });
     }
     const { id } = req.params as { id: string };
+    // Pruning first means an already-expired subscription 404s like a deleted
+    // one — from the client's perspective, expiry and deletion look the same.
+    await subscriptions.prune(now());
     const removed = await subscriptions.remove(id);
     if (!removed) {
       return reply.status(404).send({ error: 'not_found', message: 'No such subscription.' });
