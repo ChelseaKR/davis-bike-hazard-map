@@ -213,4 +213,14 @@ export interface RoutePlan {
   nearby: NearbyHazard[];
   /** How many candidate routes were considered before picking this one. */
   alternativesConsidered: number;
+  /**
+   * The plain-fastest candidate, populated ONLY when it differs from the chosen
+   * (lowest hazard-aware cost) route. Lets the UI be honest: "the fastest route
+   * is X but passes N hazards; this one adds a little distance to avoid them."
+   */
+  fastestAlternative?: {
+    distanceMeters: number;
+    durationSeconds: number;
+    hazardCount: number;
+  };
 }

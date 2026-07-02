@@ -187,6 +187,28 @@ export function RoutePlanner() {
             </div>
           </dl>
 
+          <p className="route-honesty hint">
+            {plan.fastestAlternative ? (
+              <FormattedMessage
+                id="route.honesty.delta"
+                defaultMessage="The fastest route is {distance} / {time} but passes {count, plural, one {# reported hazard} other {# reported hazards}}; this route adds {extraDistance} to avoid them."
+                values={{
+                  distance: formatDistance(plan.fastestAlternative.distanceMeters),
+                  time: formatDuration(plan.fastestAlternative.durationSeconds),
+                  count: plan.fastestAlternative.hazardCount,
+                  extraDistance: formatDistance(
+                    Math.max(0, plan.route.distanceMeters - plan.fastestAlternative.distanceMeters),
+                  ),
+                }}
+              />
+            ) : (
+              <FormattedMessage
+                id="route.honesty.fastest"
+                defaultMessage="This is also the fastest route found."
+              />
+            )}
+          </p>
+
           {plan.source === 'fallback' ? (
             <p className="hint">
               <FormattedMessage
@@ -218,11 +240,12 @@ export function RoutePlanner() {
                   <li key={n.hazard.id} className={`route-hazard severity-text-${n.hazard.severity}`}>
                     <FormattedMessage
                       id="route.hazards.item"
-                      defaultMessage="{category} · {severity} · {distance} m from your route"
+                      defaultMessage="{category} · {severity} · {distance} m from your route · costs ~{penalty} m equivalent detour"
                       values={{
                         category: labels.category(n.hazard.category),
                         severity: labels.severity(n.hazard.severity),
                         distance: Math.round(n.distanceMeters),
+                        penalty: Math.round(n.penalty),
                       }}
                     />
                   </li>

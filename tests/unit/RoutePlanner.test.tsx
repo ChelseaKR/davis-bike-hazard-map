@@ -108,8 +108,49 @@ describe('RoutePlanner', () => {
     render(<RoutePlanner />);
     await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
     await waitFor(() => expect(screen.getByText(/hazards still on this route/i)).toBeInTheDocument());
-    expect(screen.getByText(/Pothole · High · 12 m from your route/)).toBeInTheDocument();
+    // Hazard list item includes distance AND the equivalent-detour penalty (rounded).
+    expect(
+      screen.getByText(
+        /Pothole · High · 12 m from your route · costs ~700 m equivalent detour/,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText(/no hazard-free route was found/i)).toBeInTheDocument();
+  });
+
+  it('shows the honesty delta strip when a faster hazard-passing route exists', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(
+      plan({
+        route: {
+          geometry: [DAVIS_LANDMARKS[0].point, DAVIS_LANDMARKS[1].point],
+          distanceMeters: 1500,
+          durationSeconds: 360,
+          steps: [
+            { instruction: 'Head out on A St', distanceMeters: 1500, location: DAVIS_LANDMARKS[0].point },
+          ],
+        },
+        fastestAlternative: { distanceMeters: 1200, durationSeconds: 300, hazardCount: 3 },
+      }),
+    );
+    render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() => expect(screen.getByText(/turn-by-turn directions/i)).toBeInTheDocument());
+    // Fastest is 1.2 km / 5 min passing 3 hazards; chosen adds 300 m to avoid them.
+    expect(
+      screen.getByText(
+        /The fastest route is 1\.2 km \/ 5 min but passes 3 reported hazards; this route adds 300 m to avoid them\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/also the fastest route found/i)).not.toBeInTheDocument();
+  });
+
+  it('states the chosen route is also fastest when there is no alternative', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(plan());
+    render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() => expect(screen.getByText(/turn-by-turn directions/i)).toBeInTheDocument());
+    expect(screen.getByText(/This is also the fastest route found\./)).toBeInTheDocument();
   });
 
   it('explains the straight-line fallback when routing is unavailable', async () => {

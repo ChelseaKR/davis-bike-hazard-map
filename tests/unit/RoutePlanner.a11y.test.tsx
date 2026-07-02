@@ -42,4 +42,16 @@ describe('RoutePlanner accessibility', () => {
     await waitFor(() => expect(screen.getByText(/turn-by-turn directions/i)).toBeInTheDocument());
     await checkA11y(container);
   });
+
+  it('has no violations when the honesty comparison strip is shown', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue({
+      ...plan,
+      fastestAlternative: { distanceMeters: 1200, durationSeconds: 300, hazardCount: 2 },
+    });
+    const { container } = render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() => expect(screen.getByText(/but passes 2 reported hazards/i)).toBeInTheDocument());
+    await checkA11y(container);
+  });
 });

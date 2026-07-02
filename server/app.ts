@@ -461,6 +461,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       nearby: best.nearby,
       alternativesConsidered: routes.length,
     };
+
+    // Honesty panel: if the plain-fastest candidate isn't the one we chose,
+    // surface it so the rider sees the distance we spent avoiding hazards.
+    const fastest = ranked.reduce((a, b) =>
+      b.route.distanceMeters < a.route.distanceMeters ? b : a,
+    );
+    if (fastest !== best) {
+      plan.fastestAlternative = {
+        distanceMeters: fastest.route.distanceMeters,
+        durationSeconds: fastest.route.durationSeconds,
+        hazardCount: fastest.nearby.length,
+      };
+    }
+
     return { plan };
   });
 

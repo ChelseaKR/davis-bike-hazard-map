@@ -691,6 +691,105 @@ describe('hazard-aware route planner', () => {
     expect(res.json().plan.source).toBe('osrm');
     await a.close();
   });
+
+  it('surfaces the plain-fastest alternative when the chosen route dodges a hazard', async () => {
+    // A closure the mock reads at REQUEST time, so we can point route "A"
+    // straight through the hazard's published (fuzzed) location.
+    let hazardPoint = { lat: 38.5449, lng: -121.7405 };
+    const fetchMock: typeof fetch = (async () =>
+      ({
+        ok: true,
+        json: async () => ({
+          routes: [
+            {
+              // Short + fast, but it runs straight through the hazard.
+              distance: 1000,
+              duration: 250,
+              geometry: {
+                coordinates: [
+                  [hazardPoint.lng - 0.001, hazardPoint.lat],
+                  [hazardPoint.lng + 0.001, hazardPoint.lat],
+                ],
+              },
+              legs: [{ steps: [{ distance: 1000, name: 'A St', maneuver: { type: 'depart', location: [hazardPoint.lng - 0.001, hazardPoint.lat] } }] }],
+            },
+            {
+              // Longer, but well clear of the hazard corridor.
+              distance: 1500,
+              duration: 400,
+              geometry: {
+                coordinates: [
+                  [hazardPoint.lng - 0.001, hazardPoint.lat + 0.02],
+                  [hazardPoint.lng + 0.001, hazardPoint.lat + 0.02],
+                ],
+              },
+              legs: [{ steps: [{ distance: 1500, name: 'B St', maneuver: { type: 'depart', location: [hazardPoint.lng - 0.001, hazardPoint.lat + 0.02] } }] }],
+            },
+          ],
+        }),
+      }) as Response) as unknown as typeof fetch;
+    const { app: a, token: tok } = await buildAppWithModerator(
+      { ...testConfig, routingUrl: 'https://osrm.test/route/v1/cycling' },
+      fetchMock,
+    );
+    const h = { 'content-type': 'application/json', authorization: `Bearer ${tok}` };
+    const rep = await a.inject({ method: 'POST', url: '/api/reports', payload: baseReport, headers: h });
+    const id = rep.json().hazard.id;
+    await a.inject({ method: 'POST', url: `/api/moderation/${id}`, payload: { decision: 'approve' }, headers: h });
+    const pub = (await a.inject({ method: 'GET', url: '/api/hazards' })).json().hazards[0];
+    hazardPoint = pub.location;
+
+    const res = await a.inject({
+      method: 'GET',
+      url: `/api/route?from=${hazardPoint.lat},${hazardPoint.lng - 0.001}&to=${hazardPoint.lat},${hazardPoint.lng + 0.001}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const plan = res.json().plan;
+    // Chosen route is the longer, hazard-free one; the fastest is exposed as honesty.
+    expect(plan.route.distanceMeters).toBe(1500);
+    expect(plan.nearby).toHaveLength(0);
+    expect(plan.fastestAlternative).toEqual({
+      distanceMeters: 1000,
+      durationSeconds: 250,
+      hazardCount: 1,
+    });
+    await a.close();
+  });
+
+  it('omits fastestAlternative when the chosen route is also the fastest', async () => {
+    // Two candidates, neither near a hazard: the shorter one is both chosen and
+    // fastest, so there's nothing to disclose.
+    const fetchMock: typeof fetch = (async () =>
+      ({
+        ok: true,
+        json: async () => ({
+          routes: [
+            {
+              distance: 1000,
+              duration: 250,
+              geometry: { coordinates: [[-121.745, 38.5449], [-121.736, 38.5449]] },
+              legs: [{ steps: [{ distance: 1000, name: '5th St', maneuver: { type: 'depart', location: [-121.745, 38.5449] } }] }],
+            },
+            {
+              distance: 1500,
+              duration: 400,
+              geometry: { coordinates: [[-121.745, 38.55], [-121.736, 38.55]] },
+              legs: [{ steps: [{ distance: 1500, name: '8th St', maneuver: { type: 'depart', location: [-121.745, 38.55] } }] }],
+            },
+          ],
+        }),
+      }) as Response) as unknown as typeof fetch;
+    const { app: a } = await buildAppWithModerator(
+      { ...testConfig, routingUrl: 'https://osrm.test/route/v1/cycling' },
+      fetchMock,
+    );
+    const res = await a.inject({ method: 'GET', url: '/api/route?from=38.5449,-121.745&to=38.5449,-121.736' });
+    expect(res.statusCode).toBe(200);
+    const plan = res.json().plan;
+    expect(plan.route.distanceMeters).toBe(1000);
+    expect(plan.fastestAlternative).toBeUndefined();
+    await a.close();
+  });
 });
 
 describe('311 status sync-back', () => {
