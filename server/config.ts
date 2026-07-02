@@ -78,6 +78,15 @@ export const serverConfig = {
   open311JurisdictionId: process.env.OPEN311_JURISDICTION_ID ?? '',
   /** The single Open311 `service_code` this app's reports map onto. */
   open311ServiceCode: process.env.OPEN311_SERVICE_CODE ?? 'bike-hazard',
+  /**
+   * Optional OSM Notes feedback loop (EXP-08): a moderator can draft an anonymous
+   * OSM Note for hazards describing permanent map features. OFF by default — the
+   * adapter dry-runs (drafts but never posts) unless OSM_NOTES_ENABLED=true, which
+   * needs a license/consent review before flipping on.
+   */
+  osmNotesEnabled: process.env.OSM_NOTES_ENABLED === 'true',
+  osmNotesApiUrl:
+    process.env.OSM_NOTES_API_URL ?? 'https://api.openstreetmap.org/api/0.6/notes',
 
   /**
    * OSRM-compatible cycling routing backend, proxied by GET /api/route. Default
