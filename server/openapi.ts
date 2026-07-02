@@ -158,6 +158,9 @@ export const openapiSpec = {
     '/moderation/{id}/handoff/sync': {
       post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: 'Poll 311 for status and reflect it (resolving the hazard if fixed)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'sync result + updated hazard' }, '409': { description: 'never handed off' } } },
     },
+    '/moderation/{id}/osm-note': {
+      post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: 'Draft an OSM Note for a permanent-infrastructure hazard (dry-run by default; fuzzed location only)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'note result (dryRun visible) + updated hazard' }, '400': { description: 'category not eligible for OSM' }, '404': { description: 'not found' } } },
+    },
     '/handoff/webhook': {
       post: { tags: ['moderation'], summary: '311 status sync-back webhook (shared-secret auth via x-gogov-signature)', responses: { '200': { description: 'applied' }, '401': { description: 'bad signature' }, '503': { description: 'webhook disabled (no secret configured)' } } },
     },

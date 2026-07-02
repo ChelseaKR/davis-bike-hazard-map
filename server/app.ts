@@ -58,6 +58,7 @@ import {
   thumbKey,
 } from './lib/hazards.ts';
 import { forwardToGogov, fetchGogovStatus } from './lib/gogov.ts';
+import { postOsmNote, isOsmEligible } from './lib/osmNotes.ts';
 import { fetchRoutes } from './lib/routing.ts';
 import { applyHandoffStatus, initialHandoff } from './lib/lifecycle.ts';
 import {
@@ -597,6 +598,41 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { patch } = applyHandoffStatus(hazard, status.status, now(), status.note);
     const updated = await repo.update(id, patch);
     return { result: status, hazard: toPublic(updated ?? hazard) };
+  });
+
+  // --- Optional OSM Notes feedback loop (moderator-triggered, dry-run default) ---
+  // Drafts an anonymous OSM Note for a hazard describing a permanent map feature
+  // (eligible categories only). Dry-runs unless OSM_NOTES_ENABLED is set. The
+  // note carries only the FUZZED location + category/severity labels + a
+  // back-link — never description, photo, or reporter data (see osmNotes.ts).
+  app.post('/api/moderation/:id/osm-note', { preHandler: requireModerator }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const hazard = await repo.findById(id);
+    if (!hazard) {
+      return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
+    }
+    if (!isOsmEligible(hazard.category)) {
+      return reply.status(400).send({
+        error: 'ineligible_category',
+        message: 'Only permanent-infrastructure categories can be suggested to OSM.',
+      });
+    }
+    const result = await postOsmNote(
+      hazard,
+      {
+        enabled: config.osmNotesEnabled,
+        apiUrl: config.osmNotesApiUrl,
+      },
+      fetchImpl,
+    );
+    // Record the suggestion (who + dry-run/delivered) as the audit trail, the
+    // same way the 311 hand-off records its intent. Even a dry-run is recorded.
+    const by = (req as AuthedRequest).moderatorUsername;
+    const updated = await repo.update(id, {
+      osmNote: { by, at: now(), dryRun: result.dryRun, delivered: result.delivered },
+      updatedAt: now(),
+    });
+    return { result, hazard: updated ? toPublic(updated) : toPublic(hazard) };
   });
 
   // --- 311 status sync-back: inbound webhook (city/GOGov → us) ---

@@ -9,11 +9,13 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
-import type { Hazard } from '../../shared/types.ts';
+import type { Hazard, HazardCategory } from '../../shared/types.ts';
+import { OSM_ELIGIBLE_CATEGORIES } from '../../shared/types.ts';
 import {
   decideModeration,
   fetchModerationQueue,
   login,
+  suggestOsmNote,
   ApiRequestError,
   type Session,
 } from '../lib/api.ts';
@@ -44,6 +46,8 @@ export function ModerationPanel() {
   const [queue, setQueue] = useState<Hazard[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Per-hazard hint after an OSM Note suggestion (dry-run result), keyed by id.
+  const [osmHints, setOsmHints] = useState<Record<string, string>>({});
 
   const signOut = useCallback((message?: string) => {
     localStorage.removeItem(SESSION_KEY);
@@ -138,6 +142,47 @@ export function ModerationPanel() {
       setBusy(false);
     }
   };
+
+  const suggestOsm = async (id: string) => {
+    if (!session) return;
+    setBusy(true);
+    try {
+      const { result } = await suggestOsmNote(id, session.token);
+      setOsmHints((h) => ({
+        ...h,
+        [id]: result.dryRun
+          ? intl.formatMessage({
+              id: 'moderation.osm.drafted',
+              defaultMessage: 'Drafted an OSM Note (dry-run — not posted).',
+            })
+          : intl.formatMessage({
+              id: 'moderation.osm.posted',
+              defaultMessage: 'Suggested to OSM.',
+            }),
+      }));
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        signOut(
+          intl.formatMessage({
+            id: 'moderation.error.sessionExpired',
+            defaultMessage: 'Your session expired. Please sign in again.',
+          }),
+        );
+      } else {
+        setError(
+          intl.formatMessage({
+            id: 'moderation.error.osm',
+            defaultMessage: 'Could not draft an OSM Note. Try again.',
+          }),
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isOsmEligible = (category: HazardCategory): boolean =>
+    (OSM_ELIGIBLE_CATEGORIES as readonly HazardCategory[]).includes(category);
 
   if (!session) {
     return (
@@ -285,7 +330,18 @@ export function ModerationPanel() {
                 >
                   <FormattedMessage id="moderation.reject" defaultMessage="Reject" />
                 </button>
+                {isOsmEligible(h.category) && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    disabled={busy}
+                    onClick={() => void suggestOsm(h.id)}
+                  >
+                    <FormattedMessage id="moderation.osm.suggest" defaultMessage="Suggest to OSM" />
+                  </button>
+                )}
               </div>
+              {osmHints[h.id] && <p className="hint">{osmHints[h.id]}</p>}
             </li>
           ))}
         </ul>

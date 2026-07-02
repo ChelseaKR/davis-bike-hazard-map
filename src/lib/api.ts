@@ -170,3 +170,27 @@ export async function decideModeration(
     body: JSON.stringify({ decision, reason }),
   });
 }
+
+/** Result of an OSM Note suggestion (dry-run by default). */
+export interface OsmNoteResult {
+  delivered: boolean;
+  dryRun: boolean;
+  payload: { lat: number; lon: number; text: string };
+  status?: number;
+  error?: string;
+}
+
+/**
+ * Moderation: draft (dry-run by default) an OSM Note for a permanent-infrastructure
+ * hazard. Only eligible categories are accepted server-side (400 otherwise).
+ */
+export async function suggestOsmNote(
+  id: string,
+  token: string,
+): Promise<{ result: OsmNoteResult; hazard: Hazard }> {
+  return request<{ result: OsmNoteResult; hazard: Hazard }>(`/moderation/${id}/osm-note`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  });
+}

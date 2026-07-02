@@ -18,6 +18,17 @@ export const HAZARD_CATEGORIES = [
 ] as const;
 export type HazardCategory = (typeof HAZARD_CATEGORIES)[number];
 
+/**
+ * Categories that can plausibly describe a PERMANENT, OSM-mappable feature and
+ * are therefore eligible for the moderator-triggered OSM Notes feedback loop
+ * (EXP-08). Shared so the client shows the action only for these and the server
+ * can reject others.
+ */
+export const OSM_ELIGIBLE_CATEGORIES = [
+  'dangerous_intersection',
+  'poor_visibility',
+] as const satisfies readonly HazardCategory[];
+
 /** How dangerous the reporter judges the hazard to be. */
 export const SEVERITIES = ['low', 'moderate', 'high'] as const;
 export type Severity = (typeof SEVERITIES)[number];

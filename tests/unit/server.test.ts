@@ -550,6 +550,80 @@ describe('311 hand-off', () => {
   });
 });
 
+describe('OSM Notes feedback loop', () => {
+  const eligibleReport = {
+    ...baseReport,
+    category: 'dangerous_intersection',
+    clientId: '33333333-3333-4333-8333-333333333333',
+  };
+
+  it('requires moderator auth', async () => {
+    const res = await post('/api/reports', eligibleReport);
+    const id = res.json().hazard.id;
+    const note = await post(`/api/moderation/${id}/osm-note`, {});
+    expect(note.statusCode).toBe(401);
+  });
+
+  it('dry-runs by default with the fuzzed (not precise) location and records the moderator', async () => {
+    const res = await post('/api/reports', eligibleReport);
+    const id = res.json().hazard.id;
+    const note = await post(`/api/moderation/${id}/osm-note`, {}, auth());
+    expect(note.statusCode).toBe(200);
+    const result = note.json().result;
+    expect(result.dryRun).toBe(true);
+    expect(result.delivered).toBe(false);
+    // Note carries the fuzzed public point, never the precise device coordinate.
+    const stored = (await repo.findById(id))!;
+    expect(result.payload.lat).toBe(stored.publicLocation.lat);
+    expect(result.payload.lat).not.toBe(stored.preciseLocation.lat);
+    // Audit trail records who triggered it.
+    expect(stored.osmNote).toMatchObject({ by: MOD_USER, dryRun: true, delivered: false });
+  });
+
+  it('rejects ineligible categories with 400', async () => {
+    // baseReport is a pothole — not a permanent-infrastructure category.
+    const res = await post('/api/reports', baseReport);
+    const id = res.json().hazard.id;
+    const note = await post(`/api/moderation/${id}/osm-note`, {}, auth());
+    expect(note.statusCode).toBe(400);
+    expect(note.json().error).toBe('ineligible_category');
+    // No audit record written for a rejected suggestion.
+    expect((await repo.findById(id))!.osmNote ?? null).toBeNull();
+  });
+
+  it('404s for an unknown hazard', async () => {
+    const note = await post('/api/moderation/does-not-exist/osm-note', {}, auth());
+    expect(note.statusCode).toBe(404);
+  });
+
+  it('posts and reports delivery when enabled, via an injected fetch', async () => {
+    const fetchImpl = (async () =>
+      ({ ok: true, status: 200 }) as Response) as unknown as typeof fetch;
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(
+      { ...testConfig, osmNotesEnabled: true, osmNotesApiUrl: 'https://osm.example/notes' } as typeof serverConfig,
+      fetchImpl,
+    );
+    const h = { authorization: `Bearer ${tok}`, 'content-type': 'application/json' };
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: eligibleReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    const note = await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/osm-note`,
+      payload: {},
+      headers: h,
+    });
+    expect(note.statusCode).toBe(200);
+    expect(note.json().result.dryRun).toBe(false);
+    expect(note.json().result.delivered).toBe(true);
+    expect((await r.findById(id))!.osmNote).toMatchObject({ dryRun: false, delivered: true });
+  });
+});
+
 describe('legacy inline-photo migration', () => {
   it('moves a base64 data-URL photo into the blob store and leaves a { mime } ref', async () => {
     const { migrateInlinePhotos } = await import('../../server/lib/hazards.ts');

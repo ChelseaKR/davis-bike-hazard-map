@@ -62,6 +62,16 @@ export const serverConfig = {
   gogovWebhookSecret: process.env.GOGOV_WEBHOOK_SECRET ?? '',
 
   /**
+   * Optional OSM Notes feedback loop (EXP-08): a moderator can draft an anonymous
+   * OSM Note for hazards describing permanent map features. OFF by default — the
+   * adapter dry-runs (drafts but never posts) unless OSM_NOTES_ENABLED=true, which
+   * needs a license/consent review before flipping on.
+   */
+  osmNotesEnabled: process.env.OSM_NOTES_ENABLED === 'true',
+  osmNotesApiUrl:
+    process.env.OSM_NOTES_API_URL ?? 'https://api.openstreetmap.org/api/0.6/notes',
+
+  /**
    * OSRM-compatible cycling routing backend, proxied by GET /api/route. Default
    * is the public OSRM demo server (fine for dev/light use; self-host for prod
    * — see docs). Empty => the planner serves a straight-line fallback only.
