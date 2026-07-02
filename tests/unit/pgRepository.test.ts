@@ -123,7 +123,7 @@ suite('PostgresRepository', () => {
     await repo.insert(hazard({ id: 'r-old', clientId: 'r-old', status: 'resolved', resolvedAt: 1000, publicLocation: { lat: 38.54, lng: -121.74 } }));
     await repo.insert(hazard({ id: 'r-new', clientId: 'r-new', status: 'resolved', resolvedAt: 3000, publicLocation: { lat: 38.55, lng: -121.73 } }));
     await repo.insert(hazard({ id: 'approved', clientId: 'ap', status: 'approved' }));
-    await repo.insert(hazard({ id: 'r-far', clientId: 'r-far', status: 'resolved', resolvedAt: 3000, publicLocation: { lat: 40.0, lng: -120.0 } }));
+    await repo.insert(hazard({ id: 'r-far', clientId: 'r-far', status: 'resolved', resolvedAt: 2500, publicLocation: { lat: 40.0, lng: -120.0 } }));
 
     const recent = await repo.listRecentlyResolved(2000);
     expect(recent.map((h) => h.id)).toEqual(['r-new', 'r-far']); // r-old before the window; approved excluded

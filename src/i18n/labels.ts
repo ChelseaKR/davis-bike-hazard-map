@@ -26,6 +26,7 @@ const categoryMessages = defineMessages({
     id: 'hazard.category.dangerous_intersection',
     defaultMessage: 'Dangerous intersection',
   },
+  near_miss: { id: 'hazard.category.near_miss', defaultMessage: 'Near miss / close call' },
   poor_visibility: { id: 'hazard.category.poor_visibility', defaultMessage: 'Poor visibility' },
   surface_damage: { id: 'hazard.category.surface_damage', defaultMessage: 'Surface damage' },
   other: { id: 'hazard.category.other', defaultMessage: 'Other' },

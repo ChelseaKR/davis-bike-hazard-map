@@ -140,6 +140,7 @@ export const openapiSpec = {
       },
     },
     '/reports/{clientId}': {
+      get: { tags: ['reports'], summary: 'Status of my own report (clientId is the capability) — the reporter feedback loop', parameters: [{ name: 'clientId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'the hazard in its current state', content: { 'application/json': { schema: { type: 'object', properties: { hazard: { $ref: '#/components/schemas/Hazard' } } } } } }, '404': { description: 'not found' } } },
       delete: { tags: ['reports'], summary: 'Delete my report (clientId is the capability)', parameters: [{ name: 'clientId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '204': { description: 'deleted' }, '404': { description: 'not found' } } },
     },
     '/client-errors': { post: { tags: ['ops'], summary: 'Client error telemetry sink', responses: { '204': { description: 'accepted' } } } },

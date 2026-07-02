@@ -1,16 +1,43 @@
 /**
  * Reports-by-area view (coverage equity). Makes "few/no reports" legible as
  * under-reporting rather than safety, and nudges people to fill the gaps.
- * Counts are conveyed as text (the bar is decorative / aria-hidden).
+ *
+ * Beyond raw counts, it normalizes each area's reports against a coarse
+ * estimate of how much cycling happens there (research roadmap R4 / EV-SKEW) so
+ * a busy area with few reports reads as a *data desert*, not as "safe". The
+ * normalization is a rough heuristic, so it is always shown qualitatively and
+ * paired with an explicit limits note. Counts and flags are conveyed as text
+ * (the bar is decorative / aria-hidden).
  */
-import { FormattedMessage, useIntl } from 'react-intl';
+import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 import type { Hazard } from '../../shared/types.ts';
-import { bucketByArea } from '../lib/areas.ts';
+import { normalizeCoverage } from '../lib/areas.ts';
+
+/** Short, plain-text read of an area's report share vs. its estimated ridership. */
+const representationMessages = defineMessages({
+  none: {
+    id: 'coverage.representation.none',
+    defaultMessage: 'No reports yet — a likely data desert (busy enough to expect some).',
+  },
+  under: {
+    id: 'coverage.representation.under',
+    defaultMessage: 'Under-reported for its estimated ridership.',
+  },
+  over: {
+    id: 'coverage.representation.over',
+    defaultMessage: 'Heavily reported relative to its estimated ridership.',
+  },
+  typical: {
+    id: 'coverage.representation.typical',
+    defaultMessage: 'About what its estimated ridership would suggest.',
+  },
+});
 
 export function CoverageView({ hazards }: { hazards: Hazard[] }) {
   const intl = useIntl();
-  const areas = bucketByArea(hazards);
+  const areas = normalizeCoverage(hazards);
   const max = areas.reduce((m, a) => Math.max(m, a.count), 0);
+  const deserts = areas.filter((a) => a.isDataDesert);
 
   return (
     <section
@@ -23,13 +50,31 @@ export function CoverageView({ hazards }: { hazards: Hazard[] }) {
       <p className="hint">
         <FormattedMessage
           id="coverage.hint"
-          defaultMessage="How many hazards have been <strong>reported</strong> in each part of Davis. Few or no reports in an area means it's <strong>under-reported</strong> — not that it's safe. Help close the gap by reporting what you see."
+          defaultMessage="How many hazards have been <strong>reported</strong> in each part of Davis, and how that compares to roughly how much cycling happens there. Few or no reports in an area means it's <strong>under-reported</strong> — not that it's safe. Help close the gap by reporting what you see."
           values={{ strong: (chunks) => <strong>{chunks}</strong> }}
         />
       </p>
+
+      {deserts.length > 0 && (
+        <p className="coverage-desert-callout" role="note">
+          <FormattedMessage
+            id="coverage.deserts"
+            defaultMessage="<strong>Data deserts:</strong> {names} {count, plural, one {has meaningful ridership but} other {have meaningful ridership but}} <strong>no reports yet</strong>. Treat these as gaps in the data, not as safe streets."
+            values={{
+              names: deserts.map((d) => d.name).join(', '),
+              count: deserts.length,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            }}
+          />
+        </p>
+      )}
+
       <ul className="coverage-list">
         {areas.map((a) => (
-          <li key={a.name} className="coverage-row">
+          <li
+            key={a.name}
+            className={`coverage-row${a.isDataDesert ? ' coverage-row-desert' : ''}`}
+          >
             <span className="coverage-area">{a.name}</span>
             <span
               className="coverage-bar"
@@ -43,9 +88,25 @@ export function CoverageView({ hazards }: { hazards: Hazard[] }) {
                 values={{ count: a.count }}
               />
             </span>
+            {a.exposureWeight > 0 && (
+              <span className={`coverage-flag coverage-flag-${a.representation}`}>
+                {intl.formatMessage(representationMessages[a.representation])}
+              </span>
+            )}
           </li>
         ))}
       </ul>
+
+      <p className="hint coverage-limits">
+        <FormattedMessage
+          id="coverage.limits"
+          defaultMessage="<strong>How to read this:</strong> the “estimated ridership” comparison is a rough heuristic, not measured exposure data, and can itself be biased. It's here to stop scarce reports being mistaken for safety — never to rank neighbourhoods. Absence of reports is absence of <em>reports</em>, not absence of hazards."
+          values={{
+            strong: (chunks) => <strong>{chunks}</strong>,
+            em: (chunks) => <em>{chunks}</em>,
+          }}
+        />
+      </p>
     </section>
   );
 }

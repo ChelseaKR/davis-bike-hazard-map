@@ -12,6 +12,7 @@ export const HAZARD_CATEGORIES = [
   'glass_debris',
   'blocked_lane',
   'dangerous_intersection',
+  'near_miss',
   'poor_visibility',
   'surface_damage',
   'other',
@@ -44,6 +45,11 @@ export const CATEGORY_LABELS: Record<HazardCategory, string> = {
   glass_debris: 'Glass / debris',
   blocked_lane: 'Blocked bike lane',
   dangerous_intersection: 'Dangerous intersection',
+  // A "near miss" / close call (dooring, swerve, scary right-hook) is the
+  // leading-indicator class official crash data misses entirely; capturing it
+  // is cheap and high-signal (research roadmap E1). Not a physical defect, so a
+  // photo is rarely available — the photo step stays optional, as it already is.
+  near_miss: 'Near miss / close call',
   poor_visibility: 'Poor visibility',
   surface_damage: 'Surface damage',
   other: 'Other',

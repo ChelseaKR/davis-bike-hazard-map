@@ -191,7 +191,11 @@ export default function App() {
                   />
                 </p>
               )}
-              <ReportForm onSubmitted={onSubmitted} />
+              <ReportForm
+                onSubmitted={onSubmitted}
+                nearbyHazards={all}
+                onConfirmExisting={onConfirm}
+              />
             </>
           )}
 
