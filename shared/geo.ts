@@ -32,12 +32,24 @@ function toRad(deg: number): number {
 export const DEFAULT_FUZZ_METERS = 70;
 
 /**
- * Snap a coordinate to the centre of a fixed grid cell of `gridMeters`.
+ * Snap a coordinate onto a fixed grid of `gridMeters` spacing.
+ *
+ * Published points land on grid *lines offset half a step from the rounding
+ * grid* (see `snap`): each axis moves by at most one full step, so the
+ * worst-case displacement is ~sqrt(2) x `gridMeters` on the diagonal (~99 m at
+ * the default 70 m grid, plus <0.2 m of 6-decimal rounding slack). This is
+ * deliberately the *edge* variant, not the cell centre a naive reading might
+ * expect: switching to centres (`Math.floor(v/step) + 0.5`) would silently
+ * shift every already-published point by one cell, so we keep the historical
+ * grid and document the true bound instead. The bound is enforced by property
+ * tests in `tests/unit/geo.test.ts`.
  *
  * Snapping (rather than random jitter) is deliberate: it is deterministic, so
- * repeated reports from the same spot map to the same published cell and cannot
- * be averaged back to the true point, and it bounds the exposed precision to
- * the cell size regardless of how many reports exist.
+ * repeated reports from the same spot map to the same published point and
+ * cannot be averaged back to the true location, and it bounds the exposed
+ * precision to the grid size regardless of how many reports exist. Note the
+ * longitude step depends on the point's latitude, so exact-coordinate repeats
+ * (and same-latitude neighbours within a cell) collapse to identical output.
  */
 export function fuzzCoordinate(point: GeoPoint, gridMeters: number = DEFAULT_FUZZ_METERS): GeoPoint {
   const latStep = gridMeters / METERS_PER_DEG_LAT;
@@ -51,6 +63,14 @@ export function fuzzCoordinate(point: GeoPoint, gridMeters: number = DEFAULT_FUZ
   return { lat: round6(lat), lng: round6(lng) };
 }
 
+/**
+ * Snap onto grid lines offset half a `step` from the rounding grid.
+ *
+ * `Math.round(v/step)` moves at most half a step; the `+ 0.5` offset adds
+ * another half, so the result is within **one full step** of the input (the
+ * worst case, exactly one step, occurs at `v/step = n - 0.5`). Kept as-is —
+ * see the `fuzzCoordinate` doc for why we do not "fix" this to cell centres.
+ */
 function snap(value: number, step: number): number {
   return (Math.round(value / step) + 0.5) * step;
 }

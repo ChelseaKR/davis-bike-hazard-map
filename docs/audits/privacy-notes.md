@@ -9,7 +9,7 @@ Instantiates `/STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` §C for this repo.
 | Hazard type/severity/description | Core function | Server store | Until resolved/expired (14–30 d by severity) | Public (after approval) |
 | Photo (EXIF-stripped, optionally blurred) | Evidence of hazard | Server store | Same as hazard | Public only after approval; moderators before |
 | Precise location | 311 dispatch (opt-in only) | Server store, internal | Same as hazard | Server + opt-in 311 hand-off only |
-| Public location (fuzzed ~70 m) | Map display | Server store | Same as hazard | Public |
+| Public location (grid-snapped 70 m; ≤ 105 m from true point, test-enforced) | Map display | Server store | Same as hazard | Public |
 | No accounts, no contact info, no analytics/trackers | — | — | — | — |
 
 **Threat model (specific people in the data):** a bystander photographed in a
@@ -24,8 +24,16 @@ street scene; a reporter whose home-adjacent report could reveal where they live
   server test "strips EXIF server-side and gates the photo behind approval".
 - **Face/plate blur** offered on every photo (`PhotoEditor`), baked in via
   canvas re-encode (irreversible pixelation, `src/lib/blur.ts`).
-- **Location fuzzing.** Every public coordinate is grid-snapped (~70 m,
-  deterministic so it can't be averaged back), `shared/geo.ts`. The precise
+- **Location fuzzing — measured guarantee.** Every public coordinate is
+  snapped to a fixed 70 m grid (`shared/geo.ts`). The snap lands on cell
+  *edges* (half-step-offset grid lines), so each axis can move up to one full
+  step: the published point is **within 105 m of the true point** (measured
+  worst case over the Davis bbox ≈ 99 m ≈ √2 × 70 m), enforced by property
+  tests (fast-check) in `tests/unit/geo.test.ts` ("never displaces … more
+  than 1.5 x the grid size" and the worst-case sweep). Snapping is
+  deterministic — the same true location always publishes the identical
+  coordinate, and same-latitude reports in one grid cell are byte-identical —
+  so repeated reports cannot be averaged back to the true point. The precise
   point is exposed only in an opt-in, moderator-triggered 311 hand-off.
 - **Moderation before public.** No unmoderated public photo feed; the photo
   route 404s for any non-approved hazard.
@@ -57,6 +65,8 @@ A user-facing **privacy page** (`/privacy.html`) and **accessibility statement**
 - [x] No PII in logs — **auto-gated** (logger redaction; no body logging).
 - [x] Blur offered on every photo — **auto-gated** (PhotoEditor a11y/render test).
 - [x] Retention/expiry enforced — **auto-gated** (server expiry test).
+- [x] Fuzzing displacement bound (≤ 105 m) + determinism — **auto-gated**
+      (fast-check property tests, `tests/unit/geo.test.ts`).
 - [ ] Location-fuzzing policy sign-off — **review-gated** (privacy reviewer).
 
 **Last verified: 2026-05-31 · Recheck cadence: per data-flow change.**
