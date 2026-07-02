@@ -7,6 +7,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PostgresRepository } from '../../server/lib/pgRepository.ts';
 import { createModeratorStore, type ModeratorStore } from '../../server/lib/moderators.ts';
+import {
+  createSubscriptionStore,
+  buildSubscription,
+  type SubscriptionStore,
+} from '../../server/lib/subscriptions.ts';
+import type { Watch } from '../../shared/alerts.ts';
 import type { StoredHazard } from '../../server/lib/types.ts';
 
 const URL = process.env.TEST_DATABASE_URL;
@@ -213,5 +219,64 @@ suite('PostgresModeratorStore', () => {
     expect((await store.findByUsername('bob'))?.tokenVersion).toBe(0);
     expect(await store.bumpTokenVersion('bob')).toBe(1);
     expect((await store.findByUsername('bob'))?.tokenVersion).toBe(1);
+  });
+});
+
+suite('PostgresSubscriptionStore', () => {
+  let store: SubscriptionStore;
+
+  const area: Watch = { kind: 'area', minLat: 38.5, minLng: -121.8, maxLat: 38.6, maxLng: -121.7 };
+  const route: Watch = {
+    kind: 'route',
+    corridorMeters: 40,
+    geometry: [
+      { lat: 38.5421, lng: -121.7494 },
+      { lat: 38.5447, lng: -121.7405 },
+    ],
+  };
+
+  beforeAll(async () => {
+    store = await createSubscriptionStore(URL!);
+  });
+
+  beforeEach(async () => {
+    await (store as unknown as { pool: { query: (s: string) => Promise<unknown> } }).pool.query(
+      'TRUNCATE push_subscriptions',
+    );
+  });
+
+  it('round-trips a subscription including the watch jsonb and label', async () => {
+    const sub = buildSubscription(
+      'https://push.example/ep1',
+      { p256dh: 'p256', auth: 'authkey' },
+      area,
+      1234,
+      'Commute to campus',
+    );
+    await store.upsert(sub);
+    expect(await store.all()).toEqual([sub]);
+  });
+
+  it('re-subscribing the same endpoint replaces, not duplicates', async () => {
+    await store.upsert(
+      buildSubscription('https://push.example/ep1', { p256dh: 'p1', auth: 'a1' }, area, 1),
+    );
+    const updated = buildSubscription(
+      'https://push.example/ep1',
+      { p256dh: 'p2', auth: 'a2' },
+      route,
+      2,
+      'renamed',
+    );
+    await store.upsert(updated);
+    expect(await store.all()).toEqual([updated]); // same endpoint ⇒ replaced
+  });
+
+  it('removes by id and reports misses', async () => {
+    const sub = buildSubscription('https://push.example/ep2', { p256dh: 'p', auth: 'a' }, area, 1);
+    await store.upsert(sub);
+    expect(await store.remove(sub.id)).toBe(true);
+    expect(await store.all()).toEqual([]);
+    expect(await store.remove(sub.id)).toBe(false);
   });
 });

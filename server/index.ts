@@ -12,6 +12,8 @@ import { createRepository } from './lib/repository.ts';
 import { createPhotoStore } from './lib/photoStore.ts';
 import { migrateInlinePhotos } from './lib/hazards.ts';
 import { createModeratorStore, bootstrapModerator } from './lib/moderators.ts';
+import { createSubscriptionStore } from './lib/subscriptions.ts';
+import { isConfigured as isPushConfigured } from './lib/pushNotify.ts';
 import { startBackups } from './lib/backup.ts';
 import { initSentry } from './lib/sentry.ts';
 import { logBootFatal } from './lib/logger.ts';
@@ -48,9 +50,12 @@ async function main() {
     dataFile: serverConfig.dataFile,
   });
   const moderators = await createModeratorStore(serverConfig.databaseUrl);
+  // Push-alert subscriptions: Postgres-backed when DATABASE_URL is set (so
+  // they survive restarts), in-memory otherwise.
+  const subscriptions = await createSubscriptionStore(serverConfig.databaseUrl);
   // Move any legacy inline (base64) photos out of the JSON into the blob store.
   const migrated = await migrateInlinePhotos(repo, photos);
-  const app = await buildApp({ repo, photos, moderators, config: serverConfig });
+  const app = await buildApp({ repo, photos, moderators, subscriptions, config: serverConfig });
   if (migrated > 0) {
     app.log.info(`Migrated ${migrated} inline photo(s) to the blob store.`);
   }
@@ -65,6 +70,15 @@ async function main() {
   if (created) app.log.info(`Bootstrapped moderator account: ${created}`);
   if (!serverConfig.isProd) {
     app.log.info('Dev moderator login — username: admin, password: admin');
+  }
+
+  // Make the push-delivery mode explicit in the boot log (ops checklist).
+  if (serverConfig.push.enabled) {
+    app.log.info(
+      isPushConfigured(serverConfig.push)
+        ? 'Push alerts: real Web Push delivery active (VAPID keys configured).'
+        : 'Push alerts: enabled but VAPID keys missing — matching runs in dry-run.',
+    );
   }
 
   // Serve the built client (and SPA fallback) in production.

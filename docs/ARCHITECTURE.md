@@ -121,14 +121,19 @@ These record where the build deviated from the roadmap, and why.
   not just an absence. Status sync-back is graceful/dry-run by default, with the
   inbound webhook disabled until a shared secret is set (never accept
   unauthenticated status writes).
-- **ADR-7 — Saved-route push alerts: real matcher + subscription API now,
-  flagged delivery.** Rationale: the testable, civic-valuable core — geometric
-  matching of a new hazard against saved areas/route corridors, plus
-  subscription storage and a moderation-approval hook — is implemented and
-  tested. Actual Web Push needs VAPID keys, a service-worker `push` handler, and
-  the `web-push` transport, which are operational infra, so delivery ships
-  behind `PUSH_ENABLED` and dry-runs (logging matches) until wired. *Rejected
-  shipping a half-working push path* that would degrade the PWA's offline story.
+- **ADR-7 — Saved-route push alerts: full pipeline shipped, delivery behind a
+  flag.** Rationale: the testable, civic-valuable core — geometric matching of a
+  new hazard against saved areas/route corridors, plus subscription storage and
+  a moderation-approval hook — is implemented and tested, and so is the delivery
+  path: the encrypted `web-push` transport (`server/lib/pushNotify.ts`), the
+  service worker's `push`/`notificationclick` handlers (`public/push-sw.js`,
+  appended to the generated Workbox SW via `importScripts` rather than migrating
+  to `injectManifest`), and a durable Postgres `push_subscriptions` store.
+  Subscriptions the push service reports gone (HTTP 404/410) are pruned
+  automatically. The only step that stays operational is provisioning a VAPID
+  key pair, so delivery sits behind `PUSH_ENABLED` and dry-runs (logging
+  matches) until keys are set. *Rejected shipping a half-working push path* that
+  would degrade the PWA's offline story.
 - **ADR-8 — `FLY_API_TOKEN` as a long-lived deploy secret (waiver), not GitHub
   OIDC.** Dated 2026-07-05. CI-CD-STANDARD §8 wants cloud credentials via
   short-lived GitHub OIDC federation, not a long-lived repo secret. Fly.io does

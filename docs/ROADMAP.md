@@ -17,7 +17,7 @@ An offline-capable PWA for crowdsourced cycling-hazard reporting and mapping in 
 - **Scope (MoSCoW).**
   - *Must:* fast report (category, severity, photo w/ EXIF strip + blur option, geolocation); offline capture + sync; live filterable map + list view; hazard lifecycle (confirm/resolve/expire); moderation.
   - *Should:* hazard-aware routing; 311/GOGov hand-off; duplicate clustering; report detail + comments.
-  - *Could:* heatmap/trends; public open-data export/API; notifications for a watched area.
+  - *Could:* heatmap/trends; public open-data export/API; notifications for a watched area ✅ *(shipped behind `PUSH_ENABLED`: real `web-push` delivery with VAPID keys, service-worker `push`/`notificationclick` handlers, and a Postgres subscription store — see README → Push alerts).*
   - *Won't (v1):* accounts required to view; gamification; city-wide official adoption (nice, not required).
 - **Non-goals.** Not a surveillance tool; not a place to photograph identifiable people.
 

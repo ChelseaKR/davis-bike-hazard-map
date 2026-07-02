@@ -65,7 +65,12 @@ import {
   buildSubscription,
   type SubscriptionStore,
 } from './lib/subscriptions.ts';
-import { notifyForHazard } from './lib/pushNotify.ts';
+import {
+  notifyForHazard,
+  isConfigured,
+  createWebPushSender,
+  type PushSender,
+} from './lib/pushNotify.ts';
 import { verifyWebhook, ReplayCache, WEBHOOK_TOLERANCE_MS } from './lib/webhookAuth.ts';
 
 export interface AppDeps {
@@ -73,6 +78,8 @@ export interface AppDeps {
   photos?: PhotoStore;
   moderators?: ModeratorStore;
   subscriptions?: SubscriptionStore;
+  /** Override the Web Push transport (tests inject fakes). */
+  pushSender?: PushSender;
   now?: () => number;
   config?: typeof serverConfig;
   fetchImpl?: typeof fetch;
@@ -111,6 +118,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const photos = deps.photos ?? new MemoryPhotoStore();
   const moderators = deps.moderators ?? new MemoryModeratorStore();
   const subscriptions = deps.subscriptions ?? new MemorySubscriptionStore();
+  // Real Web Push transport only when the flag + both VAPID keys are set;
+  // otherwise notifyForHazard's default no-op sender keeps delivery in dry-run.
+  const pushSender =
+    deps.pushSender ?? (isConfigured(config.push) ? createWebPushSender() : undefined);
 
   const app = Fastify({
     // Structured JSON logs with a redaction allow-list (never emit precise
@@ -518,17 +529,26 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (!updated) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
-    // A newly-approved hazard can fire saved-route/area push alerts (dry-run
-    // unless push is configured). Best-effort: never let it fail moderation.
+    // A newly-approved hazard can fire saved-route/area push alerts (real
+    // delivery when VAPID keys are configured, dry-run otherwise). Best-effort:
+    // never let it fail moderation.
     if (decision === 'approve') {
       try {
         const result = await notifyForHazard(
           toPublic(updated),
           await subscriptions.all(),
           config.push,
+          pushSender,
         );
         if (result.matched > 0) {
           app.log.info({ hazard: id, ...result }, 'saved-route alert matched');
+        }
+        // Prune subscriptions the push service reported gone (HTTP 404/410).
+        for (const deadId of result.dead) {
+          await subscriptions.remove(deadId);
+        }
+        if (result.dead.length > 0) {
+          app.log.info({ pruned: result.dead.length }, 'removed dead push subscriptions');
         }
       } catch (err) {
         app.log.warn(err, 'alert notify failed');
