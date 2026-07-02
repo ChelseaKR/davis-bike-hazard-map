@@ -897,3 +897,42 @@ textarea {
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
+
+/* --- Offline tile pack (EXP-02: Save Davis for offline) --- */
+.offline-pack {
+  margin-top: 1rem;
+  padding-block: 0.85rem;
+  padding-inline: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.offline-pack h3 {
+  margin-block: 0 0.35rem;
+  font-size: 1.05rem;
+}
+.offline-estimate {
+  margin-block: 0.5rem;
+  font-weight: 600;
+}
+.offline-progress {
+  margin-top: 0.6rem;
+}
+.offline-bar {
+  block-size: 12px;
+  inline-size: 100%;
+  border-radius: 999px;
+  background: #e2e8e4;
+  overflow: hidden;
+}
+.offline-bar-fill {
+  display: block;
+  block-size: 100%;
+  background: var(--brand);
+  transition: inline-size 0.2s ease;
+}
+.offline-done {
+  margin-block: 0.6rem;
+  font-weight: 600;
+  color: var(--brand-dark);
+}

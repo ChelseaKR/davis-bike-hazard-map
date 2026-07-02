@@ -24,6 +24,7 @@ import { RoutePlanner } from './components/RoutePlanner.tsx';
 import { StatusBanner } from './components/StatusBanner.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { FeedFreshness } from './components/FeedFreshness.tsx';
+import { OfflinePack } from './components/OfflinePack.tsx';
 import { SkeletonMap } from './components/Skeleton.tsx';
 
 // Leaflet is the heaviest dependency; keep it out of the initial bundle so the
@@ -161,6 +162,7 @@ export default function App() {
           {tab === 'map' && (
             <Suspense fallback={<SkeletonMap />}>
               <MapView hazards={hazards} onConfirm={onConfirm} focusHazard={focusHazard} />
+              <OfflinePack />
             </Suspense>
           )}
 

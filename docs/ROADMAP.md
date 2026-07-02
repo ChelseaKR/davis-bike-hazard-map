@@ -83,6 +83,7 @@ docs/
 
 ## 11. Operations & sustainability
 - **Hosting/cost.** Modest: managed Postgres/PostGIS + static PWA hosting + OSM tiles (watch tile usage; self-host tiles if needed).
+- **EXP-02 — Davis offline tile pack. ✅ Done.** Opt-in "Save Davis for offline" that enumerates and pre-fetches every tile covering `DAVIS_BOUNDS` at z13–17 (~2,400 tiles) into the `osm-tiles` service-worker cache, with progress + storage reporting (`src/lib/tilePack.ts`, `src/components/OfflinePack.tsx`). Hard-gated off against the public `tile.openstreetmap.org` servers per OSM's tile-usage policy — it enables only once the app is pointed at self-hosted tiles (R8). The `osm-tiles` runtime-cache cap is raised to 4,000 entries so a seeded pack isn't evicted by ad-hoc browsing.
 - **Observability.** Health, sync-failure alarms, moderation-queue depth, map performance.
 - **Maintenance.** Hazard expiry + community confirmation keep data fresh; periodic dedupe.
 - **Sustainability.** Open data + open source means the map survives the maintainer; low running cost.

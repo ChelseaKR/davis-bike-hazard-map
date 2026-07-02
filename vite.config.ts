@@ -58,11 +58,14 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
           {
             // OpenStreetMap raster tiles — cache-first so the last-seen area
             // stays usable offline, capped so we never balloon on mobile data.
+            // The cap holds the opt-in Davis offline pack (EXP-02: ~2,400 tiles
+            // for the whole city at z13–17) plus headroom for ad-hoc browsing,
+            // so a pre-seeded pack isn't evicted by later on-demand tiles.
             urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'osm-tiles',
-              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              expiration: { maxEntries: 4000, maxAgeSeconds: 60 * 60 * 24 * 14 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },
