@@ -97,16 +97,50 @@ export const openapiSpec = {
     '/hazards': {
       get: {
         tags: ['public'],
-        summary: 'Public hazard feed (approved, unexpired)',
+        summary: 'Public hazard feed (approved, unexpired; delta mode via updatedSince)',
         parameters: [
           { name: 'categories', in: 'query', schema: { type: 'string' }, description: 'comma-separated' },
           { name: 'minSeverity', in: 'query', schema: { type: 'string' } },
           { name: 'withinDays', in: 'query', schema: { type: 'integer' } },
           { name: 'bbox', in: 'query', schema: { type: 'string' }, description: 'minLat,minLng,maxLat,maxLng' },
+          {
+            name: 'updatedSince',
+            in: 'query',
+            schema: { type: 'integer', minimum: 0 },
+            description:
+              'Delta cursor (epoch ms; use the serverTime of the previous response). ' +
+              'Returns only hazards changed at/after the cursor plus deletedIds — ' +
+              'id-only tombstones for removed hazards. A cursor older than the ' +
+              'server’s retained history is ignored: the full feed is returned ' +
+              'WITHOUT deletedIds, which clients must treat as a full refresh.',
+          },
         ],
         responses: {
-          '200': { description: 'feed (ETag/304 supported)', content: { 'application/json': { schema: { type: 'object', properties: { hazards: { type: 'array', items: { $ref: '#/components/schemas/Hazard' } } } } } } },
-          '304': { description: 'not modified' },
+          '200': {
+            description: 'feed (full fetches support ETag/304; delta responses include deletedIds)',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['hazards'],
+                  properties: {
+                    hazards: { type: 'array', items: { $ref: '#/components/schemas/Hazard' } },
+                    deletedIds: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description:
+                        'Delta responses only: ids of hazards deleted or expired since the cursor (ids only, no content). Absent on full responses.',
+                    },
+                    serverTime: {
+                      type: 'integer',
+                      description: 'Server clock when the feed was built — send back as the next updatedSince cursor.',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '304': { description: 'not modified (full fetches only)' },
         },
       },
     },

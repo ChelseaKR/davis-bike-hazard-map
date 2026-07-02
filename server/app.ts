@@ -30,7 +30,7 @@ import {
 import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
 import { rankRoutes, type RoutePlan } from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
-import type { Repository } from './lib/repository.ts';
+import { TOMBSTONE_TTL_MS, type Repository } from './lib/repository.ts';
 import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
 import {
   MemoryModeratorStore,
@@ -340,36 +340,73 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return { revoked: true, username };
   });
 
-  // --- Public feed ---
-  app.get('/api/hazards', async (req, reply) => {
-    const filters = hazardFiltersSchema.parse(parseHazardQuery(req.query));
-    // bbox is pushed down to the store (SQL) for spatial culling at scale. The
-    // feed also carries recently-resolved hazards (greyed client-side) so a fix
-    // is visible, not just an absence — see listPublicFeed.
-    let hazards = await listPublicFeed(
-      repo,
-      now(),
-      config.resolvedVisibleDays * DAY_MS,
-      filters.bbox,
-    );
-
+  // Category / severity / recency post-filters shared by the full feed and the
+  // delta feed (bbox is pushed down to the store instead).
+  const applyFeedFilters = (
+    hazards: Awaited<ReturnType<typeof listPublicFeed>>,
+    filters: ReturnType<typeof hazardFiltersSchema.parse>,
+    at: number,
+  ) => {
+    let out = hazards;
     if (filters.categories?.length) {
       const set = new Set(filters.categories);
-      hazards = hazards.filter((h) => set.has(h.category));
+      out = out.filter((h) => set.has(h.category));
     }
     if (filters.minSeverity) {
       const min = SEVERITY_RANK[filters.minSeverity];
-      hazards = hazards.filter((h) => SEVERITY_RANK[h.severity] >= min);
+      out = out.filter((h) => SEVERITY_RANK[h.severity] >= min);
     }
     if (filters.withinDays) {
-      const cutoff = now() - filters.withinDays * 24 * 60 * 60 * 1000;
-      hazards = hazards.filter((h) => h.updatedAt >= cutoff);
+      const cutoff = at - filters.withinDays * DAY_MS;
+      out = out.filter((h) => h.updatedAt >= cutoff);
+    }
+    return out;
+  };
+
+  // --- Public feed ---
+  app.get('/api/hazards', async (req, reply) => {
+    const filters = hazardFiltersSchema.parse(parseHazardQuery(req.query));
+    const at = now();
+    const resolvedVisibleMs = config.resolvedVisibleDays * DAY_MS;
+
+    // Delta poll (?updatedSince=<epoch ms>): ship only what changed since the
+    // cursor plus id-only tombstones, so the 30-second poll costs bytes
+    // proportional to change, not feed size. A cursor older than the shortest
+    // history we reliably keep (the resolved-visibility window, and never more
+    // than the tombstone retention) is ignored — the client gets the full feed
+    // (no `deletedIds`) and treats it as a full refresh.
+    const deltaHorizon = Math.min(resolvedVisibleMs, TOMBSTONE_TTL_MS);
+    if (filters.updatedSince !== undefined && filters.updatedSince >= at - deltaHorizon) {
+      const since = filters.updatedSince;
+      await repo.expire(at); // surface TTL expiries as status transitions first
+      const changed = await repo.listUpdatedSince(since, at, filters.bbox);
+      const visible = (h: (typeof changed)[number]) =>
+        h.status === 'approved' ? h.expiresAt > at : h.status === 'resolved';
+      const hazards = applyFeedFilters(changed.filter(visible).map(toPublic), filters, at);
+      // Removals = hard deletions (tombstones, ids only — never content) plus
+      // rows that transitioned out of the feed (expired / rejected).
+      const dropped = changed.filter((h) => !visible(h)).map((h) => h.id);
+      const deletedIds = [...new Set([...(await repo.listTombstones(since)), ...dropped])];
+      return reply
+        .header('cache-control', 'no-cache')
+        .send({ hazards, deletedIds, serverTime: at });
     }
 
-    // Conditional request: hash the payload so repeat polls (every 30s) get a
-    // cheap 304 instead of re-downloading the whole feed.
-    const body = JSON.stringify({ hazards });
-    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    // Full feed. bbox is pushed down to the store (SQL) for spatial culling at
+    // scale. The feed also carries recently-resolved hazards (greyed
+    // client-side) so a fix is visible, not just an absence — see listPublicFeed.
+    const hazards = applyFeedFilters(
+      await listPublicFeed(repo, at, resolvedVisibleMs, filters.bbox),
+      filters,
+      at,
+    );
+
+    // Conditional request: hash the hazards so repeat full fetches get a cheap
+    // 304 instead of re-downloading the whole feed. `serverTime` (the client's
+    // next delta cursor) is deliberately left out of the hash — on a 304 the
+    // client reuses the cached body, whose older serverTime is a safe
+    // (conservative) cursor because nothing has changed since it was built.
+    const etag = `"${createHash('sha1').update(JSON.stringify({ hazards })).digest('base64')}"`;
     if (req.headers['if-none-match'] === etag) {
       return reply.status(304).send();
     }
@@ -377,7 +414,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .header('etag', etag)
       .header('cache-control', 'no-cache')
       .header('content-type', 'application/json')
-      .send(body);
+      .send(JSON.stringify({ hazards, serverTime: at }));
   });
 
   // --- Submit a report (idempotent on clientId) ---
@@ -407,7 +444,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (!hazard) {
       return reply.status(404).send({ error: 'not_found', message: 'No report with that id.' });
     }
-    await repo.deleteById(hazard.id);
+    await repo.deleteById(hazard.id, now()); // records an id-only tombstone
     await photos.delete(hazard.id);
     await photos.delete(thumbKey(hazard.id));
     return reply.status(204).send();
@@ -654,6 +691,7 @@ function parseHazardQuery(query: unknown): Record<string, unknown> {
   }
   if (typeof q.minSeverity === 'string' && q.minSeverity) out.minSeverity = q.minSeverity;
   if (typeof q.withinDays === 'string' && q.withinDays) out.withinDays = q.withinDays;
+  if (typeof q.updatedSince === 'string' && q.updatedSince) out.updatedSince = q.updatedSince;
   // bbox=minLat,minLng,maxLat,maxLng (Leaflet getBounds order: S,W,N,E).
   if (typeof q.bbox === 'string' && q.bbox) {
     const parts = q.bbox.split(',').map(Number);

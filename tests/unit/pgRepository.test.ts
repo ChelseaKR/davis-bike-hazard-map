@@ -50,7 +50,7 @@ suite('PostgresRepository', () => {
 
   beforeEach(async () => {
     // Clean slate between tests.
-    await repo['pool'].query('TRUNCATE hazards');
+    await repo['pool'].query('TRUNCATE hazards, hazard_tombstones');
   });
 
   it('round-trips a record including the photo ref and moderation jsonb', async () => {
@@ -180,6 +180,53 @@ suite('PostgresRepository', () => {
     expect(await repo.deleteById('del')).toBe(true);
     expect(await repo.findById('del')).toBeUndefined();
     expect(await repo.deleteById('nope')).toBe(false);
+  });
+
+  it('records an id-only tombstone on delete and lists it by cursor', async () => {
+    await repo.insert(hazard({ id: 'del', clientId: 'del' }));
+    await repo.deleteById('del', 5000);
+    expect(await repo.listTombstones(5000)).toEqual(['del']); // inclusive
+    expect(await repo.listTombstones(5001)).toEqual([]); // before the cursor
+    // A miss records nothing.
+    await repo.deleteById('nope', 6000);
+    expect(await repo.listTombstones(0)).toEqual(['del']);
+  });
+
+  it('expire prunes tombstones past the retention window', async () => {
+    const { TOMBSTONE_TTL_MS } = await import('../../server/lib/repository.ts');
+    await repo.insert(hazard({ id: 'del', clientId: 'del' }));
+    await repo.deleteById('del', 1000);
+    await repo.expire(1000 + TOMBSTONE_TTL_MS - 1);
+    expect(await repo.listTombstones(0)).toEqual(['del']); // still within the window
+    await repo.expire(1000 + TOMBSTONE_TTL_MS + 1);
+    expect(await repo.listTombstones(0)).toEqual([]); // pruned
+  });
+
+  it('listUpdatedSince returns feed-relevant changes only, newest first', async () => {
+    const now = 5000;
+    const box = { minLat: 38.5, minLng: -121.8, maxLat: 38.6, maxLng: -121.7 };
+    await repo.insert(hazard({ id: 'unchanged', clientId: 'u', status: 'approved', updatedAt: 10, expiresAt: now + 1 }));
+    await repo.insert(hazard({ id: 'changed', clientId: 'c', status: 'approved', updatedAt: 3000, expiresAt: now + 1 }));
+    await repo.insert(hazard({ id: 'resolved', clientId: 'r', status: 'resolved', updatedAt: 3500, resolvedAt: 3500 }));
+    await repo.insert(hazard({ id: 'expired', clientId: 'e', status: 'expired', updatedAt: 4000 }));
+    await repo.insert(hazard({ id: 'pending', clientId: 'p', status: 'pending', updatedAt: 4200 }));
+    await repo.insert(
+      // Rejected while pending: never public, must not surface even as an id.
+      hazard({ id: 'rej-pending', clientId: 'rp', status: 'rejected', updatedAt: 4300, moderation: [{ decision: 'reject', at: 4300 }] }),
+    );
+    await repo.insert(
+      // Rejected after approval: was public, so the transition must surface.
+      hazard({ id: 'rej-approved', clientId: 'ra', status: 'rejected', updatedAt: 4400, moderation: [{ decision: 'approve', at: 100 }, { decision: 'reject', at: 4400 }] }),
+    );
+    await repo.insert(
+      hazard({ id: 'faraway', clientId: 'f', status: 'approved', updatedAt: 4500, expiresAt: now + 1, publicLocation: { lat: 40.0, lng: -120.0 } }),
+    );
+
+    const changed = await repo.listUpdatedSince(2000, now);
+    expect(changed.map((h) => h.id)).toEqual(['faraway', 'rej-approved', 'expired', 'resolved', 'changed']);
+
+    const inBox = await repo.listUpdatedSince(2000, now, box);
+    expect(inBox.map((h) => h.id)).toEqual(['rej-approved', 'expired', 'resolved', 'changed']); // faraway culled
   });
 });
 

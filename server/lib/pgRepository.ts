@@ -14,7 +14,7 @@
 import { Pool, type PoolClient } from 'pg';
 import type { StoredHazard, ModerationAction, PhotoRef } from './types.ts';
 import type { HandoffInfo } from '../../shared/types.ts';
-import type { BBox, PendingStats, Repository } from './repository.ts';
+import { TOMBSTONE_TTL_MS, type BBox, type PendingStats, type Repository } from './repository.ts';
 import { runMigrations } from './migrate.ts';
 
 interface HazardRow {
@@ -182,6 +182,39 @@ export class PostgresRepository implements Repository {
     return res.rows.map(rowToHazard);
   }
 
+  async listUpdatedSince(since: number, now: number, bbox?: BBox): Promise<StoredHazard[]> {
+    // Everything a delta poll must hear about: live approved rows and resolved
+    // rows changed since the cursor, plus expired/rejected transitions (the
+    // poller drops those). Pending rows are never publicly visible and
+    // rejected-while-pending rows were never on the feed, so neither leaks
+    // here — not even as ids.
+    const params: unknown[] = [since, now];
+    let where = `(
+         (status = 'approved' AND expires_at > $2 AND updated_at >= $1)
+      OR (status = 'resolved' AND COALESCE(resolved_at, updated_at) >= $1)
+      OR (status = 'expired' AND updated_at >= $1)
+      OR (status = 'rejected' AND updated_at >= $1
+          AND moderation @> '[{"decision": "approve"}]'::jsonb)
+    )`;
+    if (bbox) {
+      params.push(bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng);
+      where += ` AND public_lat BETWEEN $3 AND $4 AND public_lng BETWEEN $5 AND $6`;
+    }
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards WHERE ${where} ORDER BY updated_at DESC`,
+      params,
+    );
+    return res.rows.map(rowToHazard);
+  }
+
+  async listTombstones(since: number): Promise<string[]> {
+    const res = await this.pool.query<{ id: string }>(
+      'SELECT id FROM hazard_tombstones WHERE deleted_at >= $1',
+      [since],
+    );
+    return res.rows.map((r) => r.id);
+  }
+
   async expire(now: number): Promise<number> {
     const res = await this.pool.query(
       `UPDATE hazards
@@ -190,12 +223,29 @@ export class PostgresRepository implements Repository {
        WHERE status='approved' AND expires_at <= $1`,
       [now],
     );
+    // Bound tombstone growth: anything older than the delta-cursor horizon can
+    // never be requested (the API forces stale cursors onto the full feed).
+    await this.pool.query('DELETE FROM hazard_tombstones WHERE deleted_at < $1', [
+      now - TOMBSTONE_TTL_MS,
+    ]);
     return res.rowCount ?? 0;
   }
 
-  async deleteById(id: string): Promise<boolean> {
-    const res = await this.pool.query('DELETE FROM hazards WHERE id = $1', [id]);
-    return (res.rowCount ?? 0) > 0;
+  async deleteById(id: string, deletedAt: number = Date.now()): Promise<boolean> {
+    // Delete + tombstone in one transaction so a crash can't lose the marker.
+    // The tombstone carries the id ONLY — no report content (privacy).
+    return this.withTxn(async (client) => {
+      const res = await client.query('DELETE FROM hazards WHERE id = $1', [id]);
+      const deleted = (res.rowCount ?? 0) > 0;
+      if (deleted) {
+        await client.query(
+          `INSERT INTO hazard_tombstones (id, deleted_at) VALUES ($1, $2)
+           ON CONFLICT (id) DO UPDATE SET deleted_at = EXCLUDED.deleted_at`,
+          [id, deletedAt],
+        );
+      }
+      return deleted;
+    });
   }
 
   async pendingStats(): Promise<PendingStats> {

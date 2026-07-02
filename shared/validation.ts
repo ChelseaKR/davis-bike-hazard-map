@@ -80,6 +80,11 @@ export const hazardFiltersSchema = z.object({
   minSeverity: z.enum(SEVERITIES).optional(),
   withinDays: z.coerce.number().int().positive().max(365).optional(),
   bbox: bboxSchema.optional(),
+  /**
+   * Delta cursor (epoch ms): return only hazards changed at/after this instant
+   * plus id-only tombstones, so the 30-second poll ships deltas, not the feed.
+   */
+  updatedSince: z.coerce.number().int().nonnegative().optional(),
 });
 
 /**

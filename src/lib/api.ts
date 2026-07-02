@@ -9,6 +9,7 @@ import type {
   ApiError,
   GeoPoint,
   Hazard,
+  HazardFeed,
   HazardFilters,
   ReportSubmission,
 } from '../../shared/types.ts';
@@ -57,15 +58,23 @@ export function buildHazardQuery(filters?: HazardFilters): string {
   if (filters.categories?.length) params.set('categories', filters.categories.join(','));
   if (filters.minSeverity) params.set('minSeverity', filters.minSeverity);
   if (filters.withinDays) params.set('withinDays', String(filters.withinDays));
+  if (filters.updatedSince != null) params.set('updatedSince', String(filters.updatedSince));
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
+/**
+ * Fetch the hazard feed — the full response body, including the delta fields
+ * (`deletedIds`, `serverTime`) when `filters.updatedSince` is set. The 30s
+ * poll uses this so it downloads only what changed since its cursor.
+ */
+export async function fetchHazardFeed(filters?: HazardFilters): Promise<HazardFeed> {
+  return request<HazardFeed>(`/hazards${buildHazardQuery(filters)}`);
+}
+
 /** Fetch the public (approved, unexpired) hazard list. */
 export async function fetchHazards(filters?: HazardFilters): Promise<Hazard[]> {
-  const { hazards } = await request<{ hazards: Hazard[] }>(
-    `/hazards${buildHazardQuery(filters)}`,
-  );
+  const { hazards } = await fetchHazardFeed(filters);
   return hazards;
 }
 

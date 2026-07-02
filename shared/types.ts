@@ -189,6 +189,28 @@ export interface HazardFilters {
   minSeverity?: Severity;
   /** Only hazards updated within this many days. */
   withinDays?: number;
+  /**
+   * Delta cursor (epoch ms), set by the polling client — not a UI filter.
+   * When present the API returns only hazards changed at/after this instant
+   * plus id-only tombstones for removed ones (see HazardFeed).
+   */
+  updatedSince?: number;
+}
+
+/**
+ * Response body of GET /api/hazards.
+ *
+ * A full fetch carries `hazards` (+ `serverTime`, the cursor for the next
+ * delta poll). A delta response (`?updatedSince=`) additionally carries
+ * `deletedIds` — id-only tombstones (never content) for hazards removed since
+ * the cursor. A response without `deletedIds` means "replace everything".
+ */
+export interface HazardFeed {
+  hazards: Hazard[];
+  /** Ids of hazards deleted/expired since the cursor (delta responses only). */
+  deletedIds?: string[];
+  /** Server clock when the feed was built — the client's next delta cursor. */
+  serverTime?: number;
 }
 
 /** Standard error envelope returned by the API. */
