@@ -103,9 +103,10 @@ export const openapiSpec = {
           { name: 'minSeverity', in: 'query', schema: { type: 'string' } },
           { name: 'withinDays', in: 'query', schema: { type: 'integer' } },
           { name: 'bbox', in: 'query', schema: { type: 'string' }, description: 'minLat,minLng,maxLat,maxLng' },
+          { name: 'updatedSince', in: 'query', schema: { type: 'integer' }, description: 'epoch-ms delta cursor (last serverTime seen). Returns only changed rows + deletedIds tombstones; an over-old cursor is ignored and the full feed returned' },
         ],
         responses: {
-          '200': { description: 'feed (ETag/304 supported)', content: { 'application/json': { schema: { type: 'object', properties: { hazards: { type: 'array', items: { $ref: '#/components/schemas/Hazard' } } } } } } },
+          '200': { description: 'feed (ETag/304 supported). With updatedSince: a delta of changed rows plus deletedIds. serverTime seeds the next delta cursor; a response without deletedIds is a full refresh.', content: { 'application/json': { schema: { type: 'object', properties: { hazards: { type: 'array', items: { $ref: '#/components/schemas/Hazard' } }, deletedIds: { type: 'array', items: { type: 'string' }, description: 'ids removed since the cursor (delta responses only)' }, serverTime: { type: 'integer', description: 'server epoch-ms; pass back as the next updatedSince' } } } } } },
           '304': { description: 'not modified' },
         },
       },

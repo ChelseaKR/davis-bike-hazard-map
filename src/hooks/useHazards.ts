@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Hazard, HazardFilters } from '../../shared/types.ts';
 import { fetchHazards } from '../lib/api.ts';
 import { applyFilters, sortByPriority } from '../lib/filters.ts';
+
+/**
+ * Merge a delta poll's changed rows into the current set: upsert by id, then
+ * drop any ids the server tombstoned. Returns the same array reference when
+ * nothing changed so React can skip a re-render.
+ */
+function mergeDelta(current: Hazard[], changed: Hazard[], deletedIds: string[]): Hazard[] {
+  if (changed.length === 0 && deletedIds.length === 0) return current;
+  const byId = new Map(current.map((h) => [h.id, h]));
+  for (const h of changed) byId.set(h.id, h);
+  for (const id of deletedIds) byId.delete(id);
+  return [...byId.values()];
+}
 
 interface UseHazardsResult {
   hazards: Hazard[];
@@ -24,12 +37,26 @@ export function useHazards(filters: HazardFilters): UseHazardsResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  // Delta-poll cursor: the serverTime of our last successful fetch. Null until
+  // the first full load, which forces that first fetch to be a full one.
+  const sinceRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setAll(await fetchHazards());
+      const cursor = sinceRef.current;
+      const feed = await fetchHazards(cursor != null ? { updatedSince: cursor } : undefined);
+      if (cursor != null && feed.deletedIds !== undefined) {
+        // Delta response: patch the existing set in place.
+        setAll((prev) => mergeDelta(prev, feed.hazards, feed.deletedIds ?? []));
+      } else {
+        // Full feed (first load, or the server ignored a stale cursor).
+        setAll(feed.hazards);
+      }
+      // Advance the cursor to the server's clock. If the response lacks a
+      // serverTime, clear it so the next poll falls back to a full fetch.
+      sinceRef.current = feed.serverTime ?? null;
       setLastUpdatedAt(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load hazards.');

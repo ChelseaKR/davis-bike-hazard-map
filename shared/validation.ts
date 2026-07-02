@@ -80,7 +80,12 @@ export const hazardFiltersSchema = z.object({
   minSeverity: z.enum(SEVERITIES).optional(),
   withinDays: z.coerce.number().int().positive().max(365).optional(),
   bbox: bboxSchema.optional(),
+  // Delta-feed cursor (epoch ms): the 30s mobile poll sends the last
+  // serverTime it saw so the server can return only what changed since.
+  updatedSince: z.coerce.number().int().nonnegative().optional(),
 });
+
+export type ValidatedHazardFilters = z.infer<typeof hazardFiltersSchema>;
 
 /**
  * A hazard-aware route request: a start and end point, both inside Davis. The

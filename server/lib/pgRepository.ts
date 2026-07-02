@@ -14,7 +14,7 @@
 import { Pool, type PoolClient } from 'pg';
 import type { StoredHazard, ModerationAction, PhotoRef } from './types.ts';
 import type { HandoffInfo } from '../../shared/types.ts';
-import type { BBox, PendingStats, Repository } from './repository.ts';
+import { TOMBSTONE_TTL_MS, type BBox, type PendingStats, type Repository } from './repository.ts';
 import { runMigrations } from './migrate.ts';
 
 interface HazardRow {
@@ -182,6 +182,30 @@ export class PostgresRepository implements Repository {
     return res.rows.map(rowToHazard);
   }
 
+  async listUpdatedSince(since: number, now: number, bbox?: BBox): Promise<StoredHazard[]> {
+    const params: unknown[] = [since, now];
+    let where =
+      `((status = 'approved' AND expires_at > $2 AND updated_at >= $1)` +
+      ` OR (status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at >= $1))`;
+    if (bbox) {
+      params.push(bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng);
+      where += ` AND public_lat BETWEEN $3 AND $4 AND public_lng BETWEEN $5 AND $6`;
+    }
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards WHERE ${where} ORDER BY updated_at DESC`,
+      params,
+    );
+    return res.rows.map(rowToHazard);
+  }
+
+  async listTombstones(since: number): Promise<string[]> {
+    const res = await this.pool.query<{ id: string }>(
+      `SELECT id FROM hazard_tombstones WHERE deleted_at >= $1`,
+      [since],
+    );
+    return res.rows.map((r) => r.id);
+  }
+
   async expire(now: number): Promise<number> {
     const res = await this.pool.query(
       `UPDATE hazards
@@ -190,12 +214,29 @@ export class PostgresRepository implements Repository {
        WHERE status='approved' AND expires_at <= $1`,
       [now],
     );
+    // Bound tombstone growth; a client whose cursor is older is served a full
+    // feed (see the /api/hazards handler) rather than a lossy delta.
+    await this.pool.query('DELETE FROM hazard_tombstones WHERE deleted_at < $1', [
+      now - TOMBSTONE_TTL_MS,
+    ]);
     return res.rowCount ?? 0;
   }
 
   async deleteById(id: string): Promise<boolean> {
-    const res = await this.pool.query('DELETE FROM hazards WHERE id = $1', [id]);
-    return (res.rowCount ?? 0) > 0;
+    return this.withTxn(async (client) => {
+      const res = await client.query('DELETE FROM hazards WHERE id = $1', [id]);
+      const existed = (res.rowCount ?? 0) > 0;
+      if (existed) {
+        // Record an id-only tombstone (no content) in the same transaction so
+        // the next delta poll conveys the removal.
+        await client.query(
+          `INSERT INTO hazard_tombstones (id, deleted_at) VALUES ($1, $2)
+           ON CONFLICT (id) DO UPDATE SET deleted_at = EXCLUDED.deleted_at`,
+          [id, Date.now()],
+        );
+      }
+      return existed;
+    });
   }
 
   async pendingStats(): Promise<PendingStats> {

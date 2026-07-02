@@ -27,10 +27,11 @@ import {
   handoffStatusSchema,
   alertSubscriptionSchema,
 } from '../shared/validation.ts';
-import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
+import { SEVERITY_RANK, type Hazard, type Severity } from '../shared/types.ts';
+import type { ValidatedHazardFilters } from '../shared/validation.ts';
 import { rankRoutes, type RoutePlan } from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
-import type { Repository } from './lib/repository.ts';
+import { TOMBSTONE_TTL_MS, type Repository } from './lib/repository.ts';
 import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
 import {
   MemoryModeratorStore,
@@ -343,31 +344,35 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Public feed ---
   app.get('/api/hazards', async (req, reply) => {
     const filters = hazardFiltersSchema.parse(parseHazardQuery(req.query));
-    // bbox is pushed down to the store (SQL) for spatial culling at scale. The
-    // feed also carries recently-resolved hazards (greyed client-side) so a fix
-    // is visible, not just an absence — see listPublicFeed.
-    let hazards = await listPublicFeed(
-      repo,
-      now(),
-      config.resolvedVisibleDays * DAY_MS,
-      filters.bbox,
-    );
+    const nowMs = now();
 
-    if (filters.categories?.length) {
-      const set = new Set(filters.categories);
-      hazards = hazards.filter((h) => set.has(h.category));
-    }
-    if (filters.minSeverity) {
-      const min = SEVERITY_RANK[filters.minSeverity];
-      hazards = hazards.filter((h) => SEVERITY_RANK[h.severity] >= min);
-    }
-    if (filters.withinDays) {
-      const cutoff = now() - filters.withinDays * 24 * 60 * 60 * 1000;
-      hazards = hazards.filter((h) => h.updatedAt >= cutoff);
+    // Delta feed for the 30s mobile poll: the client sends the last serverTime
+    // it saw as `updatedSince`, and we return only what changed since — the
+    // changed rows plus id-only tombstones for removals — so a poll ships bytes
+    // proportional to the churn, not the whole feed. A cursor older than we keep
+    // tombstones for can't be served losslessly, so we fall through to the full
+    // feed (a response with no `deletedIds` tells the client to fully refresh).
+    const cursor = filters.updatedSince;
+    if (cursor !== undefined && cursor >= nowMs - TOMBSTONE_TTL_MS) {
+      await repo.expire(nowMs);
+      const changed = await repo.listUpdatedSince(cursor, nowMs, filters.bbox);
+      const deletedIds = await repo.listTombstones(cursor);
+      const hazards = applyFeedFilters(changed.map(toPublic), filters, nowMs);
+      return reply
+        .header('cache-control', 'no-cache')
+        .send({ hazards, deletedIds, serverTime: nowMs });
     }
 
-    // Conditional request: hash the payload so repeat polls (every 30s) get a
-    // cheap 304 instead of re-downloading the whole feed.
+    // Full feed (first load or a stale cursor). bbox is pushed down to the store
+    // (SQL) for spatial culling at scale. The feed also carries recently-resolved
+    // hazards (greyed client-side) so a fix is visible, not just an absence.
+    let hazards = await listPublicFeed(repo, nowMs, config.resolvedVisibleDays * DAY_MS, filters.bbox);
+    hazards = applyFeedFilters(hazards, filters, nowMs);
+
+    // Conditional request: hash the payload so repeat polls get a cheap 304
+    // instead of re-downloading the whole feed. `serverTime` is sent OUTSIDE the
+    // hashed body so it doesn't bust the ETag; the client uses it to seed its
+    // delta cursor after the first full load.
     const body = JSON.stringify({ hazards });
     const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
     if (req.headers['if-none-match'] === etag) {
@@ -377,7 +382,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .header('etag', etag)
       .header('cache-control', 'no-cache')
       .header('content-type', 'application/json')
-      .send(body);
+      .send(JSON.stringify({ hazards, serverTime: nowMs }));
   });
 
   // --- Submit a report (idempotent on clientId) ---
@@ -654,12 +659,39 @@ function parseHazardQuery(query: unknown): Record<string, unknown> {
   }
   if (typeof q.minSeverity === 'string' && q.minSeverity) out.minSeverity = q.minSeverity;
   if (typeof q.withinDays === 'string' && q.withinDays) out.withinDays = q.withinDays;
+  if (typeof q.updatedSince === 'string' && q.updatedSince) out.updatedSince = q.updatedSince;
   // bbox=minLat,minLng,maxLat,maxLng (Leaflet getBounds order: S,W,N,E).
   if (typeof q.bbox === 'string' && q.bbox) {
     const parts = q.bbox.split(',').map(Number);
     if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
       out.bbox = { minLat: parts[0], minLng: parts[1], maxLat: parts[2], maxLng: parts[3] };
     }
+  }
+  return out;
+}
+
+/**
+ * Apply the category / min-severity / recency filters shared by the full and
+ * delta feeds (bbox is pushed down to the store). Kept in one place so both
+ * paths cull identically.
+ */
+function applyFeedFilters(
+  hazards: Hazard[],
+  filters: ValidatedHazardFilters,
+  nowMs: number,
+): Hazard[] {
+  let out = hazards;
+  if (filters.categories?.length) {
+    const set = new Set(filters.categories);
+    out = out.filter((h) => set.has(h.category));
+  }
+  if (filters.minSeverity) {
+    const min = SEVERITY_RANK[filters.minSeverity];
+    out = out.filter((h) => SEVERITY_RANK[h.severity] >= min);
+  }
+  if (filters.withinDays) {
+    const cutoff = nowMs - filters.withinDays * 24 * 60 * 60 * 1000;
+    out = out.filter((h) => h.updatedAt >= cutoff);
   }
   return out;
 }

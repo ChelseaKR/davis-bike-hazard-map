@@ -16,6 +16,15 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 import type { StoredHazard } from './types.ts';
 
+/**
+ * How long id-only tombstones are retained (and, equivalently, the maximum
+ * delta-poll cursor age the server will honour). A client that polls more
+ * often than this never misses a deletion; one whose cursor is older is served
+ * a full feed instead of a lossy delta (see the `/api/hazards` handler). Kept
+ * generous so a phone that was merely backgrounded still gets a cheap delta.
+ */
+export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** A geographic bounding box for spatial culling of the public feed. */
 export interface BBox {
   minLat: number;
@@ -34,6 +43,17 @@ export interface Repository {
   listActive(now: number, bbox?: BBox): Promise<StoredHazard[]>;
   /** Resolved rows fixed at/after `resolvedAfter` (optional bbox), newest first. */
   listRecentlyResolved(resolvedAfter: number, bbox?: BBox): Promise<StoredHazard[]>;
+  /**
+   * Delta feed for the 30s mobile poll: rows that changed since `since` —
+   * approved+unexpired rows with `updatedAt >= since`, plus recently-resolved
+   * rows with `resolvedAt >= since` (shown greyed client-side). Newest first.
+   */
+  listUpdatedSince(since: number, now: number, bbox?: BBox): Promise<StoredHazard[]>;
+  /**
+   * Ids hard-deleted at/after `since` (id-only tombstones — no content is kept,
+   * per the privacy note). Lets a delta poll surface removals, not just changes.
+   */
+  listTombstones(since: number): Promise<string[]>;
   /**
    * Transition approved rows past their TTL to `expired`, and coarsen their
    * precise location to the public (fuzzed) one — it's only needed while a
@@ -64,6 +84,13 @@ export function inBounds(p: { lat: number; lng: number }, b: BBox): boolean {
 
 export class MemoryRepository implements Repository {
   protected store = new Map<string, StoredHazard>();
+  /**
+   * Id -> epoch-ms deleted, for delta-poll removals. Ids only — no content is
+   * retained for a deleted report (privacy). Pruned in `expire()` so it can't
+   * grow without bound; a client whose cursor predates the pruning window is
+   * told (by app.ts) to do a full refresh instead.
+   */
+  protected tombstones = new Map<string, number>();
 
   async insert(hazard: StoredHazard): Promise<StoredHazard> {
     this.store.set(hazard.id, hazard);
@@ -109,6 +136,25 @@ export class MemoryRepository implements Repository {
       .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0));
   }
 
+  async listUpdatedSince(since: number, now: number, bbox?: BBox): Promise<StoredHazard[]> {
+    return [...this.store.values()]
+      .filter(
+        (h) =>
+          (h.status === 'approved' && h.expiresAt > now && h.updatedAt >= since) ||
+          (h.status === 'resolved' && (h.resolvedAt ?? 0) >= since),
+      )
+      .filter((h) => !bbox || inBounds(h.publicLocation, bbox))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  async listTombstones(since: number): Promise<string[]> {
+    const ids: string[] = [];
+    for (const [id, deletedAt] of this.tombstones) {
+      if (deletedAt >= since) ids.push(id);
+    }
+    return ids;
+  }
+
   async expire(now: number): Promise<number> {
     let expired = 0;
     for (const h of this.store.values()) {
@@ -123,13 +169,35 @@ export class MemoryRepository implements Repository {
         expired++;
       }
     }
-    if (expired) this.persist();
+    const pruned = this.pruneTombstones(now);
+    if (expired || pruned) this.persist();
     return expired;
+  }
+
+  /**
+   * Drop tombstones older than the delta-visibility window. A client polling
+   * more often than this never misses a deletion; one that fell further behind
+   * is served a full feed (see app.ts) rather than a lossy delta.
+   */
+  protected pruneTombstones(now: number): number {
+    const cutoff = now - TOMBSTONE_TTL_MS;
+    let pruned = 0;
+    for (const [id, deletedAt] of this.tombstones) {
+      if (deletedAt < cutoff) {
+        this.tombstones.delete(id);
+        pruned++;
+      }
+    }
+    return pruned;
   }
 
   async deleteById(id: string): Promise<boolean> {
     const existed = this.store.delete(id);
-    if (existed) this.persist();
+    if (existed) {
+      // Record an id-only tombstone so the next delta poll conveys the removal.
+      this.tombstones.set(id, Date.now());
+      this.persist();
+    }
     return existed;
   }
 
@@ -159,6 +227,12 @@ export class MemoryRepository implements Repository {
  * atomically (temp file + rename) after each mutation so a crash mid-write
  * never corrupts the data file. SINGLE-PROCESS ONLY (see server/config.ts).
  */
+/** On-disk shape for the JSON store (hazards + id-only delta tombstones). */
+interface JsonFileShape {
+  hazards: StoredHazard[];
+  tombstones: [string, number][];
+}
+
 export class JsonFileRepository extends MemoryRepository {
   constructor(private readonly path: string) {
     super();
@@ -169,8 +243,14 @@ export class JsonFileRepository extends MemoryRepository {
     if (!existsSync(this.path)) return;
     try {
       const raw = readFileSync(this.path, 'utf8');
-      const list = JSON.parse(raw) as StoredHazard[];
+      const parsed = JSON.parse(raw) as StoredHazard[] | JsonFileShape;
+      // Back-compat: the file used to be a bare hazard array. Newer writes wrap
+      // it in `{ hazards, tombstones }` so delta-poll tombstones survive restarts.
+      const list = Array.isArray(parsed) ? parsed : parsed.hazards;
       for (const h of list) this.store.set(h.id, h);
+      if (!Array.isArray(parsed) && parsed.tombstones) {
+        for (const [id, deletedAt] of parsed.tombstones) this.tombstones.set(id, deletedAt);
+      }
     } catch {
       // A malformed file should not crash startup; start empty and overwrite
       // on the next successful write.
@@ -181,7 +261,11 @@ export class JsonFileRepository extends MemoryRepository {
     const dir = dirname(this.path);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const tmp = `${this.path}.tmp`;
-    writeFileSync(tmp, JSON.stringify([...this.store.values()], null, 0), 'utf8');
+    const blob: JsonFileShape = {
+      hazards: [...this.store.values()],
+      tombstones: [...this.tombstones.entries()],
+    };
+    writeFileSync(tmp, JSON.stringify(blob, null, 0), 'utf8');
     renameSync(tmp, this.path);
   }
 }
