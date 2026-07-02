@@ -7,7 +7,7 @@ Instantiates `/STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` §C for this repo.
 | Data | Why | Where | Retention | Who can access |
 |------|-----|-------|-----------|----------------|
 | Hazard type/severity/description | Core function | Server store | Until resolved/expired (14–30 d by severity) | Public (after approval) |
-| Photo (EXIF-stripped, optionally blurred) | Evidence of hazard | Server store | Same as hazard | Public only after approval; moderators before |
+| Photo (EXIF-stripped, optionally blurred) | Evidence of hazard | PhotoStore (blob) | Rejected: deleted at decision; resolved/expired: deleted after `RESOLVED_VISIBLE_DAYS` (see retention table) | Public only after approval; moderators before |
 | Precise location | 311 dispatch (opt-in only) | Server store, internal | Same as hazard | Server + opt-in 311 hand-off only |
 | Public location (fuzzed ~70 m) | Map display | Server store | Same as hazard | Public |
 | No accounts, no contact info, no analytics/trackers | — | — | — | — |
@@ -36,6 +36,25 @@ street scene; a reporter whose home-adjacent report could reveal where they live
   hazard is *active*: on reject/resolve/expire it is **overwritten with the
   public (fuzzed) point**, so we don't keep a reporter's exact spot once it's no
   longer needed for an optional 311 hand-off.
+- **Photo-blob retention & garbage collection.** Photo bytes (full + thumb in
+  the PhotoStore) follow the hazard's lifecycle. Rejection deletes the bytes
+  immediately in `moderateHazard()` — a rejected photo is the one most likely
+  to contain faces/plates. Expired and resolved hazards keep their photo only
+  for the public visibility window; an hourly `sweepPhotoRetention()` job
+  (`server/index.ts`) then deletes blob + thumb and clears the photo ref.
+
+  | Hazard state | Photo bytes (full + thumb) | TTL |
+  |--------------|----------------------------|-----|
+  | `pending` | Kept (moderators need them to judge the report) | Until a moderation decision |
+  | `approved` | Kept (served via `/api/photos/:id`) | While the hazard is live |
+  | `rejected` | **Deleted immediately** on the reject decision | 0 |
+  | `resolved` | Deleted by the retention sweep | `RESOLVED_VISIBLE_DAYS` (default 7 d) after resolution |
+  | `expired` | Deleted by the retention sweep | `RESOLVED_VISIBLE_DAYS` (default 7 d) after expiry |
+
+  **Residual window:** `/api/photos/:id` responses carry
+  `cache-control: public, max-age=3600` (`server/app.ts`), so a copy of a
+  deleted photo can persist in browser/CDN caches for up to **1 hour** after
+  deletion. Reporter self-deletion has the same residual window.
 - **Reporter deletion.** `DELETE /api/reports/<clientId>` removes a report
   (record + photo blobs); the clientId is the device-held capability. Exposed in
   the app's "My reports" and the privacy page.

@@ -193,6 +193,17 @@ export class PostgresRepository implements Repository {
     return res.rowCount ?? 0;
   }
 
+  async listPhotoGcCandidates(cutoff: number): Promise<StoredHazard[]> {
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards
+       WHERE photo_mime IS NOT NULL
+         AND status IN ('expired', 'resolved')
+         AND COALESCE(resolved_at, updated_at) <= $1`,
+      [cutoff],
+    );
+    return res.rows.map(rowToHazard);
+  }
+
   async deleteById(id: string): Promise<boolean> {
     const res = await this.pool.query('DELETE FROM hazards WHERE id = $1', [id]);
     return (res.rowCount ?? 0) > 0;
