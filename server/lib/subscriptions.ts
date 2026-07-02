@@ -7,7 +7,8 @@
  * it is mechanical.
  */
 import { createHash } from 'node:crypto';
-import type { AlertSubscription, Watch } from '../../shared/alerts.ts';
+import type { AlertLocale, AlertSubscription, Watch } from '../../shared/alerts.ts';
+import { DEFAULT_ALERT_LOCALE } from '../../shared/alerts.ts';
 
 /** Deterministic id from the push endpoint, so re-subscribing replaces cleanly. */
 export function subscriptionId(endpoint: string): string {
@@ -42,6 +43,7 @@ export function buildSubscription(
   watch: Watch,
   now: number,
   label?: string,
+  locale: AlertLocale = DEFAULT_ALERT_LOCALE,
 ): AlertSubscription {
-  return { id: subscriptionId(endpoint), endpoint, keys, watch, label, createdAt: now };
+  return { id: subscriptionId(endpoint), endpoint, keys, watch, label, locale, createdAt: now };
 }

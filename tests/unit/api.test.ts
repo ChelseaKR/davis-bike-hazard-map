@@ -75,17 +75,20 @@ describe('submitReport', () => {
     );
   });
 
-  it('throws ApiRequestError with the server message on failure', async () => {
+  it('throws ApiRequestError exposing the stable code (not the server prose) on failure', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        jsonResponse({ error: 'validation_error', message: 'Outside Davis.' }, 400),
+        jsonResponse({ error: 'outside_davis', message: 'Outside Davis.' }, 400),
       ),
     );
+    // The client translates off `.code`; `.message` is now a diagnostic string
+    // (not the server's English prose), and the raw envelope stays on `.body`.
     await expect(submitReport(submission)).rejects.toMatchObject({
       name: 'ApiRequestError',
       status: 400,
-      message: 'Outside Davis.',
+      code: 'outside_davis',
+      body: { error: 'outside_davis', message: 'Outside Davis.' },
     });
   });
 });

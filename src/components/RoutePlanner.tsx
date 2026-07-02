@@ -14,6 +14,7 @@ import { FormattedMessage, useIntl } from 'react-intl';
 import type { GeoPoint } from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import { fetchRoute } from '../lib/api.ts';
+import { apiErrorMessage } from '../i18n/apiErrors.ts';
 import { DAVIS_LANDMARKS, landmarkByName } from '../lib/landmarks.ts';
 import { getCurrentLocation, GeolocationError } from '../lib/geolocation.ts';
 import { formatDistance, formatDuration, formatLatLng } from '../lib/format.ts';
@@ -46,11 +47,9 @@ export function RoutePlanner() {
     try {
       setPlan(await fetchRoute(start.point, end.point));
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : intl.formatMessage({ id: 'route.error.plan', defaultMessage: 'Could not plan a route.' }),
-      );
+      // Translate by the API's stable error code rather than showing the
+      // server's English `message` (INTERNATIONALIZATION-STANDARD §3).
+      setError(apiErrorMessage(intl, err));
       setPlan(null);
     } finally {
       setLoading(false);

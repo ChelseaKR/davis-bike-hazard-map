@@ -272,11 +272,18 @@ describe('report intake and moderation gate', () => {
     expect(hazard.status).toBe('approved');
   });
 
-  it('rejects an invalid submission with 400', async () => {
+  it('rejects an out-of-Davis submission with 400 + the fine-grained code', async () => {
     const res = await post('/api/reports', {
       ...baseReport,
-      location: { lat: 38.58, lng: -121.49 },
+      location: { lat: 38.58, lng: -121.49 }, // valid lat/lng, outside the Davis box
     });
+    expect(res.statusCode).toBe(400);
+    // Fine-grained, stable code so the client can translate this specific case.
+    expect(res.json().error).toBe('outside_davis');
+  });
+
+  it('rejects a structurally invalid submission with the generic validation code', async () => {
+    const res = await post('/api/reports', { ...baseReport, category: 'not-a-category' });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('validation_error');
   });

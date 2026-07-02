@@ -145,4 +145,48 @@ describe('notifyForHazard', () => {
     expect(p.title).toMatch(/saved route/i);
     expect(p.body).toMatch(/high pothole/i);
   });
+
+  it('buildAlertPayload defaults to English and tags the locale', () => {
+    const p = buildAlertPayload(hazard());
+    expect(p.locale).toBe('en');
+    // An unknown/legacy locale falls back to English copy + tag.
+    const legacy = buildAlertPayload(hazard(), 'de' as never);
+    expect(legacy.locale).toBe('en');
+    expect(legacy.title).toMatch(/saved route/i);
+  });
+
+  it('buildAlertPayload localizes the copy for es', () => {
+    const p = buildAlertPayload(hazard(), 'es');
+    expect(p.locale).toBe('es');
+    expect(p.title).toMatch(/ruta guardada/i);
+    expect(p.body).toMatch(/bache/i); // es label for "pothole"
+    expect(p.hazardId).toBe('h1');
+  });
+
+  it('buildSubscription records the requested locale (default en)', () => {
+    expect(buildSubscription('https://push/x', { p256dh: 'p', auth: 'a' }, area, 1).locale).toBe('en');
+    expect(
+      buildSubscription('https://push/x', { p256dh: 'p', auth: 'a' }, area, 1, 'home', 'es').locale,
+    ).toBe('es');
+  });
+
+  it('sends each subscriber a payload in their own locale', async () => {
+    const enSub: AlertSubscription = {
+      id: 'en',
+      endpoint: 'https://push/en',
+      keys: { p256dh: 'p', auth: 'x' },
+      watch: area,
+      locale: 'en',
+      createdAt: 1,
+    };
+    const esSub: AlertSubscription = { ...enSub, id: 'es', endpoint: 'https://push/es', locale: 'es' };
+    const seen: Record<string, string> = {};
+    const send = vi.fn().mockImplementation(async (sub: AlertSubscription, payload) => {
+      seen[sub.id] = payload.locale;
+      return true;
+    });
+    const res = await notifyForHazard(hazard(), [enSub, esSub], liveConfig, send);
+    expect(res.sent).toBe(2);
+    expect(seen).toEqual({ en: 'en', es: 'es' });
+  });
 });

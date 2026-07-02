@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { HAZARD_CATEGORIES, SEVERITIES } from './types.ts';
+import { ALERT_LOCALES } from './alerts.ts';
 
 /** Davis, CA bounding box (a generous rectangle around the city + campus). */
 export const DAVIS_BOUNDS = {
@@ -36,7 +37,11 @@ export const davisPointSchema = geoPointSchema.refine(
     p.lat <= DAVIS_BOUNDS.maxLat &&
     p.lng >= DAVIS_BOUNDS.minLng &&
     p.lng <= DAVIS_BOUNDS.maxLng,
-  { message: 'Location must be within Davis, CA.' },
+  // `params.code` carries a fine-grained, stable machine code so the server's
+  // error handler can distinguish an out-of-bounds location (`outside_davis`)
+  // from a generic `validation_error`, letting the client translate it. The
+  // `message` remains the English fallback for API consumers / non-i18n clients.
+  { message: 'Location must be within Davis, CA.', params: { code: 'outside_davis' } },
 );
 
 /** A data URL for a supported raster image type. */
@@ -138,6 +143,9 @@ export const alertSubscriptionSchema = z.object({
   }),
   watch: watchSchema,
   label: z.string().trim().max(80).optional(),
+  // Preferred locale for the push text this device receives; validated against
+  // the supported set, defaulting to English server-side when omitted.
+  locale: z.enum(ALERT_LOCALES).optional(),
 });
 
 export type ValidatedAlertSubscription = z.infer<typeof alertSubscriptionSchema>;

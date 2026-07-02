@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useIntl } from 'react-intl';
 import type { Hazard, HazardFilters } from '../../shared/types.ts';
 import { fetchHazards } from '../lib/api.ts';
+import { apiErrorMessage } from '../i18n/apiErrors.ts';
 import { applyFilters, sortByPriority } from '../lib/filters.ts';
 
 interface UseHazardsResult {
@@ -20,6 +22,7 @@ interface UseHazardsResult {
  * snappy on mobile data and lets the list and map share one dataset.
  */
 export function useHazards(filters: HazardFilters): UseHazardsResult {
+  const intl = useIntl();
   const [all, setAll] = useState<Hazard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,11 +35,12 @@ export function useHazards(filters: HazardFilters): UseHazardsResult {
       setAll(await fetchHazards());
       setLastUpdatedAt(Date.now());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load hazards.');
+      // Translate by the API's stable error code (never show server prose).
+      setError(apiErrorMessage(intl, err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [intl]);
 
   useEffect(() => {
     void refresh();

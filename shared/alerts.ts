@@ -27,6 +27,17 @@ export interface RouteWatch {
 
 export type Watch = AreaWatch | RouteWatch;
 
+/**
+ * Locales a push subscriber can be notified in. Kept here (framework-free) so
+ * the server, the validation schema, and the push payload table all agree on
+ * the supported set. Mirrors the client's SUPPORTED_LANGUAGES (src/i18n/config).
+ */
+export const ALERT_LOCALES = ['en', 'es'] as const;
+export type AlertLocale = (typeof ALERT_LOCALES)[number];
+
+/** The site default / reference locale for push text (English fallback). */
+export const DEFAULT_ALERT_LOCALE: AlertLocale = 'en';
+
 /** Does a (public, fuzzed) hazard location fall inside a saved watch? */
 export function hazardMatchesWatch(location: GeoPoint, watch: Watch): boolean {
   if (watch.kind === 'area') {
@@ -50,6 +61,12 @@ export interface AlertSubscription {
   watch: Watch;
   /** Optional human label for the saved watch ("Commute to campus"). */
   label?: string;
+  /**
+   * The locale the subscriber wants push text in (negotiated on their device at
+   * subscribe time). Absent on legacy records ⇒ the notifier defaults to
+   * DEFAULT_ALERT_LOCALE ('en'). See server/lib/pushNotify.ts.
+   */
+  locale?: AlertLocale;
   createdAt: number;
 }
 

@@ -31,12 +31,13 @@
     "i18n:extract": "formatjs extract 'src/**/*.{ts,tsx}' --out-file src/i18n/locales/en.json --throws --format simple && node scripts/i18n/sync-es-skeleton.mjs",
     "i18n:utf8": "node scripts/i18n/check-utf8.mjs",
     "i18n:no-hardcoded": "node scripts/i18n/check-no-hardcoded.mjs",
+    "i18n:shared-strings": "node scripts/i18n/check-shared-strings.mjs",
     "i18n:extract:check": "node scripts/i18n/check-extract.mjs",
     "i18n:bcp47": "node scripts/i18n/check-bcp47.mjs",
     "i18n:parity": "node scripts/i18n/check-parity.mjs",
     "i18n:cldr": "node scripts/i18n/check-cldr-pin.mjs",
     "i18n:pseudo:gen": "node scripts/i18n/gen-pseudo.mjs",
-    "i18n:gates": "npm run i18n:utf8 && npm run i18n:extract:check && npm run i18n:no-hardcoded && npm run i18n:bcp47 && npm run i18n:parity && npm run i18n:cldr",
+    "i18n:gates": "npm run i18n:utf8 && npm run i18n:extract:check && npm run i18n:no-hardcoded && npm run i18n:shared-strings && npm run i18n:bcp47 && npm run i18n:parity && npm run i18n:cldr",
     "verify": "npm run lint && npm run lint:css && npm run i18n:gates && npm run typecheck && npm run test:unit && npm run build"
   },
   "lint-staged": {

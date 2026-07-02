@@ -1,0 +1,71 @@
+<!doctype html>
+<!--
+  ⚠️ PENDING NATIVE-SPEAKER REVIEW (es) — this translation is machine-drafted and
+  must be reviewed by a native Spanish speaker before launch (i18n REVIEW-GATE R3,
+  see docs/I18N.md). The English page (../accessibility.html) is authoritative until then.
+-->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b6e4f" />
+    <title>Accesibilidad — Mapa de Peligros para Ciclistas de Davis</title>
+    <!-- Reciprocal locale alternates (hreflang). -->
+    <link rel="alternate" hreflang="en" href="/accessibility.html" />
+    <link rel="alternate" hreflang="es" href="/es/accessibility.html" />
+    <link rel="alternate" hreflang="x-default" href="/accessibility.html" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font: 16px/1.6 system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #16241e;
+        background: #f7f8f7;
+      }
+      h1 { color: #0b6e4f; }
+      a { color: #095a40; }
+      code { background: #e7ece9; padding: 0 0.2em; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <p><a href="/">← Volver al mapa</a></p>
+    <p><a href="/accessibility.html" hreflang="en" lang="en" rel="alternate">English</a></p>
+    <h1>Declaración de accesibilidad</h1>
+    <p>
+      Aspiramos a cumplir con <strong>WCAG 2.2 AA</strong>. La accesibilidad es un
+      requisito de publicación: cada compilación ejecuta comprobaciones automáticas
+      (axe) en componentes y páginas completas sin permitir ninguna infracción, y se
+      prueba de principio a fin que las tareas principales puedan completarse con el
+      teclado.
+    </p>
+
+    <h2>Compromisos clave</h2>
+    <ul>
+      <li>El mapa nunca es la única vía de acceso: una <strong>vista de Lista</strong>
+        equivalente, totalmente operable con teclado y lector de pantalla, muestra los
+        mismos datos.</li>
+      <li>La gravedad se transmite mediante forma y texto, nunca solo con el color.</li>
+      <li>Foco visible, puntos de referencia semánticos y un enlace para saltar
+        contenido en toda la aplicación.</li>
+      <li>Se respeta <code>prefers-reduced-motion</code> (se reducen las animaciones).</li>
+      <li>«Sin reportes» se presenta como falta de reportes, no como «seguro»; consulta
+        la vista de <strong>Cobertura</strong>.</li>
+    </ul>
+
+    <h2>Limitaciones conocidas</h2>
+    <p>
+      Antes del lanzamiento público se completa una validación con lector de pantalla
+      (VoiceOver/NVDA); el guion de pruebas se publica con el proyecto. WebKit/Safari
+      se cubre con pruebas manuales en dispositivos.
+    </p>
+
+    <h2>Comentarios</h2>
+    <p>
+      ¿Encontraste una barrera? Contacta al operador indicado en el README del proyecto
+      para que podamos corregirla.
+    </p>
+    <p><a href="/es/privacy.html">Privacidad</a></p>
+  </body>
+</html>

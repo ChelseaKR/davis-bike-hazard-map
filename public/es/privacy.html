@@ -1,0 +1,82 @@
+<!doctype html>
+<!--
+  ⚠️ PENDING NATIVE-SPEAKER REVIEW (es) — this translation is machine-drafted and
+  must be reviewed by a native Spanish speaker before launch (i18n REVIEW-GATE R3,
+  see docs/I18N.md). The English page (../privacy.html) is authoritative until then.
+-->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b6e4f" />
+    <title>Privacidad — Mapa de Peligros para Ciclistas de Davis</title>
+    <!-- Reciprocal locale alternates (hreflang). -->
+    <link rel="alternate" hreflang="en" href="/privacy.html" />
+    <link rel="alternate" hreflang="es" href="/es/privacy.html" />
+    <link rel="alternate" hreflang="x-default" href="/privacy.html" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font: 16px/1.6 system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #16241e;
+        background: #f7f8f7;
+      }
+      h1 { color: #0b6e4f; }
+      a { color: #095a40; }
+      code { background: #e7ece9; padding: 0 0.2em; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <p><a href="/">← Volver al mapa</a></p>
+    <p><a href="/privacy.html" hreflang="en" lang="en" rel="alternate">English</a></p>
+    <h1>Privacidad</h1>
+    <p>
+      El Mapa de Peligros para Ciclistas de Davis recopila lo mínimo posible. No
+      hay <strong>cuentas de usuario</strong> para quienes reportan, ni rastreadores
+      de análisis o publicidad de terceros.
+    </p>
+
+    <h2>Qué contiene un reporte</h2>
+    <ul>
+      <li>Una categoría de peligro, la gravedad y una descripción opcional que
+        escribes.</li>
+      <li>Una ubicación. Tu coordenada <strong>precisa</strong> se usa solo en el
+        servidor; el mapa público muestra un punto <strong>difuminado a una
+        cuadrícula de aproximadamente 70 metros</strong> para que no pueda
+        identificar un hogar o una persona.</li>
+      <li>Una foto opcional. Las fotos se <strong>despojan de sus metadatos EXIF y
+        se vuelven a codificar en tu dispositivo y otra vez en el servidor</strong>
+        (se eliminan los metadatos de ubicación/cámara), y puedes difuminar rostros
+        y matrículas antes de subirlas.</li>
+      <li>Un identificador de reporte aleatorio generado en tu dispositivo.</li>
+    </ul>
+
+    <h2>Moderación y retención</h2>
+    <p>
+      Nada se muestra públicamente hasta que un moderador lo aprueba. Tu coordenada
+      precisa se conserva solo mientras un peligro está activo; una vez que se
+      rechaza, se resuelve o caduca, el punto preciso se <strong>reduce a la
+      cuadrícula pública</strong>. No vendemos ni compartimos datos personales.
+    </p>
+
+    <h2>Tus opciones</h2>
+    <ul>
+      <li><strong>Elimina tu reporte.</strong> Tu dispositivo guarda el identificador
+        de tu reporte; eliminar un reporte desde «Mis reportes» lo borra localmente,
+        y la aplicación puede pedir al servidor que lo elimine (registro y fotos)
+        mediante <code>DELETE /api/reports/&lt;tu-id-de-reporte&gt;</code>.</li>
+      <li><strong>Datos abiertos.</strong> Los peligros aprobados y difuminados se
+        publican como datos abiertos (<a href="/api/hazards/export">exportación
+        GeoJSON</a>, ODbL).</li>
+    </ul>
+
+    <p>
+      ¿Preguntas o una solicitud de eliminación que no puedes completar en la
+      aplicación? Contacta al operador indicado en el README del proyecto.
+    </p>
+    <p><a href="/es/accessibility.html">Declaración de accesibilidad</a></p>
+  </body>
+</html>

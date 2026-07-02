@@ -12,6 +12,7 @@
  */
 import type { Watch } from '../../shared/alerts.ts';
 import { subscribeAlert, unsubscribeAlert, type PushSubscriptionPayload } from './api.ts';
+import { negotiate } from '../i18n/config.ts';
 
 /** Is the Push API available in this browser + context (HTTPS / localhost)? */
 export function isPushSupported(): boolean {
@@ -58,6 +59,8 @@ export async function registerHazardAlert(
   watch: Watch,
   vapidPublicKey: string,
   label?: string,
+  /** Locale to receive push text in; defaults to the device's negotiated one. */
+  locale: string = negotiate(),
 ): Promise<string> {
   if (!isPushSupported()) throw new Error('Push notifications are not supported here.');
   const permission = await Notification.requestPermission();
@@ -72,7 +75,7 @@ export async function registerHazardAlert(
       applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
     }));
 
-  const { id } = await subscribeAlert(toPayload(sub), watch, label);
+  const { id } = await subscribeAlert(toPayload(sub), watch, label, locale);
   return id;
 }
 

@@ -173,9 +173,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // Validation errors -> 400 with a stable envelope.
   app.setErrorHandler((err: FastifyError, _req, reply) => {
     if (err instanceof ZodError) {
+      // Prefer a fine-grained, stable machine code carried by the failing rule
+      // (a custom Zod refinement's `params.code`, e.g. `outside_davis`) so the
+      // client can translate the specific failure; fall back to the generic code.
+      const first = err.issues[0];
+      const code =
+        first?.code === 'custom'
+          ? (first.params as { code?: string } | undefined)?.code
+          : undefined;
       return reply.status(400).send({
-        error: 'validation_error',
-        message: err.issues[0]?.message ?? 'Invalid request.',
+        error: code ?? 'validation_error',
+        message: first?.message ?? 'Invalid request.',
         details: err.issues,
       });
     }
@@ -536,8 +544,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
           .status(503)
           .send({ error: 'disabled', message: 'Push alerts are not enabled on this server.' });
       }
-      const { subscription, watch, label } = alertSubscriptionSchema.parse(req.body);
-      const sub = buildSubscription(subscription.endpoint, subscription.keys, watch, now(), label);
+      const { subscription, watch, label, locale } = alertSubscriptionSchema.parse(req.body);
+      const sub = buildSubscription(
+        subscription.endpoint,
+        subscription.keys,
+        watch,
+        now(),
+        label,
+        locale, // undefined ⇒ buildSubscription defaults to 'en'
+      );
       await subscriptions.upsert(sub);
       return reply.status(201).send({ id: sub.id });
     },

@@ -24,6 +24,16 @@ export class ApiRequestError extends Error {
     super(message);
     this.name = 'ApiRequestError';
   }
+
+  /**
+   * The stable machine error code from the envelope (e.g. `validation_error`,
+   * `outside_davis`, `not_found`). Undefined for non-JSON error bodies. Callers
+   * should translate via this code (see src/i18n/apiErrors.ts) rather than
+   * displaying `.message`, which is only an English fallback for API consumers.
+   */
+  get code(): string | undefined {
+    return this.body?.error;
+  }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -39,8 +49,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // non-JSON error body — ignore
     }
+    // The Error `message` is a diagnostic string (used in logs/telemetry), NOT
+    // for display — it carries the machine code, not the server's English prose.
+    // UI surfaces translate via `err.code` (see src/i18n/apiErrors.ts).
     throw new ApiRequestError(
-      body?.message ?? `Request failed (${res.status})`,
+      body?.error ? `API error: ${body.error} (${res.status})` : `Request failed (${res.status})`,
       res.status,
       body,
     );
@@ -118,10 +131,12 @@ export async function subscribeAlert(
   subscription: PushSubscriptionPayload,
   watch: Watch,
   label?: string,
+  /** Preferred locale for push text; server validates + defaults to 'en'. */
+  locale?: string,
 ): Promise<{ id: string }> {
   return request<{ id: string }>('/alerts/subscribe', {
     method: 'POST',
-    body: JSON.stringify({ subscription, watch, label }),
+    body: JSON.stringify({ subscription, watch, label, locale }),
   });
 }
 

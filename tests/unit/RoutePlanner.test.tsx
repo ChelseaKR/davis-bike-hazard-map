@@ -120,12 +120,16 @@ describe('RoutePlanner', () => {
     await waitFor(() => expect(screen.getByText(/direct line/i)).toBeInTheDocument());
   });
 
-  it('surfaces an error if planning fails', async () => {
+  it('surfaces a generic, localized error if planning fails', async () => {
     fetchRoute.mockReset();
+    // A non-API error (e.g. network down) has no stable code, so the UI shows a
+    // generic localized message — never the raw Error prose (i18n §3).
     fetchRoute.mockRejectedValue(new Error('network down'));
     render(<RoutePlanner />);
     await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/network down/i);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/something went wrong/i);
+    expect(alert).not.toHaveTextContent(/network down/i);
   });
 
   it('updates an endpoint when a landmark is selected', async () => {
