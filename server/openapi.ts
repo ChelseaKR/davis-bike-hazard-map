@@ -120,7 +120,7 @@ export const openapiSpec = {
           { name: 'to', in: 'query', required: true, schema: { type: 'string' }, description: 'lat,lng (within Davis)' },
         ],
         responses: {
-          '200': { description: 'a RoutePlan (chosen route geometry + turn-by-turn steps + hazards on route)' },
+          '200': { description: 'a RoutePlan (chosen route geometry + turn-by-turn steps + hazards on route; nightWeighting=true when scored after civil twilight, weighting poor-visibility hazards higher)' },
           '400': { description: 'endpoints missing or outside Davis' },
         },
       },

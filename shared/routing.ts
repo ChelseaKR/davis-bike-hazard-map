@@ -12,7 +12,7 @@
  * Everything here is deterministic and dependency-free so it can be unit-tested
  * without a network, a map, or a clock.
  */
-import type { GeoPoint, Hazard, Severity } from './types.ts';
+import type { GeoPoint, Hazard, HazardCategory, Severity } from './types.ts';
 import { SEVERITY_RANK } from './types.ts';
 import { haversineMeters } from './geo.ts';
 
@@ -58,6 +58,16 @@ export interface ScoredRoute {
   cost: number;
 }
 
+/**
+ * Environmental conditions at planning time that change how much a hazard
+ * matters. Kept deliberately small and explicit so scoring stays pure and the
+ * plan can be honest about *why* a route was re-weighted.
+ */
+export interface RouteConditions {
+  /** True after civil twilight (sun below −6°): darkness amplifies some hazards. */
+  isDark: boolean;
+}
+
 export interface RouteScoringOptions {
   /** Corridor half-width (m): hazards within this of the line are considered. */
   corridorMeters: number;
@@ -66,6 +76,8 @@ export interface RouteScoringOptions {
   /** Recency half-life (days): a hazard's weight halves every this-many days. */
   recencyHalfLifeDays: number;
   now: number;
+  /** Time/environment conditions; absent means "assume neutral daytime". */
+  conditions?: RouteConditions;
 }
 
 export const DEFAULT_SCORING: Omit<RouteScoringOptions, 'now'> = {
@@ -73,6 +85,29 @@ export const DEFAULT_SCORING: Omit<RouteScoringOptions, 'now'> = {
   highPenaltyMeters: 800,
   recencyHalfLifeDays: 14,
 };
+
+/**
+ * Per-category multipliers applied when it's dark (after civil twilight).
+ *
+ * A `poor_visibility` hazard (an unlit path, a blind, badly-sighted crossing)
+ * is materially more dangerous at night than in daylight, so we weight it up.
+ * Categories absent from this table are unaffected by darkness (multiplier 1).
+ */
+export const NIGHT_MULTIPLIERS: Partial<Record<HazardCategory, number>> = {
+  poor_visibility: 2,
+};
+
+/**
+ * Condition multiplier for a hazard category. Returns 1 (no effect) unless it's
+ * dark AND the category has a night multiplier. Pure and total.
+ */
+export function conditionWeight(
+  category: HazardCategory,
+  conditions?: RouteConditions,
+): number {
+  if (conditions?.isDark) return NIGHT_MULTIPLIERS[category] ?? 1;
+  return 1;
+}
 
 /** Local equirectangular projection (metres) around a reference latitude. */
 function toLocal(p: GeoPoint, refLat: number): { x: number; y: number } {
@@ -156,6 +191,7 @@ export function hazardPenalty(
     severityWeight(hazard.severity) *
     recencyWeight(hazard.updatedAt, opts.now, opts.recencyHalfLifeDays) *
     confirmationWeight(hazard.confirmations) *
+    conditionWeight(hazard.category, opts.conditions) *
     proximity
   );
 }
@@ -201,6 +237,94 @@ export function rankRoutes(
     .sort((a, b) => a.cost - b.cost);
 }
 
+// Davis reference lat/lng for solar-position math. Kept local (rather than
+// importing DAVIS_CENTER from validation.ts) so this scoring module stays
+// dependency-free — validation.ts pulls in zod. Value matches DAVIS_CENTER.
+/** Davis, CA reference latitude for civil-twilight math. */
+export const DAVIS_LAT = 38.5449;
+/** Davis, CA reference longitude for civil-twilight math. */
+export const DAVIS_LNG = -121.7405;
+
+/** Civil-twilight threshold: the sun sits below this altitude when it's "dark". */
+const CIVIL_TWILIGHT_ALTITUDE_DEG = -6;
+
+const toRad = (deg: number): number => (deg * Math.PI) / 180;
+const toDeg = (rad: number): number => (rad * 180) / Math.PI;
+
+/**
+ * Sun altitude (degrees above the horizon) at a given instant and place.
+ *
+ * Standard NOAA solar-position approximation — no network, no ephemeris tables.
+ * Accurate to well within the ~0.5° we need to decide "is it dark enough that
+ * poor-visibility hazards matter more?" Pure and deterministic given its inputs.
+ */
+export function solarAltitudeDeg(epochMs: number, lat: number, lng: number): number {
+  // Julian day and Julian century (J2000.0 epoch).
+  const jd = epochMs / 86_400_000 + 2_440_587.5;
+  const t = (jd - 2_451_545.0) / 36_525;
+
+  // Geometric mean longitude and anomaly of the sun (degrees).
+  const l0 = ((280.46646 + t * (36000.76983 + t * 0.0003032)) % 360 + 360) % 360;
+  const m = 357.52911 + t * (35999.05029 - 0.0001537 * t);
+  const mRad = toRad(m);
+
+  // Orbital eccentricity and the sun's equation of the centre.
+  const e = 0.016708634 - t * (0.000042037 + 0.0000001267 * t);
+  const c =
+    Math.sin(mRad) * (1.914602 - t * (0.004817 + 0.000014 * t)) +
+    Math.sin(2 * mRad) * (0.019993 - 0.000101 * t) +
+    Math.sin(3 * mRad) * 0.000289;
+
+  // Apparent ecliptic longitude of the sun.
+  const trueLong = l0 + c;
+  const omega = 125.04 - 1934.136 * t;
+  const lambda = trueLong - 0.00569 - 0.00478 * Math.sin(toRad(omega));
+
+  // Obliquity of the ecliptic (with nutation correction).
+  const eps0 =
+    23 + (26 + (21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))) / 60) / 60;
+  const eps = eps0 + 0.00256 * Math.cos(toRad(omega));
+
+  // Solar declination.
+  const declRad = Math.asin(Math.sin(toRad(eps)) * Math.sin(toRad(lambda)));
+
+  // Equation of time (minutes).
+  const y = Math.tan(toRad(eps) / 2) ** 2;
+  const l0Rad = toRad(l0);
+  const eqTime =
+    4 *
+    toDeg(
+      y * Math.sin(2 * l0Rad) -
+        2 * e * Math.sin(mRad) +
+        4 * e * y * Math.sin(mRad) * Math.cos(2 * l0Rad) -
+        0.5 * y * y * Math.sin(4 * l0Rad) -
+        1.25 * e * e * Math.sin(2 * mRad),
+    );
+
+  // True solar time (minutes) at this longitude, then the hour angle (degrees).
+  const minutesUtc = ((epochMs % 86_400_000) + 86_400_000) % 86_400_000 / 60_000;
+  let trueSolarTime = minutesUtc + eqTime + 4 * lng;
+  trueSolarTime = ((trueSolarTime % 1440) + 1440) % 1440;
+  let hourAngle = trueSolarTime / 4 - 180;
+  if (hourAngle < -180) hourAngle += 360;
+
+  // Solar zenith → altitude.
+  const latRad = toRad(lat);
+  const cosZenith =
+    Math.sin(latRad) * Math.sin(declRad) +
+    Math.cos(latRad) * Math.cos(declRad) * Math.cos(toRad(hourAngle));
+  const zenith = Math.acos(Math.max(-1, Math.min(1, cosZenith)));
+  return 90 - toDeg(zenith);
+}
+
+/**
+ * True when it's dark (past civil twilight) at the given instant and place —
+ * the signal that flips on night-aware hazard weighting.
+ */
+export function isDarkAt(epochMs: number, lat: number, lng: number): boolean {
+  return solarAltitudeDeg(epochMs, lat, lng) < CIVIL_TWILIGHT_ALTITUDE_DEG;
+}
+
 /** The hazard-aware route plan the API returns and the client renders. */
 export interface RoutePlan {
   /** 'osrm' when a real road graph was used; 'fallback' for a straight-line stub. */
@@ -213,4 +337,10 @@ export interface RoutePlan {
   nearby: NearbyHazard[];
   /** How many candidate routes were considered before picking this one. */
   alternativesConsidered: number;
+  /**
+   * True when the plan was scored for darkness (past civil twilight in Davis),
+   * which weights poor-visibility hazards higher. Surfaced so the UI can say so
+   * honestly — the ranking changed *because* it's night.
+   */
+  nightWeighting?: boolean;
 }

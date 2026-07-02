@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { describeStep, fallbackRoute, fetchRoutes } from '../../server/lib/routing.ts';
+import { isDarkAt, rankRoutes, DAVIS_LAT, DAVIS_LNG, type Route } from '../../shared/routing.ts';
+import type { Hazard } from '../../shared/types.ts';
 
 const FROM = { lat: 38.5449, lng: -121.7405 };
 const TO = { lat: 38.5462, lng: -121.7361 };
@@ -104,5 +106,72 @@ describe('fetchRoutes', () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ code: 'NoRoute', routes: [] }) } as Response);
     const res = await fetchRoutes(FROM, TO, { routingUrl: 'https://osrm.test' }, fetchMock as unknown as typeof fetch);
     expect(res.source).toBe('fallback');
+  });
+});
+
+// Mirrors the /api/route planner: derive `conditions` from the request clock at
+// Davis, then rank. Same candidate routes + hazard, only the time changes.
+describe('planner night-condition weighting (as wired in the route handler)', () => {
+  const NOW = 1_700_000_000_000; // fixed clock for the hazard's recency
+  const DAY = 24 * 60 * 60 * 1000;
+
+  // Davis is PST (UTC−8) in January.
+  const NOON = Date.UTC(2026, 0, 15, 20, 0, 0); // 12:00 PST → daylight
+  const MIDNIGHT = Date.UTC(2026, 0, 16, 8, 0, 0); // 00:00 PST → dark
+
+  const shorter: Route = {
+    geometry: [
+      { lat: 38.545, lng: -121.75 },
+      { lat: 38.545, lng: -121.73 },
+    ],
+    distanceMeters: 1740,
+    durationSeconds: 400,
+    steps: [],
+  };
+  const longer: Route = {
+    geometry: [
+      { lat: 38.547, lng: -121.75 },
+      { lat: 38.547, lng: -121.73 },
+    ],
+    distanceMeters: 1740 + 600,
+    durationSeconds: 540,
+    steps: [],
+  };
+  const poorVisibility: Hazard = {
+    id: 'pv',
+    clientId: 'c',
+    category: 'poor_visibility',
+    severity: 'moderate',
+    description: null,
+    location: { lat: 38.545, lng: -121.74 }, // on the shorter route
+    photoUrl: null,
+    thumbnailUrl: null,
+    status: 'approved',
+    confirmations: 0,
+    createdAt: NOW,
+    updatedAt: NOW,
+    expiresAt: NOW + 30 * DAY,
+  };
+
+  function plan(at: number) {
+    const isDark = isDarkAt(at, DAVIS_LAT, DAVIS_LNG);
+    const ranked = rankRoutes([shorter, longer], [poorVisibility], {
+      now: NOW,
+      corridorMeters: 45,
+      conditions: { isDark },
+    });
+    return { isDark, chosen: ranked[0].route };
+  }
+
+  it('by day keeps the shorter route (isDark=false)', () => {
+    const { isDark, chosen } = plan(NOON);
+    expect(isDark).toBe(false);
+    expect(chosen).toBe(shorter);
+  });
+
+  it('at night diverts to the safer route and flags night weighting (isDark=true)', () => {
+    const { isDark, chosen } = plan(MIDNIGHT);
+    expect(isDark).toBe(true);
+    expect(chosen).toBe(longer);
   });
 });

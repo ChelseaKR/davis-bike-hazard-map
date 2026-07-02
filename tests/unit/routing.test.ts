@@ -8,6 +8,12 @@ import {
   hazardPenalty,
   scoreRoute,
   rankRoutes,
+  conditionWeight,
+  NIGHT_MULTIPLIERS,
+  isDarkAt,
+  solarAltitudeDeg,
+  DAVIS_LAT,
+  DAVIS_LNG,
   DEFAULT_SCORING,
   type Route,
   type RouteScoringOptions,
@@ -185,5 +191,88 @@ describe('rankRoutes', () => {
     const longer: Route = { ...route, distanceMeters: route.distanceMeters + 500 };
     const ranked = rankRoutes([longer, route], [], opts());
     expect(ranked[0].route).toBe(route);
+  });
+});
+
+// A fixed winter date so the twilight math is fully deterministic. Davis is on
+// PST (UTC−8) in January, so local clock time = UTC − 8h.
+const NOON_LOCAL = Date.UTC(2026, 0, 15, 20, 0, 0); // 12:00 PST
+const NIGHT_LOCAL = Date.UTC(2026, 0, 16, 7, 0, 0); // 23:00 PST
+
+describe('isDarkAt (civil twilight)', () => {
+  it('is false at Davis noon and true at 23:00 local', () => {
+    // Sanity on the underlying altitude: sun up at noon, well down at 23:00.
+    expect(solarAltitudeDeg(NOON_LOCAL, DAVIS_LAT, DAVIS_LNG)).toBeGreaterThan(0);
+    expect(solarAltitudeDeg(NIGHT_LOCAL, DAVIS_LAT, DAVIS_LNG)).toBeLessThan(-6);
+    expect(isDarkAt(NOON_LOCAL, DAVIS_LAT, DAVIS_LNG)).toBe(false);
+    expect(isDarkAt(NIGHT_LOCAL, DAVIS_LAT, DAVIS_LNG)).toBe(true);
+  });
+});
+
+describe('conditionWeight / night hazard weighting', () => {
+  it('doubles a poor_visibility hazard only when it is dark; other categories are unchanged', () => {
+    expect(NIGHT_MULTIPLIERS.poor_visibility).toBe(2);
+    // Poor visibility: 1 by day, 2 at night.
+    expect(conditionWeight('poor_visibility')).toBe(1);
+    expect(conditionWeight('poor_visibility', { isDark: false })).toBe(1);
+    expect(conditionWeight('poor_visibility', { isDark: true })).toBe(2);
+    // Potholes don't care about darkness.
+    expect(conditionWeight('pothole', { isDark: true })).toBe(1);
+  });
+
+  it('gives a poor_visibility hazard a higher penalty at night, leaving other categories flat', () => {
+    const pv = hazard({ category: 'poor_visibility', severity: 'moderate' });
+    const dayPv = hazardPenalty(pv, 0, opts());
+    const nightPv = hazardPenalty(pv, 0, opts({ conditions: { isDark: true } }));
+    expect(nightPv).toBeCloseTo(dayPv * 2, 6);
+    expect(nightPv).toBeGreaterThan(dayPv);
+
+    // A non-visibility hazard is identical day vs night.
+    const pothole = hazard({ category: 'pothole', severity: 'moderate' });
+    const dayPot = hazardPenalty(pothole, 0, opts());
+    const nightPot = hazardPenalty(pothole, 0, opts({ conditions: { isDark: true } }));
+    expect(nightPot).toBe(dayPot);
+  });
+});
+
+describe('rankRoutes diverges by time of day', () => {
+  it('picks the shorter route by day but the safer one at night when a poor_visibility hazard sits on the short route', () => {
+    // Shorter route (on lat 38.545) carries a poor_visibility hazard.
+    const shorter: Route = {
+      geometry: [
+        { lat: 38.545, lng: -121.75 },
+        { lat: 38.545, lng: -121.73 },
+      ],
+      distanceMeters: 1740,
+      durationSeconds: 400,
+      steps: [],
+    };
+    // A parallel route ~220 m north — longer, but clear of the hazard.
+    const longer: Route = {
+      geometry: [
+        { lat: 38.547, lng: -121.75 },
+        { lat: 38.547, lng: -121.73 },
+      ],
+      distanceMeters: 1740 + 600,
+      durationSeconds: 540,
+      steps: [],
+    };
+    const hazards = [
+      hazard({
+        category: 'poor_visibility',
+        severity: 'moderate',
+        location: { lat: 38.545, lng: -121.74 },
+      }),
+    ];
+
+    // By day: the poor_visibility penalty (~400) is smaller than the 600 m
+    // detour, so the shorter route still wins.
+    const byDay = rankRoutes([shorter, longer], hazards, opts());
+    expect(byDay[0].route).toBe(shorter);
+
+    // At night: the penalty doubles (~800) and now exceeds the detour, so the
+    // planner diverges and takes the longer, safer route.
+    const byNight = rankRoutes([shorter, longer], hazards, opts({ conditions: { isDark: true } }));
+    expect(byNight[0].route).toBe(longer);
   });
 });

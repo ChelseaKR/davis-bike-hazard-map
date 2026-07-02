@@ -28,7 +28,7 @@ import {
   alertSubscriptionSchema,
 } from '../shared/validation.ts';
 import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
-import { rankRoutes, type RoutePlan } from '../shared/routing.ts';
+import { rankRoutes, isDarkAt, DAVIS_LAT, DAVIS_LNG, type RoutePlan } from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
 import type { Repository } from './lib/repository.ts';
 import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
@@ -446,11 +446,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       to: parsePoint(q.to),
     });
 
-    const hazards = await listPublic(repo, now());
+    const at = now();
+    const hazards = await listPublic(repo, at);
     const { routes, source } = await fetchRoutes(from, to, { routingUrl: config.routingUrl }, fetchImpl);
+    // After civil twilight, weight poor-visibility hazards higher — an unlit
+    // path matters more in the dark. Derived from the request time + Davis
+    // location so it's honest and needs no external API.
+    const isDark = isDarkAt(at, DAVIS_LAT, DAVIS_LNG);
     // Corridor slightly wider than the privacy fuzz grid (~70 m cells) so a
     // hazard published a cell away from the true spot still influences scoring.
-    const ranked = rankRoutes(routes, hazards, { now: now(), corridorMeters: 45 });
+    const ranked = rankRoutes(routes, hazards, {
+      now: at,
+      corridorMeters: 45,
+      conditions: { isDark },
+    });
     const best = ranked[0];
 
     const plan: RoutePlan = {
@@ -460,6 +469,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       route: best.route,
       nearby: best.nearby,
       alternativesConsidered: routes.length,
+      ...(isDark ? { nightWeighting: true } : {}),
     };
     return { plan };
   });
