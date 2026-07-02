@@ -38,9 +38,10 @@ export const openapiSpec = {
       },
       Hazard: {
         type: 'object',
+        // Note: `clientId` is intentionally NOT exposed here — it is the
+        // reporter's deletion capability and never appears in the public feed.
         properties: {
           id: { type: 'string' },
-          clientId: { type: 'string', format: 'uuid' },
           category: { type: 'string' },
           severity: { type: 'string', enum: ['low', 'moderate', 'high'] },
           description: { type: 'string', nullable: true },

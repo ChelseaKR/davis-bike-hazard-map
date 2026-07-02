@@ -5,7 +5,6 @@ import type { Hazard } from '../../shared/types.ts';
 function at(lat: number, lng: number, id = 'h'): Hazard {
   return {
     id,
-    clientId: id,
     category: 'pothole',
     severity: 'low',
     description: null,

@@ -87,7 +87,6 @@ describe('RoutePlanner', () => {
           {
             hazard: {
               id: 'h1',
-              clientId: 'c1',
               category: 'pothole',
               severity: 'high',
               description: null,

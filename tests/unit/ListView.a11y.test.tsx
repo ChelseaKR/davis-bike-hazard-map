@@ -8,7 +8,6 @@ const NOW = 1_700_000_000_000;
 function hazard(id: string, over: Partial<Hazard> = {}): Hazard {
   return {
     id,
-    clientId: `c-${id}`,
     category: 'pothole',
     severity: 'high',
     description: 'A hazard',

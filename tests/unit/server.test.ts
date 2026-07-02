@@ -612,6 +612,39 @@ describe('data lifecycle & privacy', () => {
     expect(gj.features[0].geometry.type).toBe('Point');
   });
 
+  it('never leaks the reporter clientId in any unauthenticated response (FIX-01)', async () => {
+    // clientId is the reporter's deletion capability (DELETE /api/reports/:clientId).
+    // Publishing it would let anyone scrape the feed and delete every report, so
+    // it must be absent from the feed, the export, and the create/confirm bodies.
+    const create = await post('/api/reports', baseReport);
+    const id = create.json().hazard.id;
+    expect(create.json().hazard).not.toHaveProperty('clientId');
+    expect(create.payload).not.toContain(baseReport.clientId);
+
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+
+    const feed = await app.inject({ method: 'GET', url: '/api/hazards' });
+    expect(feed.payload).not.toContain(baseReport.clientId);
+    for (const h of feed.json().hazards) {
+      expect(h).not.toHaveProperty('clientId');
+    }
+
+    const confirm = await post(`/api/hazards/${id}/confirm`, {});
+    expect(confirm.json().hazard).not.toHaveProperty('clientId');
+    expect(confirm.payload).not.toContain(baseReport.clientId);
+
+    const exp = await app.inject({ method: 'GET', url: '/api/hazards/export' });
+    expect(exp.payload).not.toContain(baseReport.clientId);
+    for (const f of exp.json().features) {
+      expect(f.properties).not.toHaveProperty('clientId');
+    }
+
+    // The reporter still holds their clientId locally, so their own deletion
+    // capability is intact.
+    const del = await app.inject({ method: 'DELETE', url: `/api/reports/${baseReport.clientId}` });
+    expect(del.statusCode).toBe(204);
+  });
+
   it('coarsens the precise location once a hazard is resolved', async () => {
     const r = await post('/api/reports', baseReport);
     const id = r.json().hazard.id;
