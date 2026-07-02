@@ -14,6 +14,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { transition } from '../../shared/statusMachine.ts';
 import type { StoredHazard } from './types.ts';
 
 /** A geographic bounding box for spatial culling of the public feed. */
@@ -112,16 +113,14 @@ export class MemoryRepository implements Repository {
   async expire(now: number): Promise<number> {
     let expired = 0;
     for (const h of this.store.values()) {
-      if (h.status === 'approved' && h.expiresAt <= now) {
-        // Coarsen the precise location away once the hazard is no longer active.
-        this.store.set(h.id, {
-          ...h,
-          status: 'expired',
-          updatedAt: now,
-          preciseLocation: h.publicLocation,
-        });
-        expired++;
-      }
+      if (h.expiresAt > now) continue;
+      // Route through the state machine: only `approved` hazards have an
+      // `expire` edge, so terminal (or pending) hazards are never touched.
+      const patch = transition(h, 'expired', 'expire', now);
+      if (!patch) continue;
+      // Coarsen the precise location away once the hazard is no longer active.
+      this.store.set(h.id, { ...h, ...patch, preciseLocation: h.publicLocation });
+      expired++;
     }
     if (expired) this.persist();
     return expired;
