@@ -38,6 +38,7 @@ import {
   type ModeratorStore,
 } from './lib/moderators.ts';
 import { verifyPassword } from './lib/password.ts';
+import { LoginThrottle } from './lib/loginThrottle.ts';
 import { issueToken, verifyToken } from './lib/token.ts';
 import { createMetrics } from './lib/metrics.ts';
 import { buildLoggerOptions } from './lib/logger.ts';
@@ -208,11 +209,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     (req as AuthedRequest).moderatorUsername = payload.sub;
   };
 
-  // Per-account failed-login throttle (per-process; complements the per-IP rate
-  // limit). After MAX_LOGIN_FAILS misses an account is locked for LOCKOUT_MS.
-  const loginFailures = new Map<string, { count: number; until: number }>();
-  const MAX_LOGIN_FAILS = 5;
-  const LOCKOUT_MS = 15 * 60 * 1000;
+  // Per-account failed-login throttle (complements the per-IP rate limit).
+  // Bounded + self-pruning — see server/lib/loginThrottle.ts. NOTE: this
+  // counter, like the @fastify/rate-limit counters, lives in process memory,
+  // so throttling is PER-PROCESS: running a single app instance is an
+  // operational constraint (documented in the README runbook), and scaling
+  // out requires moving these counters to a shared store first.
+  const loginThrottle = new LoginThrottle();
 
   // --- OpenAPI spec ---
   app.get('/api/openapi.json', async () => openapiSpec);
@@ -289,8 +292,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const { username, password } = loginSchema.parse(req.body);
 
       // Per-account lockout after repeated misses.
-      const fail = loginFailures.get(username);
-      if (fail && fail.until > now()) {
+      if (loginThrottle.isLocked(username, now())) {
         return reply
           .status(429)
           .send({ error: 'too_many_attempts', message: 'Too many attempts. Try again later.' });
@@ -299,19 +301,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const moderator = await moderators.findByUsername(username);
       const ok = await verifyPassword(password, moderator?.passwordHash ?? DUMMY_PASSWORD_HASH);
       if (!moderator || !ok) {
-        const f = loginFailures.get(username) ?? { count: 0, until: 0 };
-        f.count += 1;
-        if (f.count >= MAX_LOGIN_FAILS) {
-          f.until = now() + LOCKOUT_MS;
-          f.count = 0;
-        }
-        loginFailures.set(username, f);
+        loginThrottle.recordFailure(username, now());
         return reply
           .status(401)
           .send({ error: 'invalid_credentials', message: 'Wrong username or password.' });
       }
 
-      loginFailures.delete(username); // success clears the counter
+      loginThrottle.clear(username); // success clears the counter
       const token = issueToken(
         username,
         config.sessionSecret,
