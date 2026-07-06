@@ -6,11 +6,10 @@
  * EXIF is stripped and blur is offered before anything is stored.
  */
 import { Suspense, lazy, useState } from 'react';
+import { FormattedMessage, useIntl } from 'react-intl';
 import {
-  CATEGORY_LABELS,
   HAZARD_CATEGORIES,
   SEVERITIES,
-  SEVERITY_LABELS,
   type GeoPoint,
   type HazardCategory,
   type ReportSubmission,
@@ -26,6 +25,7 @@ import { syncOnce, isOnline } from '../lib/sync.ts';
 import { getCurrentLocation, GeolocationError } from '../lib/geolocation.ts';
 import { newId } from '../lib/id.ts';
 import { formatLatLng } from '../lib/format.ts';
+import { useLabels } from '../i18n/labels.ts';
 import { PhotoEditor } from './PhotoEditor.tsx';
 
 // Leaflet is heavy; only pull it in when the user opens the map picker.
@@ -42,6 +42,8 @@ type Status =
   | { kind: 'error'; message: string };
 
 export function ReportForm({ onSubmitted }: ReportFormProps) {
+  const intl = useIntl();
+  const labels = useLabels();
   const [category, setCategory] = useState<HazardCategory>('pothole');
   const [severity, setSeverity] = useState<Severity>('moderate');
   const [description, setDescription] = useState('');
@@ -62,14 +64,25 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
       const point = await getCurrentLocation();
       setLocation(point);
       if (!isWithinDavis(point)) {
-        setGeoError('That location is outside Davis. Adjust it on the map.');
+        setGeoError(
+          intl.formatMessage({
+            id: 'report.geo.outside',
+            defaultMessage: 'That location is outside Davis. Adjust it on the map.',
+          }),
+        );
         setShowMap(true);
       }
     } catch (err) {
       const msg =
         err instanceof GeolocationError && err.code === 'denied'
-          ? 'Location permission denied. Set the spot on the map instead.'
-          : 'Could not get your location. Set the spot on the map instead.';
+          ? intl.formatMessage({
+              id: 'report.geo.denied',
+              defaultMessage: 'Location permission denied. Set the spot on the map instead.',
+            })
+          : intl.formatMessage({
+              id: 'report.geo.unavailable',
+              defaultMessage: 'Could not get your location. Set the spot on the map instead.',
+            });
       setGeoError(msg);
       setShowMap(true);
     } finally {
@@ -91,7 +104,13 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!location) {
-      setStatus({ kind: 'error', message: 'Please set the hazard location.' });
+      setStatus({
+        kind: 'error',
+        message: intl.formatMessage({
+          id: 'report.error.noLocation',
+          defaultMessage: 'Please set the hazard location.',
+        }),
+      });
       return;
     }
 
@@ -109,7 +128,9 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
     if (!parsed.success) {
       setStatus({
         kind: 'error',
-        message: parsed.error.issues[0]?.message ?? 'Please check the form.',
+        message:
+          parsed.error.issues[0]?.message ??
+          intl.formatMessage({ id: 'report.error.checkForm', defaultMessage: 'Please check the form.' }),
       });
       return;
     }
@@ -125,7 +146,10 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
     } catch {
       setStatus({
         kind: 'error',
-        message: 'Could not save the report on this device.',
+        message: intl.formatMessage({
+          id: 'report.error.saveFailed',
+          defaultMessage: 'Could not save the report on this device.',
+        }),
       });
     }
   };
@@ -133,28 +157,50 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
   if (status.kind === 'saved') {
     return (
       <div className="report-success" role="status">
-        <h2>Report saved{status.online ? ' and syncing' : ' offline'} ✓</h2>
+        <h2>
+          <FormattedMessage
+            id="report.saved.heading"
+            defaultMessage="{online, select, true {Report saved and syncing ✓} other {Report saved offline ✓}}"
+            values={{ online: status.online }}
+          />
+        </h2>
         <p>
-          {status.online
-            ? 'Thanks! It will appear on the map once a moderator approves it.'
-            : "You're offline — it's saved on your phone and will sync automatically when you reconnect."}
+          {status.online ? (
+            <FormattedMessage
+              id="report.saved.online"
+              defaultMessage="Thanks! It will appear on the map once a moderator approves it."
+            />
+          ) : (
+            <FormattedMessage
+              id="report.saved.offline"
+              defaultMessage="You're offline — it's saved on your phone and will sync automatically when you reconnect."
+            />
+          )}
         </p>
         <button
           type="button"
           className="btn btn-primary"
           onClick={() => setStatus({ kind: 'idle' })}
         >
-          Report another hazard
+          <FormattedMessage id="report.saved.another" defaultMessage="Report another hazard" />
         </button>
       </div>
     );
   }
 
   return (
-    <form className="report-form" onSubmit={handleSubmit} aria-label="Report a hazard">
+    <form
+      className="report-form"
+      onSubmit={handleSubmit}
+      aria-label={intl.formatMessage({ id: 'report.aria', defaultMessage: 'Report a hazard' })}
+    >
       <fieldset>
-        <legend>What's the hazard?</legend>
-        <label htmlFor="category">Type</label>
+        <legend>
+          <FormattedMessage id="report.legend.what" defaultMessage="What's the hazard?" />
+        </legend>
+        <label htmlFor="category">
+          <FormattedMessage id="report.label.type" defaultMessage="Type" />
+        </label>
         <select
           id="category"
           value={category}
@@ -162,15 +208,21 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
         >
           {HAZARD_CATEGORIES.map((c) => (
             <option key={c} value={c}>
-              {CATEGORY_LABELS[c]}
+              {labels.category(c)}
             </option>
           ))}
         </select>
       </fieldset>
 
       <fieldset>
-        <legend>How dangerous is it?</legend>
-        <div className="severity-options" role="radiogroup" aria-label="Severity">
+        <legend>
+          <FormattedMessage id="report.legend.severity" defaultMessage="How dangerous is it?" />
+        </legend>
+        <div
+          className="severity-options"
+          role="radiogroup"
+          aria-label={intl.formatMessage({ id: 'report.aria.severity', defaultMessage: 'Severity' })}
+        >
           {SEVERITIES.map((s) => (
             <label key={s} className={`severity-chip severity-${s}`}>
               <input
@@ -180,14 +232,16 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
                 checked={severity === s}
                 onChange={() => setSeverity(s)}
               />
-              {SEVERITY_LABELS[s]}
+              {labels.severity(s)}
             </label>
           ))}
         </div>
       </fieldset>
 
       <fieldset>
-        <legend>Where is it?</legend>
+        <legend>
+          <FormattedMessage id="report.legend.where" defaultMessage="Where is it?" />
+        </legend>
         <div className="location-row">
           <button
             type="button"
@@ -195,7 +249,11 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
             onClick={useMyLocation}
             disabled={locating}
           >
-            {locating ? 'Locating…' : 'Use my location'}
+            {locating ? (
+              <FormattedMessage id="common.locating" defaultMessage="Locating…" />
+            ) : (
+              <FormattedMessage id="common.useMyLocation" defaultMessage="Use my location" />
+            )}
           </button>
           <button
             type="button"
@@ -203,15 +261,28 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
             onClick={() => setShowMap((v) => !v)}
             aria-expanded={showMap}
           >
-            {showMap ? 'Hide map' : 'Set on map'}
+            {showMap ? (
+              <FormattedMessage id="report.map.hide" defaultMessage="Hide map" />
+            ) : (
+              <FormattedMessage id="report.map.set" defaultMessage="Set on map" />
+            )}
           </button>
         </div>
         <p className="location-readout" aria-live="polite">
-          {location
-            ? `Location: ${formatLatLng(location.lat, location.lng)}`
-            : 'No location set yet.'}
+          {location ? (
+            <FormattedMessage
+              id="report.location.set"
+              defaultMessage="Location: {coords}"
+              values={{ coords: formatLatLng(location.lat, location.lng) }}
+            />
+          ) : (
+            <FormattedMessage id="report.location.none" defaultMessage="No location set yet." />
+          )}
           {location && !locationValid && (
-            <span className="error-text"> — outside Davis.</span>
+            <span className="error-text">
+              {' '}
+              <FormattedMessage id="report.location.outside" defaultMessage="— outside Davis." />
+            </span>
           )}
         </p>
         {geoError && (
@@ -220,17 +291,31 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
           </p>
         )}
         {showMap && (
-          <Suspense fallback={<p className="hint">Loading map…</p>}>
+          <Suspense
+            fallback={
+              <p className="hint">
+                <FormattedMessage id="common.loadingMap" defaultMessage="Loading map…" />
+              </p>
+            }
+          >
             <LocationPicker value={location} onChange={setLocation} />
           </Suspense>
         )}
       </fieldset>
 
       <fieldset>
-        <legend>Photo (optional)</legend>
+        <legend>
+          <FormattedMessage id="report.legend.photo" defaultMessage="Photo (optional)" />
+        </legend>
         {photo ? (
           <div className="photo-attached">
-            <img src={photo} alt="Attached hazard, location data removed" />
+            <img
+              src={photo}
+              alt={intl.formatMessage({
+                id: 'report.photo.attachedAlt',
+                defaultMessage: 'Attached hazard, location data removed',
+              })}
+            />
             <button
               type="button"
               className="btn"
@@ -239,7 +324,7 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
                 setShowEditor(false);
               }}
             >
-              Remove photo
+              <FormattedMessage id="report.photo.remove" defaultMessage="Remove photo" />
             </button>
           </div>
         ) : showEditor ? (
@@ -252,26 +337,35 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
           />
         ) : (
           <button type="button" className="btn" onClick={() => setShowEditor(true)}>
-            Add a photo
+            <FormattedMessage id="report.photo.add" defaultMessage="Add a photo" />
           </button>
         )}
       </fieldset>
 
       <fieldset>
-        <legend>Anything else? (optional)</legend>
+        <legend>
+          <FormattedMessage id="report.legend.notes" defaultMessage="Anything else? (optional)" />
+        </legend>
         <label htmlFor="description" className="visually-hidden">
-          Description
+          <FormattedMessage id="report.label.description" defaultMessage="Description" />
         </label>
         <textarea
           id="description"
           value={description}
           maxLength={MAX_DESCRIPTION_LEN}
           rows={3}
-          placeholder="e.g. Deep pothole in the bike lane just past the light."
+          placeholder={intl.formatMessage({
+            id: 'report.placeholder.description',
+            defaultMessage: 'e.g. Deep pothole in the bike lane just past the light.',
+          })}
           onChange={(e) => setDescription(e.target.value)}
         />
         <p className="hint">
-          {MAX_DESCRIPTION_LEN - description.length} characters left
+          <FormattedMessage
+            id="report.charsLeft"
+            defaultMessage="{count, number} characters left"
+            values={{ count: MAX_DESCRIPTION_LEN - description.length }}
+          />
         </p>
       </fieldset>
 
@@ -286,11 +380,17 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
         className="btn btn-primary btn-block"
         disabled={status.kind === 'saving' || !locationValid}
       >
-        {status.kind === 'saving' ? 'Saving…' : 'Submit report'}
+        {status.kind === 'saving' ? (
+          <FormattedMessage id="common.saving" defaultMessage="Saving…" />
+        ) : (
+          <FormattedMessage id="report.submit" defaultMessage="Submit report" />
+        )}
       </button>
       <p className="hint">
-        Your photo's location data is removed on this device before saving, and
-        nothing appears publicly until a moderator approves it.
+        <FormattedMessage
+          id="report.privacyNote"
+          defaultMessage="Your photo's location data is removed on this device before saving, and nothing appears publicly until a moderator approves it."
+        />
       </p>
     </form>
   );

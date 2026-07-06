@@ -8,7 +8,8 @@
  * localStorage so a refresh doesn't force a re-login; "Sign out" clears it.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { CATEGORY_LABELS, SEVERITY_LABELS, type Hazard } from '../../shared/types.ts';
+import { FormattedMessage, useIntl } from 'react-intl';
+import type { Hazard } from '../../shared/types.ts';
 import {
   decideModeration,
   fetchModerationQueue,
@@ -17,6 +18,7 @@ import {
   type Session,
 } from '../lib/api.ts';
 import { timeAgo } from '../lib/format.ts';
+import { useLabels } from '../i18n/labels.ts';
 import { HazardPhoto } from './HazardPhoto.tsx';
 
 const SESSION_KEY = 'dbhm.session';
@@ -34,6 +36,8 @@ function loadStoredSession(): Session | null {
 }
 
 export function ModerationPanel() {
+  const intl = useIntl();
+  const labels = useLabels();
   const [session, setSession] = useState<Session | null>(loadStoredSession);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -57,20 +61,35 @@ export function ModerationPanel() {
         setQueue(await fetchModerationQueue(tok));
       } catch (err) {
         if (err instanceof ApiRequestError && err.status === 401) {
-          signOut('Your session expired. Please sign in again.');
+          signOut(
+            intl.formatMessage({
+              id: 'moderation.error.sessionExpired',
+              defaultMessage: 'Your session expired. Please sign in again.',
+            }),
+          );
         } else {
-          setError('Could not load the queue. Try again.');
+          setError(
+            intl.formatMessage({
+              id: 'moderation.error.loadQueue',
+              defaultMessage: 'Could not load the queue. Try again.',
+            }),
+          );
         }
       } finally {
         setBusy(false);
       }
     },
-    [signOut],
+    [signOut, intl],
   );
 
   useEffect(() => {
     if (session) void load(session.token);
-    // Load once on mount with a stored session.
+    // Load once on mount with a stored session. Deliberately excludes `load`
+    // from deps: re-running on every render-scoped `load` identity change
+    // would refetch the queue in a loop. No tracking issue filed yet — CQ-35
+    // wants every suppression linked to one; file one and replace this note
+    // if this effect needs revisiting (flagged in
+    // audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md, quick win 9).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -84,7 +103,12 @@ export function ModerationPanel() {
       setPassword('');
       await load(s.token);
     } catch {
-      setError('Wrong username or password.');
+      setError(
+        intl.formatMessage({
+          id: 'moderation.error.badCredentials',
+          defaultMessage: 'Wrong username or password.',
+        }),
+      );
     } finally {
       setBusy(false);
     }
@@ -101,9 +125,19 @@ export function ModerationPanel() {
       setQueue((q) => q.filter((h) => h.id !== id));
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {
-        signOut('Your session expired. Please sign in again.');
+        signOut(
+          intl.formatMessage({
+            id: 'moderation.error.sessionExpired',
+            defaultMessage: 'Your session expired. Please sign in again.',
+          }),
+        );
       } else {
-        setError('Could not record that decision. Try again.');
+        setError(
+          intl.formatMessage({
+            id: 'moderation.error.decision',
+            defaultMessage: 'Could not record that decision. Try again.',
+          }),
+        );
       }
     } finally {
       setBusy(false);
@@ -112,11 +146,18 @@ export function ModerationPanel() {
 
   if (!session) {
     return (
-      <section className="moderation" aria-label="Moderation sign-in">
-        <h2>Moderator sign-in</h2>
+      <section
+        className="moderation"
+        aria-label={intl.formatMessage({ id: 'moderation.aria.signIn', defaultMessage: 'Moderation sign-in' })}
+      >
+        <h2>
+          <FormattedMessage id="moderation.signIn.heading" defaultMessage="Moderator sign-in" />
+        </h2>
         <p className="hint">
-          Reports stay hidden from the public map until a moderator approves
-          them. Sign in with your moderator account to review the queue.
+          <FormattedMessage
+            id="moderation.signIn.hint"
+            defaultMessage="Reports stay hidden from the public map until a moderator approves them. Sign in with your moderator account to review the queue."
+          />
         </p>
         <form
           onSubmit={(e) => {
@@ -124,7 +165,9 @@ export function ModerationPanel() {
             void signIn();
           }}
         >
-          <label htmlFor="modUser">Username</label>
+          <label htmlFor="modUser">
+            <FormattedMessage id="moderation.username" defaultMessage="Username" />
+          </label>
           <input
             id="modUser"
             type="text"
@@ -132,7 +175,9 @@ export function ModerationPanel() {
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
           />
-          <label htmlFor="modPass">Password</label>
+          <label htmlFor="modPass">
+            <FormattedMessage id="moderation.password" defaultMessage="Password" />
+          </label>
           <input
             id="modPass"
             type="password"
@@ -145,7 +190,11 @@ export function ModerationPanel() {
             className="btn btn-primary"
             disabled={busy || !username || !password}
           >
-            {busy ? 'Signing in…' : 'Sign in'}
+            {busy ? (
+              <FormattedMessage id="moderation.signingIn" defaultMessage="Signing in…" />
+            ) : (
+              <FormattedMessage id="moderation.signIn" defaultMessage="Sign in" />
+            )}
           </button>
         </form>
         {error && (
@@ -158,15 +207,30 @@ export function ModerationPanel() {
   }
 
   return (
-    <section className="moderation" aria-label="Moderation queue">
+    <section
+      className="moderation"
+      aria-label={intl.formatMessage({ id: 'moderation.aria.queue', defaultMessage: 'Moderation queue' })}
+    >
       <div className="moderation-head">
-        <h2>Pending review ({queue.length})</h2>
-        <span className="hint">Signed in as {session.username}</span>
+        <h2>
+          <FormattedMessage
+            id="moderation.pending"
+            defaultMessage="Pending review ({count})"
+            values={{ count: queue.length }}
+          />
+        </h2>
+        <span className="hint">
+          <FormattedMessage
+            id="moderation.signedInAs"
+            defaultMessage="Signed in as {username}"
+            values={{ username: session.username }}
+          />
+        </span>
         <button type="button" className="btn btn-small" onClick={() => load(session.token)}>
-          Refresh
+          <FormattedMessage id="common.refresh" defaultMessage="Refresh" />
         </button>
         <button type="button" className="btn btn-small" onClick={() => signOut()}>
-          Sign out
+          <FormattedMessage id="moderation.signOut" defaultMessage="Sign out" />
         </button>
       </div>
       {error && (
@@ -175,24 +239,38 @@ export function ModerationPanel() {
         </p>
       )}
       {queue.length === 0 ? (
-        <p className="empty-state">Nothing waiting. The queue is clear. ✓</p>
+        <p className="empty-state">
+          <FormattedMessage
+            id="moderation.empty"
+            defaultMessage="Nothing waiting. The queue is clear. ✓"
+          />
+        </p>
       ) : (
         <ul className="moderation-list">
           {queue.map((h) => (
             <li key={h.id} className="moderation-item">
               <div className="moderation-item-head">
-                <strong>{CATEGORY_LABELS[h.category]}</strong>
+                <strong>{labels.category(h.category)}</strong>
                 <span className={`severity-text severity-text-${h.severity}`}>
-                  {SEVERITY_LABELS[h.severity]}
+                  {labels.severity(h.severity)}
                 </span>
-                <span className="hint">filed {timeAgo(h.createdAt)}</span>
+                <span className="hint">
+                  <FormattedMessage
+                    id="moderation.filed"
+                    defaultMessage="filed {when}"
+                    values={{ when: timeAgo(h.createdAt) }}
+                  />
+                </span>
               </div>
               {h.description && <p>{h.description}</p>}
               {h.photoUrl && (
                 <HazardPhoto
                   className="moderation-photo"
                   src={h.photoUrl}
-                  alt="Submitted hazard awaiting review"
+                  alt={intl.formatMessage({
+                    id: 'moderation.photoAlt',
+                    defaultMessage: 'Submitted hazard awaiting review',
+                  })}
                 />
               )}
               <div className="moderation-actions">
@@ -202,7 +280,7 @@ export function ModerationPanel() {
                   disabled={busy}
                   onClick={() => decide(h.id, 'approve')}
                 >
-                  Approve
+                  <FormattedMessage id="moderation.approve" defaultMessage="Approve" />
                 </button>
                 <button
                   type="button"
@@ -210,7 +288,7 @@ export function ModerationPanel() {
                   disabled={busy}
                   onClick={() => decide(h.id, 'reject')}
                 >
-                  Reject
+                  <FormattedMessage id="moderation.reject" defaultMessage="Reject" />
                 </button>
               </div>
             </li>

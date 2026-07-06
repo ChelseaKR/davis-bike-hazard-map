@@ -5,6 +5,7 @@
  * glyph with no explanation.
  */
 import { useState } from 'react';
+import { FormattedMessage, useIntl } from 'react-intl';
 
 interface HazardPhotoProps {
   src: string;
@@ -13,6 +14,7 @@ interface HazardPhotoProps {
 }
 
 export function HazardPhoto({ src, alt, className }: HazardPhotoProps) {
+  const intl = useIntl();
   const [failed, setFailed] = useState(false);
 
   if (failed) {
@@ -20,9 +22,12 @@ export function HazardPhoto({ src, alt, className }: HazardPhotoProps) {
       <p
         className={`photo-unavailable${className ? ` ${className}` : ''}`}
         role="img"
-        aria-label={`${alt} — photo unavailable`}
+        aria-label={intl.formatMessage(
+          { id: 'photo.unavailableAria', defaultMessage: '{alt} — photo unavailable' },
+          { alt },
+        )}
       >
-        Photo unavailable
+        <FormattedMessage id="photo.unavailable" defaultMessage="Photo unavailable" />
       </p>
     );
   }

@@ -3,6 +3,7 @@
  * cyclist can tell whether the data is fresh and pull it again on demand. The
  * status text is a polite live region so screen-reader users hear updates.
  */
+import { FormattedMessage } from 'react-intl';
 import { timeAgo } from '../lib/format.ts';
 
 interface FeedFreshnessProps {
@@ -17,11 +18,17 @@ export function FeedFreshness({ updatedAt, loading, onRefresh, now = Date.now() 
   return (
     <div className="feed-freshness">
       <span className="hint" role="status" aria-live="polite">
-        {loading
-          ? 'Updating…'
-          : updatedAt
-            ? `Updated ${timeAgo(updatedAt, now)}`
-            : 'Not loaded yet'}
+        {loading ? (
+          <FormattedMessage id="feed.updating" defaultMessage="Updating…" />
+        ) : updatedAt ? (
+          <FormattedMessage
+            id="feed.updated"
+            defaultMessage="Updated {when}"
+            values={{ when: timeAgo(updatedAt, now) }}
+          />
+        ) : (
+          <FormattedMessage id="feed.notLoaded" defaultMessage="Not loaded yet" />
+        )}
       </span>
       <button
         type="button"
@@ -29,7 +36,7 @@ export function FeedFreshness({ updatedAt, loading, onRefresh, now = Date.now() 
         onClick={onRefresh}
         disabled={loading}
       >
-        Refresh
+        <FormattedMessage id="common.refresh" defaultMessage="Refresh" />
       </button>
     </div>
   );

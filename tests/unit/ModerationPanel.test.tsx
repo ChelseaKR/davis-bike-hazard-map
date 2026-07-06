@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '../i18n-render.tsx';
 import userEvent from '@testing-library/user-event';
 import { ModerationPanel } from '../../src/components/ModerationPanel.tsx';
 import { checkA11y } from '../axe.ts';
@@ -9,7 +9,6 @@ const SESSION_KEY = 'dbhm.session';
 
 const queueItem: Hazard = {
   id: 'h1',
-  clientId: 'c1',
   category: 'pothole',
   severity: 'high',
   description: 'Pending pothole',

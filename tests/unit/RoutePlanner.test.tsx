@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '../i18n-render.tsx';
 import userEvent from '@testing-library/user-event';
 import type { RoutePlan } from '../../shared/routing.ts';
 
@@ -87,7 +87,6 @@ describe('RoutePlanner', () => {
           {
             hazard: {
               id: 'h1',
-              clientId: 'c1',
               category: 'pothole',
               severity: 'high',
               description: null,

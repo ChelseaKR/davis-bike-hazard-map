@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '../i18n-render.tsx';
 import userEvent from '@testing-library/user-event';
 import { MyReports } from '../../src/components/MyReports.tsx';
 import { enqueueReport, _resetDbForTests } from '../../src/lib/db.ts';

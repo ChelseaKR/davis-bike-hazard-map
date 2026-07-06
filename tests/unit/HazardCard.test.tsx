@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../i18n-render.tsx';
 import userEvent from '@testing-library/user-event';
 import { HazardCard } from '../../src/components/HazardCard.tsx';
 import type { Hazard } from '../../shared/types.ts';
@@ -9,7 +9,6 @@ const NOW = 1_700_000_000_000;
 function hazard(over: Partial<Hazard> = {}): Hazard {
   return {
     id: 'h1',
-    clientId: 'c1',
     category: 'pothole',
     severity: 'high',
     description: 'Deep pothole in the lane',

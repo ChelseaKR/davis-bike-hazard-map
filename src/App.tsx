@@ -5,6 +5,7 @@
  * queue whenever the device is online.
  */
 import { lazy, Suspense, useCallback, useEffect } from 'react';
+import { FormattedMessage, defineMessages, useIntl } from 'react-intl';
 import type { Hazard } from '../shared/types.ts';
 import { useHazards } from './hooks/useHazards.ts';
 import { useOnline } from './hooks/useOnline.ts';
@@ -34,22 +35,25 @@ const MapView = lazy(() =>
 /** Read-only views available in the public dashboard. */
 const PUBLIC_TABS: Tab[] = ['map', 'list', 'coverage', 'route'];
 
-const ALL_TABS: { id: Tab; label: string }[] = [
-  { id: 'map', label: 'Map' },
-  { id: 'list', label: 'List' },
-  { id: 'coverage', label: 'Coverage' },
-  { id: 'route', label: 'Route' },
-  { id: 'report', label: 'Report' },
-  { id: 'mine', label: 'My reports' },
-  { id: 'moderate', label: 'Moderate' },
-];
+const ALL_TABS: Tab[] = ['map', 'list', 'coverage', 'route', 'report', 'mine', 'moderate'];
+
+const tabMessages = defineMessages({
+  map: { id: 'nav.tab.map', defaultMessage: 'Map' },
+  list: { id: 'nav.tab.list', defaultMessage: 'List' },
+  coverage: { id: 'nav.tab.coverage', defaultMessage: 'Coverage' },
+  route: { id: 'nav.tab.route', defaultMessage: 'Route' },
+  report: { id: 'nav.tab.report', defaultMessage: 'Report' },
+  mine: { id: 'nav.tab.mine', defaultMessage: 'My reports' },
+  moderate: { id: 'nav.tab.moderate', defaultMessage: 'Moderate' },
+});
 
 // In public-dashboard mode the report/my-reports/moderation tabs are removed.
 const TABS = config.publicDashboard
-  ? ALL_TABS.filter((t) => PUBLIC_TABS.includes(t.id))
+  ? ALL_TABS.filter((t) => PUBLIC_TABS.includes(t))
   : ALL_TABS;
 
 export default function App() {
+  const intl = useIntl();
   const [{ tab, filters, focusHazard, statusKey }, dispatch] = useViewState();
   const online = useOnline();
 
@@ -95,32 +99,41 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1>
-          <span aria-hidden="true">🚲</span> Davis Bike Hazard Map
+          <span aria-hidden="true">🚲</span>{' '}
+          <FormattedMessage id="app.title" defaultMessage="Davis Bike Hazard Map" />
         </h1>
-        <p className="tagline">See it, flag it, route around it.</p>
+        <p className="tagline">
+          <FormattedMessage id="app.tagline" defaultMessage="See it, flag it, route around it." />
+        </p>
       </header>
 
-      <nav className="tabs" aria-label="Views">
+      <nav className="tabs" aria-label={intl.formatMessage({ id: 'nav.aria', defaultMessage: 'Views' })}>
         {TABS.map((t) => (
           <button
-            key={t.id}
+            key={t}
             type="button"
-            className={`tab ${tab === t.id ? 'tab-active' : ''}`}
-            aria-current={tab === t.id ? 'page' : undefined}
-            onClick={() => dispatch({ type: 'setTab', tab: t.id })}
+            className={`tab ${tab === t ? 'tab-active' : ''}`}
+            aria-current={tab === t ? 'page' : undefined}
+            onClick={() => dispatch({ type: 'setTab', tab: t })}
           >
-            {t.label}
+            {intl.formatMessage(tabMessages[t])}
           </button>
         ))}
       </nav>
 
       {config.publicDashboard && (
         <p className="public-banner" role="note">
-          Public read-only view — reporting and moderation are disabled. See the{' '}
-          <a href="https://www.cityofdavis.org/city-hall/public-works-utilities-and-operations">
-            city's 311
-          </a>{' '}
-          to file an official request.
+          <FormattedMessage
+            id="app.publicBanner"
+            defaultMessage="Public read-only view — reporting and moderation are disabled. See the <link>city's 311</link> to file an official request."
+            values={{
+              link: (chunks) => (
+                <a href="https://www.cityofdavis.org/city-hall/public-works-utilities-and-operations">
+                  {chunks}
+                </a>
+              ),
+            }}
+          />
         </p>
       )}
 
@@ -172,7 +185,10 @@ export default function App() {
             <>
               {!online && (
                 <p className="hint offline-hint">
-                  You're offline — your report will be saved and synced later.
+                  <FormattedMessage
+                    id="report.offlineHint"
+                    defaultMessage="You're offline — your report will be saved and synced later."
+                  />
                 </p>
               )}
               <ReportForm onSubmitted={onSubmitted} />
@@ -189,14 +205,28 @@ export default function App() {
 
       <footer className="app-footer">
         <p>
-          Map data ©{' '}
-          <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>{' '}
-          contributors. Community-reported hazards are not verified by the city.
+          <FormattedMessage
+            id="footer.attribution"
+            defaultMessage="Map data © <link>OpenStreetMap</link> contributors. Community-reported hazards are not verified by the city."
+            values={{
+              link: (chunks) => (
+                <a href="https://www.openstreetmap.org/copyright">{chunks}</a>
+              ),
+            }}
+          />
         </p>
         <p className="footer-links">
-          <a href="/privacy.html">Privacy</a> ·{' '}
-          <a href="/accessibility.html">Accessibility</a> ·{' '}
-          <a href="/api/hazards/export">Open data (GeoJSON)</a>
+          <a href="/privacy.html">
+            <FormattedMessage id="footer.privacy" defaultMessage="Privacy" />
+          </a>{' '}
+          ·{' '}
+          <a href="/accessibility.html">
+            <FormattedMessage id="footer.accessibility" defaultMessage="Accessibility" />
+          </a>{' '}
+          ·{' '}
+          <a href="/api/hazards/export">
+            <FormattedMessage id="footer.openData" defaultMessage="Open data (GeoJSON)" />
+          </a>
         </p>
       </footer>
     </div>

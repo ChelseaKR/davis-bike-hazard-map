@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { IntlProviderShell } from './i18n/IntlProviderShell.tsx';
 import { installGlobalErrorHandlers } from './lib/telemetry.ts';
 import './styles.css';
 
@@ -16,9 +17,13 @@ const rootEl = document.getElementById('root');
 if (rootEl) {
   createRoot(rootEl).render(
     <StrictMode>
-      <ErrorBoundary source="app-root">
-        <App />
-      </ErrorBoundary>
+      {/* IntlProvider wraps the root boundary so even the crash-fallback UI is
+          localizable and always has intl context. */}
+      <IntlProviderShell>
+        <ErrorBoundary source="app-root">
+          <App />
+        </ErrorBoundary>
+      </IntlProviderShell>
     </StrictMode>,
   );
 }

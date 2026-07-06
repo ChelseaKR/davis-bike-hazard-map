@@ -3,6 +3,7 @@
  * queued on this device. Uses role="status" so screen readers announce changes.
  */
 import { useEffect, useState } from 'react';
+import { FormattedMessage } from 'react-intl';
 import { useOnline } from '../hooks/useOnline.ts';
 import { countByState, type QueueState } from '../lib/db.ts';
 
@@ -37,17 +38,32 @@ export function StatusBanner({ refreshKey = 0 }: { refreshKey?: number }) {
       className={`status-banner ${online ? 'status-online' : 'status-offline'}`}
       role="status"
     >
-      {!online && <span>Offline — reports are saved on your device.</span>}
+      {!online && (
+        <span>
+          <FormattedMessage
+            id="status.offline"
+            defaultMessage="Offline — reports are saved on your device."
+          />
+        </span>
+      )}
       {pending > 0 && (
         <span>
           {' '}
-          {pending} report{pending === 1 ? '' : 's'} waiting to sync.
+          <FormattedMessage
+            id="status.pending"
+            defaultMessage="{count, plural, one {# report waiting to sync.} other {# reports waiting to sync.}}"
+            values={{ count: pending }}
+          />
         </span>
       )}
       {failed > 0 && (
         <span className="status-error">
           {' '}
-          {failed} report{failed === 1 ? '' : 's'} couldn't sync — check My Reports.
+          <FormattedMessage
+            id="status.failed"
+            defaultMessage="{count, plural, one {# report couldn't sync — check My Reports.} other {# reports couldn't sync — check My Reports.}}"
+            values={{ count: failed }}
+          />
         </span>
       )}
     </div>

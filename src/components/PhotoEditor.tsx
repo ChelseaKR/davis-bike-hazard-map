@@ -10,6 +10,7 @@
  * env) we degrade gracefully to the EXIF-stripped, un-blurred image and say so.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FormattedMessage, useIntl } from 'react-intl';
 import {
   pixelateRegions,
   rectFromCorners,
@@ -39,6 +40,7 @@ interface Loaded {
 }
 
 export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
+  const intl = useIntl();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [regions, setRegions] = useState<BlurRegion[]>([]);
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,12 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
     setError(null);
     // Reject an oversized file before reading it into memory (early validation).
     if (file.size > MAX_RAW_PHOTO_BYTES) {
-      setError('That image is too large. Please choose one under 25 MB.');
+      setError(
+        intl.formatMessage({
+          id: 'photoEditor.error.tooLarge',
+          defaultMessage: 'That image is too large. Please choose one under 25 MB.',
+        }),
+      );
       return;
     }
     setBusy(true);
@@ -82,7 +89,13 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
       // where a busy 1280px frame still exceeds the upload limit, so the user
       // finds out here (with the photo in hand) rather than at submit.
       if (baseUrl.length > MAX_PHOTO_BYTES * 1.4) {
-        setError('This photo is too detailed to compress under the limit. Try a simpler shot.');
+        setError(
+          intl.formatMessage({
+            id: 'photoEditor.error.tooDetailed',
+            defaultMessage:
+              'This photo is too detailed to compress under the limit. Try a simpler shot.',
+          }),
+        );
         setBusy(false);
         return;
       }
@@ -91,11 +104,16 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
       setRegions([]);
       setLoaded({ baseUrl, width: dims.width, height: dims.height, exifWasPresent });
     } catch {
-      setError('Could not read that image. Please try another photo.');
+      setError(
+        intl.formatMessage({
+          id: 'photoEditor.error.unreadable',
+          defaultMessage: 'Could not read that image. Please try another photo.',
+        }),
+      );
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [intl]);
 
   // Repaint the preview canvas whenever the image, regions, or drag change.
   useEffect(() => {
@@ -152,11 +170,24 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
     setBusy(false);
     if (found.length) {
       setRegions((prev) => [...prev, ...found]);
-      setAutoNote(`Auto-blurred ${found.length} face${found.length === 1 ? '' : 's'}.`);
+      setAutoNote(
+        intl.formatMessage(
+          {
+            id: 'photoEditor.autoBlurred',
+            defaultMessage: '{count, plural, one {Auto-blurred # face.} other {Auto-blurred # faces.}}',
+          },
+          { count: found.length },
+        ),
+      );
     } else {
-      setAutoNote('No faces detected automatically — drag to blur any manually.');
+      setAutoNote(
+        intl.formatMessage({
+          id: 'photoEditor.noFaces',
+          defaultMessage: 'No faces detected automatically — drag to blur any manually.',
+        }),
+      );
     }
-  }, []);
+  }, [intl]);
 
   const usePhoto = useCallback(() => {
     if (!loaded) return;
@@ -169,11 +200,18 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
   }, [loaded, onComplete]);
 
   return (
-    <section className="photo-editor" aria-label="Photo privacy editor">
+    <section
+      className="photo-editor"
+      aria-label={intl.formatMessage({ id: 'photoEditor.aria', defaultMessage: 'Photo privacy editor' })}
+    >
       {!loaded && (
         <div className="photo-picker">
           <label className="btn btn-primary file-label">
-            {busy ? 'Processing…' : 'Add a photo'}
+            {busy ? (
+              <FormattedMessage id="photoEditor.processing" defaultMessage="Processing…" />
+            ) : (
+              <FormattedMessage id="report.photo.add" defaultMessage="Add a photo" />
+            )}
             <input
               type="file"
               accept="image/*"
@@ -187,8 +225,10 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
             />
           </label>
           <p className="hint">
-            Photos are stripped of location data and you can blur faces or plates
-            before anything is saved. This happens on your device.
+            <FormattedMessage
+              id="photoEditor.hint"
+              defaultMessage="Photos are stripped of location data and you can blur faces or plates before anything is saved. This happens on your device."
+            />
           </p>
         </div>
       )}
@@ -202,8 +242,12 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
       {loaded && (
         <div className="photo-stage">
           <p className="privacy-badge" role="status">
-            <span aria-hidden="true">🔒</span> Location metadata removed
-            {loaded.exifWasPresent ? ' (EXIF GPS found and stripped)' : ''}.
+            <span aria-hidden="true">🔒</span>{' '}
+            <FormattedMessage
+              id="photoEditor.metadataRemoved"
+              defaultMessage="{exif, select, true {Location metadata removed (EXIF GPS found and stripped).} other {Location metadata removed.}}"
+              values={{ exif: loaded.exifWasPresent }}
+            />
           </p>
 
           <canvas
@@ -212,7 +256,10 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
             height={loaded.height}
             className="blur-canvas"
             role="img"
-            aria-label="Photo preview. Drag across faces or licence plates to blur them."
+            aria-label={intl.formatMessage({
+              id: 'photoEditor.canvasAria',
+              defaultMessage: 'Photo preview. Drag across faces or licence plates to blur them.',
+            })}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -226,7 +273,7 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
 
           <div className="editor-actions">
             <button type="button" className="btn" onClick={autoDetect} disabled={busy}>
-              Auto-blur faces
+              <FormattedMessage id="photoEditor.autoBlur" defaultMessage="Auto-blur faces" />
             </button>
             <button
               type="button"
@@ -234,13 +281,17 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
               onClick={() => setRegions([])}
               disabled={!regions.length}
             >
-              Clear blur ({regions.length})
+              <FormattedMessage
+                id="photoEditor.clearBlur"
+                defaultMessage="Clear blur ({count})"
+                values={{ count: regions.length }}
+              />
             </button>
             <button type="button" className="btn" onClick={onCancel}>
-              Remove photo
+              <FormattedMessage id="report.photo.remove" defaultMessage="Remove photo" />
             </button>
             <button type="button" className="btn btn-primary" onClick={usePhoto}>
-              Use photo
+              <FormattedMessage id="photoEditor.usePhoto" defaultMessage="Use photo" />
             </button>
           </div>
         </div>

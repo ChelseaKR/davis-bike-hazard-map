@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../i18n-render.tsx';
 import { ListView } from '../../src/components/ListView.tsx';
 import type { Hazard } from '../../shared/types.ts';
 
@@ -8,7 +8,6 @@ const NOW = 1_700_000_000_000;
 function hazard(id: string, over: Partial<Hazard> = {}): Hazard {
   return {
     id,
-    clientId: `c-${id}`,
     category: 'pothole',
     severity: 'high',
     description: 'A hazard',

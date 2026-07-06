@@ -6,6 +6,7 @@
  * lazily and never blocks the form on mobile data.
  */
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
+import { useIntl } from 'react-intl';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoPoint } from '../../shared/types.ts';
@@ -28,6 +29,7 @@ function ClickToPlace({ onChange }: { onChange: (p: GeoPoint) => void }) {
 }
 
 export default function LocationPicker({ value, onChange }: LocationPickerProps) {
+  const intl = useIntl();
   const center = value ?? DAVIS_CENTER;
   return (
     <div className="location-picker">
@@ -36,7 +38,10 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
         zoom={15}
         scrollWheelZoom={false}
         className="location-picker-map"
-        aria-label="Tap the map to set the hazard location"
+        aria-label={intl.formatMessage({
+          id: 'locationPicker.aria',
+          defaultMessage: 'Tap the map to set the hazard location',
+        })}
       >
         <TileLayer attribution={config.tileAttribution} url={config.tileUrl} />
         <ClickToPlace onChange={onChange} />

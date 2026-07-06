@@ -12,6 +12,9 @@ playwright-report/
 test-results/
 .playwright/
 
+# G9 pseudolocale — generated test artifact, never committed (INTERNATIONALIZATION-STANDARD §4/§8)
+tests/i18n/en-XA.generated.json
+
 # Local data & secrets
 data/
 *.sqlite

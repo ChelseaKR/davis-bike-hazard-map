@@ -3,25 +3,20 @@
  * what they've filed, retry a failed sync, or delete a report from their phone.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { CATEGORY_LABELS, SEVERITY_LABELS } from '../../shared/types.ts';
+import { FormattedMessage, useIntl } from 'react-intl';
 import {
   deleteReport,
   getAllReports,
   type QueuedReport,
-  type QueueState,
 } from '../lib/db.ts';
 import { deleteReport as deleteReportFromServer } from '../lib/api.ts';
 import { syncOnce, isOnline } from '../lib/sync.ts';
 import { timeAgo } from '../lib/format.ts';
-
-const STATE_LABEL: Record<QueueState, string> = {
-  queued: 'Waiting to sync',
-  syncing: 'Syncing…',
-  synced: 'On the map (pending moderation)',
-  error: "Couldn't sync",
-};
+import { useLabels } from '../i18n/labels.ts';
 
 export function MyReports({ onChange }: { onChange?: () => void }) {
+  const intl = useIntl();
+  const labels = useLabels();
   const [reports, setReports] = useState<QueuedReport[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -56,12 +51,16 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
     onChange?.();
   };
 
+  const ariaLabel = intl.formatMessage({ id: 'myReports.aria', defaultMessage: 'My reports' });
+
   if (reports.length === 0) {
     return (
-      <section className="my-reports" aria-label="My reports">
+      <section className="my-reports" aria-label={ariaLabel}>
         <p className="empty-state">
-          You haven't filed any hazards yet. Reports you make are saved here even
-          when you're offline.
+          <FormattedMessage
+            id="myReports.empty"
+            defaultMessage="You haven't filed any hazards yet. Reports you make are saved here even when you're offline."
+          />
         </p>
       </section>
     );
@@ -70,7 +69,7 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
   const hasPending = reports.some((r) => r.state === 'queued' || r.state === 'error');
 
   return (
-    <section className="my-reports" aria-label="My reports">
+    <section className="my-reports" aria-label={ariaLabel}>
       {hasPending && (
         <button
           type="button"
@@ -78,19 +77,31 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
           onClick={retry}
           disabled={busy || !isOnline()}
         >
-          {busy ? 'Syncing…' : isOnline() ? 'Sync now' : 'Offline'}
+          {busy ? (
+            <FormattedMessage id="common.syncing" defaultMessage="Syncing…" />
+          ) : isOnline() ? (
+            <FormattedMessage id="myReports.syncNow" defaultMessage="Sync now" />
+          ) : (
+            <FormattedMessage id="myReports.offline" defaultMessage="Offline" />
+          )}
         </button>
       )}
       <ul className="my-reports-list">
         {reports.map((r) => (
           <li key={r.clientId} className={`my-report state-${r.state}`}>
             <div className="my-report-head">
-              <strong>{CATEGORY_LABELS[r.submission.category]}</strong>
-              <span className={`pill pill-${r.state}`}>{STATE_LABEL[r.state]}</span>
+              <strong>{labels.category(r.submission.category)}</strong>
+              <span className={`pill pill-${r.state}`}>{labels.queueState(r.state)}</span>
             </div>
             <p className="hint">
-              {SEVERITY_LABELS[r.submission.severity]} severity · filed{' '}
-              {timeAgo(r.createdAt)}
+              <FormattedMessage
+                id="myReports.meta"
+                defaultMessage="{severity} severity · filed {when}"
+                values={{
+                  severity: labels.severity(r.submission.severity),
+                  when: timeAgo(r.createdAt),
+                }}
+              />
             </p>
             {r.state === 'error' && r.lastError && (
               <p className="error-text">{r.lastError}</p>
@@ -100,7 +111,14 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
               className="btn btn-small"
               onClick={() => remove(r)}
             >
-              {r.state === 'synced' ? 'Delete my report' : 'Delete from this device'}
+              {r.state === 'synced' ? (
+                <FormattedMessage id="myReports.delete.server" defaultMessage="Delete my report" />
+              ) : (
+                <FormattedMessage
+                  id="myReports.delete.device"
+                  defaultMessage="Delete from this device"
+                />
+              )}
             </button>
           </li>
         ))}

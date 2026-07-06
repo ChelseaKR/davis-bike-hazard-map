@@ -32,6 +32,7 @@
     "tests",
     "scripts",
     "vite.config.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.i18n.config.ts"
   ]
 }

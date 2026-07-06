@@ -5,15 +5,10 @@
  * alone — accessibility), and every card carries the "reported, not verified"
  * framing the transparency audit requires.
  */
-import {
-  CATEGORY_LABELS,
-  SEVERITY_LABELS,
-  LIFECYCLE_LABELS,
-  HANDOFF_STAGE_LABELS,
-  lifecycleStage,
-  type Hazard,
-} from '../../shared/types.ts';
+import { FormattedMessage, useIntl } from 'react-intl';
+import { lifecycleStage, type Hazard } from '../../shared/types.ts';
 import { timeAgo, formatLatLng } from '../lib/format.ts';
+import { useLabels } from '../i18n/labels.ts';
 import { HazardPhoto } from './HazardPhoto.tsx';
 
 interface HazardCardProps {
@@ -35,6 +30,8 @@ export function HazardCard({
   onFocusOnMap,
   now = Date.now(),
 }: HazardCardProps) {
+  const intl = useIntl();
+  const labels = useLabels();
   const stage = lifecycleStage(hazard);
   return (
     <li className={`hazard-card hazard-stage-${stage}`}>
@@ -46,29 +43,40 @@ export function HazardCard({
           {SEVERITY_SHAPE[hazard.severity]}
         </span>
         <h3 className="hazard-title">
-          {CATEGORY_LABELS[hazard.category]}
+          {labels.category(hazard.category)}
           <span className="visually-hidden">
-            , {SEVERITY_LABELS[hazard.severity]} severity
+            <FormattedMessage
+              id="hazard.card.severitySr"
+              defaultMessage=", {severity} severity"
+              values={{ severity: labels.severity(hazard.severity) }}
+            />
           </span>
         </h3>
         <span className={`lifecycle-badge lifecycle-${stage}`}>
-          {LIFECYCLE_LABELS[stage]}
+          {labels.lifecycle(stage)}
         </span>
         <span className={`severity-text severity-text-${hazard.severity}`}>
-          {SEVERITY_LABELS[hazard.severity]}
+          {labels.severity(hazard.severity)}
         </span>
       </div>
 
       {stage === 'resolved' && (
         <p className="hazard-resolved-note">
-          Reported fixed{hazard.resolvedAt ? ` ${timeAgo(hazard.resolvedAt, now)}` : ''} — shown
-          briefly so you know it was addressed.
+          <FormattedMessage
+            id="hazard.card.resolvedNote"
+            defaultMessage="Reported fixed{when} — shown briefly so you know it was addressed."
+            values={{ when: hazard.resolvedAt ? ` ${timeAgo(hazard.resolvedAt, now)}` : '' }}
+          />
         </p>
       )}
 
       {hazard.handoff && (
         <p className="hazard-handoff-note">
-          City 311: {HANDOFF_STAGE_LABELS[hazard.handoff.stage]}
+          <FormattedMessage
+            id="hazard.card.handoff"
+            defaultMessage="City 311: {status}"
+            values={{ status: labels.handoff(hazard.handoff.stage) }}
+          />
         </p>
       )}
 
@@ -78,26 +86,40 @@ export function HazardCard({
         <HazardPhoto
           className="hazard-photo"
           src={hazard.thumbnailUrl ?? hazard.photoUrl}
-          alt={`Reported ${CATEGORY_LABELS[hazard.category].toLowerCase()} hazard`}
+          alt={intl.formatMessage(
+            { id: 'hazard.card.photoAlt', defaultMessage: 'Reported {category} hazard' },
+            { category: labels.category(hazard.category).toLowerCase() },
+          )}
         />
       )}
 
       <dl className="hazard-meta">
         <div>
-          <dt>Reported</dt>
+          <dt>
+            <FormattedMessage id="hazard.card.reportedLabel" defaultMessage="Reported" />
+          </dt>
           <dd>{timeAgo(hazard.updatedAt, now)}</dd>
         </div>
         <div>
-          <dt>Confirmations</dt>
+          <dt>
+            <FormattedMessage id="hazard.card.confirmationsLabel" defaultMessage="Confirmations" />
+          </dt>
           <dd>{hazard.confirmations}</dd>
         </div>
         <div>
-          <dt>Approx. location</dt>
+          <dt>
+            <FormattedMessage id="hazard.card.locationLabel" defaultMessage="Approx. location" />
+          </dt>
           <dd>{formatLatLng(hazard.location.lat, hazard.location.lng)}</dd>
         </div>
       </dl>
 
-      <p className="hazard-note">Community-reported — not verified by the city.</p>
+      <p className="hazard-note">
+        <FormattedMessage
+          id="hazard.card.note"
+          defaultMessage="Community-reported — not verified by the city."
+        />
+      </p>
 
       <div className="hazard-actions">
         {onConfirm && stage !== 'resolved' && stage !== 'expired' && (
@@ -106,7 +128,7 @@ export function HazardCard({
             className="btn btn-small"
             onClick={() => onConfirm(hazard.id)}
           >
-            I saw this too
+            <FormattedMessage id="hazard.card.confirm" defaultMessage="I saw this too" />
           </button>
         )}
         {onFocusOnMap && (
@@ -115,7 +137,7 @@ export function HazardCard({
             className="btn btn-small"
             onClick={() => onFocusOnMap(hazard)}
           >
-            Show on map
+            <FormattedMessage id="hazard.card.showOnMap" defaultMessage="Show on map" />
           </button>
         )}
       </div>
