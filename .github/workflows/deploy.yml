@@ -20,6 +20,15 @@ jobs:
   deploy:
     name: Fly.io
     runs-on: ubuntu-latest
+    # Gates production deploys behind a GitHub Environment (CICD-22). This
+    # workflow edit alone does not add a required reviewer — that's a
+    # repo-settings action (Settings → Environments → production → required
+    # reviewers), not something this file can express; until it's configured
+    # in the GitHub UI, referencing the environment here has no protective
+    # effect beyond letting the Environment's URL/secrets scoping show up in
+    # the run. See docs/ARCHITECTURE.md ADR-8 and
+    # audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md P1-8.
+    environment: production
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:

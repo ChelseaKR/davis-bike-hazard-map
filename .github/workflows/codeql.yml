@@ -1,7 +1,8 @@
 name: CodeQL
 
-# Static analysis (SAST) for JS/TS: runs on push/PR to main and weekly so new
-# advisories are caught even without code changes.
+# Static analysis (SAST) for JS/TS *and* the GitHub Actions workflows
+# themselves (CICD-20): runs on push/PR to main and weekly so new advisories
+# are caught even without code changes.
 on:
   push:
     branches: [main]
@@ -20,13 +21,26 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze (javascript-typescript)
+    name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
-    # Code scanning result upload needs GitHub Advanced Security, which private
-    # repos don't have by default — the analysis runs but the upload 403s. Keep
-    # this non-blocking until code scanning is enabled (repo Settings → Security)
-    # or the repo is made public; then it surfaces results and can be required.
-    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # `actions` scans the workflow YAML itself (CICD-20); no autobuild
+        # needed for it since there's no code to compile.
+        language: [javascript-typescript, actions]
+    # NOTE (2026-07-05 remediation, P0-3/P1-2): this job used to be entirely
+    # `continue-on-error: true` at the job level, which meant CodeQL could
+    # never block a merge for ANY reason, including real findings. That's
+    # fixed below: the analyze step now writes SARIF locally with
+    # `upload: never` (skipping the upload-to-code-scanning call that 403s on
+    # a private repo without GitHub Advanced Security) and a dedicated step
+    # parses that SARIF and fails the job on any error-level (security)
+    # result. So SAST is blocking again even while private. Tracking issue:
+    # audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md P0-3 — once the
+    # repo goes public or GHAS is enabled (P0-2), switch `upload: never` back
+    # to `upload: always` and add this job to required checks so results also
+    # surface in the Security tab.
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
@@ -34,9 +48,35 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3
         with:
-          languages: javascript-typescript
+          languages: ${{ matrix.language }}
           queries: security-and-quality
       - name: Autobuild
+        if: matrix.language == 'javascript-typescript'
         uses: github/codeql-action/autobuild@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3
-      - name: Perform CodeQL analysis
+      - name: Perform CodeQL analysis (SARIF written locally; upload skipped, see note above)
         uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3
+        with:
+          upload: never
+          output: sarif-results
+      - name: Enforce SAST gate on the parsed SARIF (SEC-08) — this is what actually blocks CI now
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(sarif-results/*.sarif)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No SARIF output found from the CodeQL analyze step — treating as a failure rather than a silent pass."
+            exit 1
+          fi
+          error_count=$(jq -s '[.[].runs[].results[]? | select(.level == "error")] | length' "${files[@]}")
+          echo "CodeQL error-level (security) findings: ${error_count}"
+          if [ "${error_count}" != "0" ]; then
+            echo "::error::CodeQL found ${error_count} error-level security finding(s). Download the codeql-sarif artifact from this run to see them."
+            exit 1
+          fi
+      - name: Upload SARIF as a build artifact (manual inspection; code-scanning upload needs GHAS — see note above)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: codeql-sarif-${{ matrix.language }}
+          path: sarif-results/
+          if-no-files-found: warn

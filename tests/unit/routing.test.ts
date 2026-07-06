@@ -20,7 +20,6 @@ const DAY = 24 * 60 * 60 * 1000;
 function hazard(over: Partial<Hazard> = {}): Hazard {
   return {
     id: 'h1',
-    clientId: 'c1',
     category: 'pothole',
     severity: 'high',
     description: null,
