@@ -1,1 +1,12 @@
 npx lint-staged
+
+# SEC-17: catch secrets before they ever reach a commit, not just in CI.
+# Requires the gitleaks binary (https://github.com/gitleaks/gitleaks#installing);
+# if it isn't installed locally this step is skipped with a warning rather than
+# blocking every contributor's first commit — CI's gitleaks-action (ci.yml) is
+# the real backstop either way.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact
+else
+  echo "warning: gitleaks not installed locally — skipping pre-commit secret scan (CI still runs it)" >&2
+fi

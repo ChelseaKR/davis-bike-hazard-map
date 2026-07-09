@@ -382,11 +382,33 @@ registry.registerPath({
   method: 'post',
   path: '/handoff/webhook',
   tags: ['moderation'],
-  summary: '311 status sync-back webhook (shared-secret auth via x-gogov-signature)',
-  request: { body: { required: true, content: json(handoffStatus) } },
+  summary:
+    '311 status sync-back webhook (HMAC-SHA256 over the raw body + signed timestamp; replay-protected)',
+  description:
+    'Send `x-gogov-timestamp` (epoch ms) and `x-gogov-signature` = hex ' +
+    'HMAC-SHA256, keyed by the shared secret, over the string ' +
+    '`{timestamp}.{rawBody}`. The timestamp must be within 5 minutes of ' +
+    'server time and each signature is accepted at most once. The ' +
+    'referenced hazard must already have a 311 hand-off record.',
+  request: {
+    headers: z.object({
+      'x-gogov-timestamp': z
+        .string()
+        .openapi({ description: 'epoch ms; folded into the signed message' }),
+      'x-gogov-signature': z
+        .string()
+        .openapi({ description: 'hex HMAC-SHA256 of `{timestamp}.{rawBody}`' }),
+    }),
+    body: { required: true, content: json(handoffStatus) },
+  },
   responses: {
     200: { description: 'applied' },
-    401: { description: 'bad signature', content: errorContent },
+    401: { description: 'missing/forged signature, or stale timestamp', content: errorContent },
+    404: { description: 'no hazard for that reference', content: errorContent },
+    409: {
+      description: 'replayed signature, or hazard never handed off',
+      content: errorContent,
+    },
     503: { description: 'webhook disabled (no secret configured)', content: errorContent },
   },
 });

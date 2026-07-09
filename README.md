@@ -80,11 +80,60 @@ CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs the same gate
 - **Push alerts:** server-side matching, subscription storage (in-memory; a Postgres table is the documented next step), and dry-run delivery ship behind `PUSH_ENABLED`. To actually deliver: generate a VAPID pair (`npx web-push generate-vapid-keys`), set `PUSH_ENABLED=true` + `VAPID_*`, add a `push`/`notificationclick` handler to the service worker, and wire the `web-push` transport into `server/lib/pushNotify.ts` (`PushSender`). Until then subscriptions are accepted only when enabled and matches are logged, not sent.
 - **Public dashboard:** deploy with `VITE_PUBLIC_DASHBOARD=true` for a read-only public map (no report/moderation UI). Seed demo data first so the map isn't empty: `DATABASE_PATH=./data/hazards.json make seed` (or run `make seed` against your `DATABASE_URL`); seeds are clearly fictional (see `scripts/seed.ts`).
 
+## Observability
+Per `/STANDARDS/OBSERVABILITY-STANDARD.md`, tier is declared explicitly rather than left implicit:
+
+- **Server (Fastify + Postgres): Tier A.** In place: `/livez` + `/readyz` (fail-closed, contract
+  tested), structured JSON logs (Pino, redaction-tested), Prometheus metrics
+  (`dbhm_moderation_queue_depth`, `dbhm_oldest_pending_age_seconds`, RED-shaped HTTP histogram),
+  Sentry error + trace sampling. **Gaps tracked:** no OpenTelemetry SDK/spans yet (no trace
+  correlation, no `trace_id`/`span_id` in logs), no `slos/*.yaml` + burn-rate alerts yet (the 48h
+  moderation SLA exists de facto with metrics/alert rules in
+  [`docs/ops/prometheus-alerts.yml`](./docs/ops/prometheus-alerts.yml) but isn't a declared SLO
+  document).
+- **PWA (client): Tier B.** In place: Lighthouse CI lab budgets (accessibility blocking; perf/byte-
+  weight advisory), client error reporting (`src/lib/telemetry.ts`). **Gap tracked:** no RUM/
+  web-vitals field beacon (OBS-26).
+
+Dated: 2026-07-05. See the Standards Conformance table below (§Standards) for the OBSERVABILITY row.
+
 ## For Claude Code
 - **Build entrypoint:** [`docs/ROADMAP.md`](./docs/ROADMAP.md) → *Implementation Plan*; what was built is in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 - **Hard guardrails:** **strip EXIF and offer face/plate blurring on every photo before upload** (privacy is a gate); the map must be usable on mobile data and offline; moderation exists before launch (no unmoderated public photo feed); GIS stays free via OpenStreetMap; accessibility is a gate (the map has a non-map list view).
 - **Commands:** `make dev` · `make verify` · `make a11y` · `make e2e`.
-- **Definition of done:** a Davis cyclist can install the PWA, file a hazard offline, see it on the map after sync, and (optionally) push it to 311 — with all `/STANDARDS` gates green. ✅ Met; see the gates table above and [`docs/audits/`](./docs/audits/).
+- **Definition of done:** a Davis cyclist can install the PWA, file a hazard offline, see it on the map after sync, and (optionally) push it to 311 — functionally met; see the gates table above and [`docs/audits/`](./docs/audits/). Standards conformance: see the table below — gaps are tracked, not hidden.
 
 ## Standards
 Inherits [`/STANDARDS`](../STANDARDS/). Responsible-tech findings are committed in [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and [`docs/audits/`](./docs/audits/).
+
+### Standards Conformance
+Per `/STANDARDS/README.md` §"How a repo declares conformance," every standard gets an explicit
+row: **Applies** (with the honest state and where the gap is tracked) or **N/A** (with a reason).
+Silent omission is itself a defect, so this table exists even though it shows real gaps rather than
+a clean sweep. Full evidence: the 2026-07-05 conformance audit,
+[`audit-2026-07-05/davis-bike-hazard-map-AUDIT.md`](../audit-2026-07-05/davis-bike-hazard-map-AUDIT.md)
+(≈48% weighted conformance), and the corresponding
+[`audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md`](../audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md)
+(work plan + live execution status per item). Regenerate this table whenever a re-audit lands.
+
+| Standard | Applies? | State | Gap tracking |
+|---|---|---|---|
+| QUALITY-AND-METRICS | Applies | Partial (coverage/e2e/a11y gated; DORA ledger, perf budgets, PR-template DoD owed) | REMEDIATION.md P2-4, P3 |
+| CODE-QUALITY | Applies (TS/frontend sections; Python-only controls N/A) | Partial (strict TS + ESLint recommended in place; strictTypeChecked, Prettier, size-limit, ADR extraction owed) | REMEDIATION.md P1-3, P1-4, P1-6, P2-3 |
+| SECURITY-AND-SUPPLY-CHAIN | Applies (ships code + container) | Partial (SHA-pinned actions, Trivy, npm audit, gitleaks CI all blocking; ASVS now declared — see Responsible-Tech §F; SBOM/signing, Scorecard, scheduled TruffleHog owed) | REMEDIATION.md P1-7, P2-1 |
+| CI-CD | Applies (5 workflows) | Partial (single ordered `ci.yml`, least-privilege `permissions:` blocks, concurrency groups all in place; **branch protection/rulesets absent — see below**, CODEOWNERS added 2026-07-05, zizmor owed) | REMEDIATION.md P0-2 (BLOCKED, manual), P1-2 |
+| RELEASE-AND-VERSIONING | Applies — **no releases yet**; pipeline intent: tagged betas `vX.Y.Z` once cut, deployed image maps to tag | Gap (zero tags, `CHANGELOG.md` added 2026-07-05, SBOM/signing/release workflow not yet built) | REMEDIATION.md P2-1 |
+| ACCESSIBILITY | Applies (frontend emitting HTML; repo-stated gate) | Partial (axe + Lighthouse a11y merge-blocking, WCAG 2.2 AA tagged; ACR/VPAT, dated SR-matrix, reading-level gate owed) | REMEDIATION.md P2-5, P3 |
+| OBSERVABILITY | Applies (Server → Tier A, PWA → Tier B — see `## Observability` above, declared 2026-07-05) | Partial (probes/metrics/logging solid; OTel spans, SLO yaml, RUM beacon owed) | REMEDIATION.md P1-9, P2-7, P3 |
+| INTERNATIONALIZATION | Applies (explicitly in-scope, STANDARDS §1/§11) | Strongest standard in the repo (see [`docs/I18N.md`](./docs/I18N.md)) — **catalog + gates exist only on the unmerged `i18n-catalog-retrofit` branch as of 2026-07-05**, not on `main`; Spanish translation still skeleton-only (documented deferral) | REMEDIATION.md P1-1 (merge decision — not automated, see Execution Log), P2-6 |
+| AI-EVALUATION | **N/A** — no LLM SDK, no AI/agent code paths anywhere in `package.json` or `src/`/`server/` (verified 2026-07-05) | N/A | — |
+| DOCUMENTATION | Applies | Partial (this table + `CHANGELOG.md` close two gaps as of 2026-07-05; ADRs still inline in `ARCHITECTURE.md` rather than `docs/adr/`, currency stamps incomplete) | REMEDIATION.md P2-3, P3 |
+| RESPONSIBLE-TECH-FRAMEWORK | Applies | Strong (ethics/bias/privacy/transparency sign-offs committed in `docs/RESPONSIBLE-TECH-AUDITS.md` + `docs/audits/`; ASVS level now declared §F; audit artifacts dated 2026-05-31, predate the June feature wave — regeneration owed) | REMEDIATION.md P2-2 |
+
+**Branch protection / rulesets (CI-CD, CODE-QUALITY):** `main` currently has no branch protection
+and no rulesets configured on GitHub (verified by API at audit time: `.../branches/main/protection`
+→ 404, `.../rulesets` → `[]`), so every merge-blocking CI gate above is advisory, not enforced —
+direct push, force-push, and self-merge are all technically possible. This is a live GitHub setting
+outside this repo's files; see `audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md` P0-2 for the
+exact decision and commands needed (repo-visibility/plan choice, then a ruleset). **BLOCKED pending
+a maintainer decision** — not something a code change can fix.

@@ -27,9 +27,15 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/dbhm
-      SESSION_SECRET: dev-compose-secret-change-me
-      MODERATOR_USERNAME: admin
-      MODERATOR_PASSWORD: admin
+      # These fall back to well-known, insecure local-only defaults (matching
+      # the dev in-memory admin/admin story) so `docker compose up --build`
+      # still works with zero setup, but a project-root `.env` (copy
+      # .env.example, docker compose auto-loads it for `${VAR}` substitution
+      # — separate from the `environment:` map above) overrides them without
+      # editing this file. Never rely on these defaults outside local dev.
+      SESSION_SECRET: ${SESSION_SECRET:-dev-compose-secret-change-me}
+      MODERATOR_USERNAME: ${MODERATOR_USERNAME:-admin}
+      MODERATOR_PASSWORD: ${MODERATOR_PASSWORD:-admin}
       PORT: '8787'
     ports:
       - '8787:8787'

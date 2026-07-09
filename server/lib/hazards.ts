@@ -136,11 +136,16 @@ export function sweepExpired(repo: Repository, now: number): Promise<number> {
   return repo.expire(now);
 }
 
-/** Project a stored hazard to the PUBLIC shape (fuzzed location, photo URL). */
+/**
+ * Project a stored hazard to the PUBLIC shape (fuzzed location, photo URL).
+ *
+ * Deliberately omits `clientId`: it is the reporter's deletion capability, so
+ * it must never appear in any unauthenticated response (see FIX-01). It stays
+ * on `StoredHazard` and on the reporter's own device.
+ */
 export function toPublic(h: StoredHazard): Hazard {
   return {
     id: h.id,
-    clientId: h.clientId,
     category: h.category,
     severity: h.severity,
     description: h.description,

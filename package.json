@@ -6,7 +6,7 @@
   "description": "Crowdsourced, offline-first cycling-hazard map for Davis, CA — an installable PWA.",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=20 <23"
   },
   "scripts": {
     "dev": "concurrently -n client,server -c cyan,magenta \"npm:dev:client\" \"npm:dev:server\"",
@@ -18,7 +18,7 @@
     "start": "cross-env NODE_ENV=production tsx server/index.ts",
     "seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "lint:css": "stylelint \"src/**/*.css\"",
     "test": "vitest run",

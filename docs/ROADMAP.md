@@ -45,13 +45,23 @@ An offline-capable PWA for crowdsourced cycling-hazard reporting and mapping in 
 |--------|--------|-------------|------|
 | EXIF stripped on upload | 100% | upload pipeline test | merge-blocking |
 | Offline report → sync success | works w/o connectivity | e2e offline test | merge-blocking |
-| axe violations (incl. list view) | 0 | pa11y-ci | merge-blocking |
-| Map first interactive (mobile) | within budget | Lighthouse mobile | merge-blocking |
+| axe violations (incl. list view) | 0 | axe (Vitest component + Playwright full-page, WCAG 2.2 AA) + Lighthouse a11y ≥ 0.9 | merge-blocking |
+| Map first interactive (mobile) | within budget | Lighthouse mobile (warn-level; not yet merge-blocking — tracked) | advisory |
 | Moderation SLA (flagged content) | documented + enforced in flow | moderation test | review-gated |
-| Coverage | ≥ 85% / ≥ 80% | coverage | merge-blocking |
+| Coverage | lines ≥ 89, functions ≥ 86, statements ≥ 89, branches ≥ 84 (enforced; vite.config.ts:162) | Vitest coverage-v8 | merge-blocking |
 | PII in open-data export | none | export schema test | merge-blocking |
 
 **Testing.** Unit (taxonomy, lifecycle, routing weights), integration (report→store→map, 311 adapter), e2e (offline capture + sync via Playwright), a11y (axe + keyboard + SR + list parity), and privacy (EXIF strip, export schema).
+
+**CI-CD-STANDARD §1 optional stages (6–8), declared per repo (CICD-29):**
+
+| Stage | Applicable? | Evidence |
+|---|---|---|
+| 6. a11y | Applicable | axe (component + full-page) + Lighthouse a11y, merge-blocking (see table above) |
+| 7. perf | Applicable | Lighthouse CI budgets in `lighthouserc.json`, run in `ci.yml`'s `lighthouse` job — currently warn-level except a11y; tightening to blocking is tracked (P1-3, bundle-size gate) |
+| 8. responsible | Applicable | `docs/RESPONSIBLE-TECH-AUDITS.md` + `docs/audits/*` (ethics, bias/equity, privacy/DPIA, transparency, security); auto-gated tests (EXIF strip, moderation-before-public, coverage-view, export schema) + review-gated sign-offs |
+
+Row corrected 2026-07-05 (prior version claimed `pa11y-ci`, which is not present, and a stale coverage target of 85/80; see `audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md` quick-win 8).
 
 ## 8. Implementation plan for Claude Code
 ```
