@@ -95,7 +95,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox
       - name: Run e2e (offline capture→sync + full-page a11y)
         env:
-          E2E_BROWSERS: chromium,firefox
+          E2E_BROWSERS: ${{ github.event_name == 'pull_request' && 'chromium' || 'chromium,firefox' }}
         run: npm run e2e
       - name: G9 pseudolocale overflow (en-XA, desktop + mobile — INTERNATIONALIZATION-STANDARD §4/§8)
         run: npm run e2e:i18n
