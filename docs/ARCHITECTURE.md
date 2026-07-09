@@ -129,3 +129,21 @@ These record where the build deviated from the roadmap, and why.
   the `web-push` transport, which are operational infra, so delivery ships
   behind `PUSH_ENABLED` and dry-runs (logging matches) until wired. *Rejected
   shipping a half-working push path* that would degrade the PWA's offline story.
+- **ADR-8 — `FLY_API_TOKEN` as a long-lived deploy secret (waiver), not GitHub
+  OIDC.** Dated 2026-07-05. CI-CD-STANDARD §8 wants cloud credentials via
+  short-lived GitHub OIDC federation, not a long-lived repo secret. Fly.io does
+  not offer a GitHub OIDC trust relationship (no equivalent of AWS's
+  `sts:AssumeRoleWithWebIdentity`/`id-token: write` flow), so this control
+  cannot be met literally. **Waiver:** `FLY_API_TOKEN` stays a repo secret,
+  scoped to a **deploy-only** Fly token (`fly tokens create deploy -a
+  davis-bike-hazard-map`, not an org/personal token) rather than a full-access
+  token, consumed only by `deploy.yml`'s single job with no other write scope.
+  **Rotation cadence:** rotate at minimum every 90 days and immediately on any
+  suspected exposure; track the rotation date here or in a follow-up dated
+  note. **Compensating controls:** the secret is never printed/echoed, the
+  deploy job requests no other permissions, and (once configured — see below)
+  the job runs under a GitHub Environment so a compromised workflow file still
+  can't deploy without going through the environment gate. *Owed:* actually
+  configuring the `production` environment's required reviewer is a live
+  GitHub setting, not a file change — tracked in
+  `audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md` P1-8.

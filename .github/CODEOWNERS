@@ -1,0 +1,7 @@
+# Code owners — see CI-CD-STANDARD (CICD-17/18) and CODE-QUALITY-STANDARD (CQ-39).
+# Requires branch protection / a ruleset requiring code-owner review to actually
+# enforce review-by-owner on PRs; until then this file documents ownership only.
+# See P0-2 in audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md.
+
+* @ChelseaKR
+/.github/workflows/ @ChelseaKR

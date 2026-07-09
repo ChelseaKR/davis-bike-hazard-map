@@ -84,7 +84,12 @@ export function ModerationPanel() {
 
   useEffect(() => {
     if (session) void load(session.token);
-    // Load once on mount with a stored session.
+    // Load once on mount with a stored session. Deliberately excludes `load`
+    // from deps: re-running on every render-scoped `load` identity change
+    // would refetch the queue in a loop. No tracking issue filed yet — CQ-35
+    // wants every suppression linked to one; file one and replace this note
+    // if this effect needs revisiting (flagged in
+    // audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md, quick win 9).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

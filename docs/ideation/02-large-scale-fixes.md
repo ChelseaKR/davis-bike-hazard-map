@@ -9,11 +9,14 @@ items; where one builds on an existing ID it says so. Effort tiers:
 ---
 
 ## FIX-01 — Remove the deletion-capability leak from the public feed
-**Status: DONE (2026-07-02)** — `clientId` dropped from `toPublic()`
-(`server/lib/hazards.ts`) and the public `Hazard` interface
+**Status: DONE (2026-07-02; the code fix landed on `main` via #41's WIP
+commit, the audit trail below completes it)** — `clientId` dropped from
+`toPublic()` (`server/lib/hazards.ts`) and the public `Hazard` interface
 (`shared/types.ts`); merge-blocking regression test "never leaks the reporter
 clientId in any unauthenticated response (FIX-01)" in
-`tests/unit/server.test.ts`; recorded as R8 in `docs/audits/residual-risk.md`.
+`tests/unit/server.test.ts`; recorded as R8 in `docs/audits/residual-risk.md`,
+including the residual: clientIds published by any pre-fix deployment remain
+valid deletion proofs until rotated — see R8 for operator guidance.
 
 **Pitch:** stop publishing `clientId` — currently anyone can delete anyone's report.
 

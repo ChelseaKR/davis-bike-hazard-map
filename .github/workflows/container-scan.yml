@@ -9,8 +9,18 @@ name: Container scan
 on:
   push:
     branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "package.json"
+      - "package-lock.json"
   pull_request:
     branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "package.json"
+      - "package-lock.json"
   schedule:
     - cron: '0 7 * * 1' # Mondays 07:00 UTC
 
