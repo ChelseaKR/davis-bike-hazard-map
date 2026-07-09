@@ -145,10 +145,14 @@ export interface ReportSubmission {
  *
  * Note: `location` here is the FUZZED coordinate (see server/lib/geo). The
  * precise device coordinate is never exposed in the public feed.
+ *
+ * `clientId` is deliberately ABSENT: it is the reporter's deletion capability
+ * (see `DELETE /api/reports/:clientId`), so publishing it in the feed would let
+ * anyone erase any report. It lives only on the server-side `StoredHazard` and
+ * on the reporter's own device (their local report queue).
  */
 export interface Hazard {
   id: string;
-  clientId: string;
   category: HazardCategory;
   severity: Severity;
   description: string | null;

@@ -150,9 +150,10 @@ items; where one builds on an existing ID it says so. Effort tiers:
 - **Status:** ✅ DONE (S + doc branch) — the failure map is bounded and
   self-pruning (`server/lib/loginThrottle.ts`, LRU cap 10k + lazy expiry +
   opportunistic sweep; unit-tested in `tests/unit/loginThrottle.test.ts`,
-  including the 10k-spray bound), and "single instance only" is documented
-  as a hard operational constraint in the README runbook. The shared-store
-  (`auth_throttle` table) path remains the prerequisite for scaling out.
+  including the 10k-spray bound), locked accounts survive cap eviction, and
+  "single instance only" is documented as a hard operational constraint in
+  the README runbook. The shared-store (`auth_throttle` table) path remains
+  the prerequisite for scaling out.
 - **Why it matters:** `loginFailures` is an unbounded per-process `Map`
   (`server/app.ts:213-215`) — an attacker spraying random usernames grows it
   forever (slow memory leak), and both lockout and `@fastify/rate-limit`

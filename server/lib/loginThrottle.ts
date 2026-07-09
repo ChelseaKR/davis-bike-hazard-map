@@ -16,6 +16,8 @@
  * - **Hard cap:** if a spray of distinct usernames outruns expiry, the
  *   least-recently-failed entries are evicted so the map never exceeds
  *   `maxEntries` — an attacker cannot grow process memory unboundedly.
+ *   Eviction prefers entries that are not currently locked out, so the
+ *   spray cannot be used to lift an active lockout.
  *
  * NOTE: this state is per-process. Throttling is only effective while the
  * app runs as a single instance — see the README runbook before scaling out.
@@ -78,11 +80,24 @@ export class LoginThrottle {
     // Re-insert so the map's insertion order stays recency order.
     this.failures.delete(username);
     this.failures.set(username, entry);
-    // Hard cap: evict the least-recently-failed accounts.
+    // Hard cap: evict the least-recently-failed account, PREFERRING entries
+    // that are not currently locked out. Evicting a locked entry would lift
+    // its lockout, so a spray of fresh usernames must never be able to
+    // unlock an account under active brute-force. Locked entries fall to
+    // eviction only when every tracked entry is locked (the attacker paid
+    // maxFails misses per slot to get there, and the memory bound must
+    // still hold).
     while (this.failures.size > this.maxEntries) {
-      const oldest = this.failures.keys().next().value;
-      if (oldest === undefined) break;
-      this.failures.delete(oldest);
+      let evict: string | undefined;
+      for (const [candidate, e] of this.failures) {
+        if (e.until <= now) {
+          evict = candidate;
+          break;
+        }
+      }
+      evict ??= this.failures.keys().next().value;
+      if (evict === undefined) break;
+      this.failures.delete(evict);
     }
   }
 

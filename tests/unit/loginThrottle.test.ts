@@ -77,6 +77,31 @@ describe('memory bounds', () => {
     expect(throttle.isLocked('b', T0 + 5)).toBe(false);
   });
 
+  it('cap eviction never lifts an active lockout (spray cannot unlock a locked account)', () => {
+    const throttle = new LoginThrottle({ maxFails: 2, maxEntries: 3 });
+    throttle.recordFailure('victim', T0);
+    throttle.recordFailure('victim', T0 + 1); // locked — and oldest entry
+    expect(throttle.isLocked('victim', T0 + 1)).toBe(true);
+    // An attacker sprays fresh usernames to overflow the cap. The locked
+    // entry sits at the front of the LRU, but must not be the one evicted.
+    for (let i = 0; i < 10; i++) {
+      throttle.recordFailure(`spray-${i}`, T0 + 2 + i);
+    }
+    expect(throttle.size).toBeLessThanOrEqual(3);
+    expect(throttle.isLocked('victim', T0 + 12)).toBe(true);
+  });
+
+  it('falls back to evicting the oldest locked entry when every entry is locked', () => {
+    const throttle = new LoginThrottle({ maxFails: 1, maxEntries: 2 });
+    throttle.recordFailure('a', T0); // locked
+    throttle.recordFailure('b', T0 + 1); // locked
+    throttle.recordFailure('c', T0 + 2); // locked; cap exceeded, all locked
+    expect(throttle.size).toBe(2);
+    expect(throttle.isLocked('a', T0 + 2)).toBe(false); // oldest lock shed
+    expect(throttle.isLocked('b', T0 + 2)).toBe(true);
+    expect(throttle.isLocked('c', T0 + 2)).toBe(true);
+  });
+
   it('sweeps expired entries opportunistically on writes', () => {
     const throttle = new LoginThrottle();
     throttle.recordFailure('old-1', T0);

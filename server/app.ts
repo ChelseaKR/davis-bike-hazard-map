@@ -15,7 +15,7 @@ import Fastify, {
 import rateLimit from '@fastify/rate-limit';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { ZodError } from 'zod';
 import {
   reportSubmissionSchema,
@@ -67,6 +67,7 @@ import {
   type SubscriptionStore,
 } from './lib/subscriptions.ts';
 import { notifyForHazard } from './lib/pushNotify.ts';
+import { verifyWebhook, ReplayCache, WEBHOOK_TOLERANCE_MS } from './lib/webhookAuth.ts';
 
 export interface AppDeps {
   repo: Repository;
@@ -88,6 +89,11 @@ export interface AppDeps {
 /** A request that has passed the moderator session check. */
 interface AuthedRequest extends FastifyRequest {
   moderatorUsername?: string;
+}
+
+/** A request whose raw (unparsed) JSON body was preserved for HMAC verification. */
+interface RawBodyRequest extends FastifyRequest {
+  rawBody?: string;
 }
 
 const ttlOpts = (config: typeof serverConfig) => ({
@@ -216,6 +222,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // operational constraint (documented in the README runbook), and scaling
   // out requires moving these counters to a shared store first.
   const loginThrottle = new LoginThrottle();
+
+  // Replay guard for the inbound 311 webhook: a verified signature may be
+  // presented only once within its freshness window (FIX-02). Bounded + self-
+  // pruning, so it can't grow without limit.
+  const webhookReplays = new ReplayCache(WEBHOOK_TOLERANCE_MS);
 
   // --- OpenAPI spec ---
   app.get('/api/openapi.json', async () => openapiSpec);
@@ -596,41 +607,81 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   // --- 311 status sync-back: inbound webhook (city/GOGov → us) ---
-  // Authenticated by a shared secret; DISABLED (503) unless GOGOV_WEBHOOK_SECRET
-  // is configured, so we never accept unauthenticated status writes.
-  app.post('/api/handoff/webhook', async (req, reply) => {
-    if (!config.gogovWebhookSecret) {
-      return reply.status(503).send({ error: 'disabled', message: '311 sync-back webhook is not configured.' });
-    }
-    const header = req.headers['x-gogov-signature'];
-    const signature = Array.isArray(header) ? '' : header ?? '';
-    if (!constantTimeEqual(signature, config.gogovWebhookSecret)) {
-      return reply.status(401).send({ error: 'unauthorized', message: 'Invalid webhook signature.' });
-    }
-    const { reference, status, note } = handoffStatusSchema.parse(req.body);
-    // The reference is the hazard id we forwarded.
-    const hazard = (await repo.findById(reference)) ?? undefined;
-    if (!hazard) {
-      return reply.status(404).send({ error: 'not_found', message: 'No hazard for that reference.' });
-    }
-    const { patch, stage, resolved } = applyHandoffStatus(hazard, status, now(), note);
-    const updated = await repo.update(reference, patch);
-    return { ok: true, stage, resolved, hazard: toPublic(updated ?? hazard) };
+  // Cryptographically hardened ingress (FIX-02) for the product's highest-trust
+  // claim. The sender must present an HMAC-SHA256 over the RAW body plus a
+  // signed, in-window timestamp (so a captured request can't be forged onto a
+  // new body or replayed after it goes stale), the signature must not have been
+  // seen before (replay guard), AND the hazard must actually carry a hand-off
+  // record — mirroring the sync route so a secret holder can't resolve arbitrary
+  // hazards. DISABLED (503) unless GOGOV_WEBHOOK_SECRET is configured.
+  //
+  // Registered in its own encapsulated scope so we can attach a content-type
+  // parser that PRESERVES the raw body (needed for HMAC) without changing how
+  // any other route parses JSON.
+  await app.register(async (webhook) => {
+    webhook.addContentTypeParser(
+      'application/json',
+      { parseAs: 'string' },
+      (req, body, done) => {
+        const raw = typeof body === 'string' ? body : '';
+        (req as RawBodyRequest).rawBody = raw;
+        try {
+          done(null, raw.length ? JSON.parse(raw) : {});
+        } catch (err) {
+          (err as FastifyError).statusCode = 400;
+          done(err as Error, undefined);
+        }
+      },
+    );
+
+    webhook.post('/api/handoff/webhook', async (req, reply) => {
+      if (!config.gogovWebhookSecret) {
+        return reply.status(503).send({ error: 'disabled', message: '311 sync-back webhook is not configured.' });
+      }
+      const verification = verifyWebhook({
+        secret: config.gogovWebhookSecret,
+        signatureHeader: singleHeader(req.headers['x-gogov-signature']),
+        timestampHeader: singleHeader(req.headers['x-gogov-timestamp']),
+        rawBody: (req as RawBodyRequest).rawBody ?? '',
+        now: now(),
+      });
+      if (!verification.ok) {
+        req.log.warn({ reason: verification.reason }, 'inbound 311 webhook rejected');
+        return reply.status(401).send({ error: 'unauthorized', message: 'Invalid webhook signature.' });
+      }
+      const { reference, status, note } = handoffStatusSchema.parse(req.body);
+      // The reference is the hazard id we forwarded.
+      const hazard = (await repo.findById(reference)) ?? undefined;
+      if (!hazard) {
+        return reply.status(404).send({ error: 'not_found', message: 'No hazard for that reference.' });
+      }
+      // Only a hazard actually handed off to 311 can have its status pushed back.
+      if (!hazard.handoff) {
+        return reply.status(409).send({ error: 'not_handed_off', message: 'Hazard was never handed off to 311.' });
+      }
+      // Replay guard: a verified signature may be applied only once. Checked
+      // here (right before we mutate) rather than up front, so a request we
+      // never act on — an unknown reference, or one not yet handed off — doesn't
+      // burn its nonce and can be legitimately re-delivered later.
+      if (!webhookReplays.check(verification.signature, now())) {
+        return reply.status(409).send({ error: 'replayed', message: 'Webhook already processed.' });
+      }
+      const { patch, stage, resolved } = applyHandoffStatus(hazard, status, now(), note);
+      const updated = await repo.update(reference, patch);
+      return { ok: true, stage, resolved, hazard: toPublic(updated ?? hazard) };
+    });
   });
 
   return app;
 }
 
 /**
- * Constant-time string comparison for shared secrets (e.g. the 311 webhook
- * signature), consistent with token/password verification elsewhere. Returns
- * false for unequal lengths without leaking *where* a same-length value differs.
+ * Collapse a possibly-multi-valued request header to a single string. Absent or
+ * duplicated headers become `undefined` — a duplicated auth header is malformed
+ * and treated as missing rather than silently picking one.
  */
-function constantTimeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
+function singleHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? undefined : value;
 }
 
 /** Parse a "lat,lng" query value into a point (or undefined if malformed). */

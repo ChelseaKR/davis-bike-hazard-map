@@ -9,7 +9,6 @@ const SESSION_KEY = 'dbhm.session';
 
 const queueItem: Hazard = {
   id: 'h1',
-  clientId: 'c1',
   category: 'pothole',
   severity: 'high',
   description: 'Pending pothole',

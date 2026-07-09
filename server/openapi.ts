@@ -38,9 +38,10 @@ export const openapiSpec = {
       },
       Hazard: {
         type: 'object',
+        // Note: `clientId` is intentionally NOT exposed here — it is the
+        // reporter's deletion capability and never appears in the public feed.
         properties: {
           id: { type: 'string' },
-          clientId: { type: 'string', format: 'uuid' },
           category: { type: 'string' },
           severity: { type: 'string', enum: ['low', 'moderate', 'high'] },
           description: { type: 'string', nullable: true },
@@ -159,7 +160,27 @@ export const openapiSpec = {
       post: { tags: ['moderation'], security: [{ bearerAuth: [] }], summary: 'Poll 311 for status and reflect it (resolving the hazard if fixed)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'sync result + updated hazard' }, '409': { description: 'never handed off' } } },
     },
     '/handoff/webhook': {
-      post: { tags: ['moderation'], summary: '311 status sync-back webhook (shared-secret auth via x-gogov-signature)', responses: { '200': { description: 'applied' }, '401': { description: 'bad signature' }, '503': { description: 'webhook disabled (no secret configured)' } } },
+      post: {
+        tags: ['moderation'],
+        summary: '311 status sync-back webhook (HMAC-SHA256 over the raw body + signed timestamp; replay-protected)',
+        description:
+          'Send `x-gogov-timestamp` (epoch ms) and `x-gogov-signature` = hex ' +
+          'HMAC-SHA256, keyed by the shared secret, over the string ' +
+          '`{timestamp}.{rawBody}`. The timestamp must be within 5 minutes of ' +
+          'server time and each signature is accepted at most once. The ' +
+          'referenced hazard must already have a 311 hand-off record.',
+        parameters: [
+          { name: 'x-gogov-timestamp', in: 'header', required: true, schema: { type: 'string' }, description: 'epoch ms; folded into the signed message' },
+          { name: 'x-gogov-signature', in: 'header', required: true, schema: { type: 'string' }, description: 'hex HMAC-SHA256 of `{timestamp}.{rawBody}`' },
+        ],
+        responses: {
+          '200': { description: 'applied' },
+          '401': { description: 'missing/forged signature, or stale timestamp' },
+          '404': { description: 'no hazard for that reference' },
+          '409': { description: 'replayed signature, or hazard never handed off' },
+          '503': { description: 'webhook disabled (no secret configured)' },
+        },
+      },
     },
     '/alerts/subscribe': {
       post: { tags: ['alerts'], summary: 'Subscribe a saved area/route to new-hazard push alerts (feature-flagged)', responses: { '201': { description: 'subscription id' }, '400': { description: 'invalid' }, '503': { description: 'push disabled' } } },

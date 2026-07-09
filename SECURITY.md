@@ -8,13 +8,17 @@ anything public.
 
 ## Supported versions
 
-This is a pre-1.0 Beta. Security fixes land on `main` and the latest tagged release; there is no
-back-porting to older tags. Pin a tag and watch releases for advisories.
+This is a pre-1.0 Beta. **No tagged releases exist yet** (`git tag` is empty as of 2026-07-05) — the
+release pipeline is a declared gap, tracked in
+`audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md` P2-1. Until the first `v0.1.0` tag ships,
+run and track `main` directly; once tags exist, security fixes will land on `main` and the latest
+tagged release with no back-porting to older tags, and this section will be updated to say "pin a
+tag."
 
 | Version | Supported |
 | ------- | --------- |
-| `main` / latest tag | ✅ |
-| older tags | ❌ |
+| `main` (pre-release Beta) | ✅ |
+| tagged releases | none exist yet — see P2-1 |
 
 ## Reporting a vulnerability
 
