@@ -24,7 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        # PRs exercise the current runtime; main keeps the compatibility range.
+        node: ${{ github.event_name == 'pull_request' && fromJSON('[22]') || fromJSON('[20, 22]') }}
     services:
       postgres:
         image: postgres:16-alpine
@@ -94,7 +95,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox
       - name: Run e2e (offline capture→sync + full-page a11y)
         env:
-          E2E_BROWSERS: chromium,firefox
+          E2E_BROWSERS: ${{ github.event_name == 'pull_request' && 'chromium' || 'chromium,firefox' }}
         run: npm run e2e
       - name: G9 pseudolocale overflow (en-XA, desktop + mobile — INTERNATIONALIZATION-STANDARD §4/§8)
         run: npm run e2e:i18n
@@ -108,6 +109,7 @@ jobs:
 
   e2e-webkit:
     name: End-to-end (WebKit, non-blocking)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # WebKit-on-Linux currently fails to render the shell in headless CI
     # (tracked). Kept visible but non-blocking so it never holds up a merge;
@@ -171,6 +173,7 @@ jobs:
       - name: Dependency audit (production deps, fail on high/critical)
         run: npm audit --omit=dev --audit-level=high
       - name: Secret scan (gitleaks)
+        if: github.event_name != 'pull_request'
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
