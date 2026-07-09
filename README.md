@@ -113,9 +113,9 @@ Per `/STANDARDS/README.md` §"How a repo declares conformance," every standard g
 row: **Applies** (with the honest state and where the gap is tracked) or **N/A** (with a reason).
 Silent omission is itself a defect, so this table exists even though it shows real gaps rather than
 a clean sweep. Full evidence: the 2026-07-05 conformance audit,
-[`audit-2026-07-05/davis-bike-hazard-map-AUDIT.md`](../audit-2026-07-05/davis-bike-hazard-map-AUDIT.md)
+`audit-2026-07-05/davis-bike-hazard-map-AUDIT.md`
 (≈48% weighted conformance), and the corresponding
-[`audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md`](../audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md)
+`audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md`
 (work plan + live execution status per item). Regenerate this table whenever a re-audit lands.
 
 | Standard | Applies? | State | Gap tracking |
