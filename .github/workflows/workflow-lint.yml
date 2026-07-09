@@ -1,0 +1,44 @@
+name: workflow-lint
+
+# SAST for the GitHub Actions workflows themselves (CICD-19, RTF-06). Runs
+# zizmor against everything under .github/ whenever a workflow/action file
+# changes, plus on main so drift is caught even without a workflow PR.
+#
+# `advanced-security: false` + `annotations: true` deliberately skip the
+# built-in SARIF-to-code-scanning upload: that upload needs GitHub Advanced
+# Security, which isn't available on this private repo, and would 403 the
+# same way codeql.yml's did before the 2026-07-05 remediation (P0-3). zizmor
+# itself still fails the job on any finding at/above `min-severity` regardless
+# of the upload path, so this stays a real, blocking gate. Once the repo goes
+# public or GHAS is enabled (see P0-2), flip to `advanced-security: true` /
+# `annotations: false` and add `security-events: write` + this job to
+# required checks so findings also surface in the Security tab.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/**', '.github/actions/**']
+  pull_request:
+    paths: ['.github/workflows/**', '.github/actions/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor (workflow SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa  # v0.5.7
+        with:
+          inputs: .github/workflows
+          min-severity: high
+          advanced-security: false
+          annotations: true

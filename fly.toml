@@ -18,6 +18,11 @@ primary_region = "sjc" # San Jose — closest to Davis, CA
 
 [env]
   PORT = "8787"
+  # OBS-01: declares the service name for observability tooling even though
+  # the OTel SDK itself isn't wired up yet (see server/lib/logger.ts's
+  # SERVICE_NAME const and README.md #Observability's Tier-A gap list —
+  # tracked in audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md P1-9).
+  OTEL_SERVICE_NAME = "davis-bike-hazard-map"
 
 [http_service]
   internal_port = 8787

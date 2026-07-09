@@ -29,6 +29,11 @@ Instantiates `/STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md`. A public map of user-su
 - **Commitment:** zero `axe` violations and a committed manual walkthrough covering the list view. **Auto-gated:** axe + keyboard + list-parity tests. **Review-gated:** SR walkthrough sign-off.
 
 ## F. Security
+- **ASVS 5.0 Level: L2** — the app handles location + photo PII and moderator authentication, which
+  puts it above baseline (L1) per SECURITY-AND-SUPPLY-CHAIN-STANDARD SEC-01; L3 is not warranted
+  (no payments, no high-value/regulated data beyond civic location/photo reports). Declared
+  2026-07-05. This makes SEC-21/22 (authorization test suites keyed to the declared level) an owed
+  gap rather than a silent one — tracked for a follow-up PR.
 - **Threat model:** spam/abuse submissions, malicious image uploads, location/PII leakage, 311-adapter injection.
 - **Controls:** upload validation + image sanitization, rate-limiting, moderation, SAST + deps + secret scans merge-blocking, least-privilege on the 311 adapter.
 - **Residual-risk register** committed in `docs/audits/`. **Auto-gated:** scanners + upload-validation tests. **Review-gated:** threat-model sign-off.
