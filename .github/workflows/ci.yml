@@ -109,6 +109,7 @@ jobs:
 
   e2e-webkit:
     name: End-to-end (WebKit, non-blocking)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # WebKit-on-Linux currently fails to render the shell in headless CI
     # (tracked). Kept visible but non-blocking so it never holds up a merge;
