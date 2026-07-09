@@ -24,7 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        # PRs exercise the current runtime; main keeps the compatibility range.
+        node: ${{ github.event_name == 'pull_request' && fromJSON('[22]') || fromJSON('[20, 22]') }}
     services:
       postgres:
         image: postgres:16-alpine
