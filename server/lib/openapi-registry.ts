@@ -70,9 +70,12 @@ const handoffInfo = registry.register(
  */
 export const hazardSchema = registry.register(
   'Hazard',
+  // `clientId` is deliberately ABSENT from this public shape: it is the
+  // reporter's deletion capability (FIX-01) and never appears in any
+  // unauthenticated response. It exists only in the request schemas below
+  // (report submission + the reporter's own DELETE path parameter).
   z.object({
     id: z.string(),
-    clientId: z.string().uuid(),
     category: z.enum(HAZARD_CATEGORIES),
     severity: z.enum(SEVERITIES),
     description: z.string().nullable(),
