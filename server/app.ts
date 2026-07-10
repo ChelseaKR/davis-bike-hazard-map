@@ -57,7 +57,7 @@ import {
   toPublic,
   thumbKey,
 } from './lib/hazards.ts';
-import { forwardToGogov, fetchGogovStatus } from './lib/gogov.ts';
+import { forwardHandoff, syncHandoffStatus } from './lib/handoff.ts';
 import { fetchRoutes } from './lib/routing.ts';
 import { applyHandoffStatus, initialHandoff } from './lib/lifecycle.ts';
 import {
@@ -566,26 +566,39 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return reply.status(204).send();
   });
 
-  // --- Optional 311/GOGov hand-off (moderator-triggered, least privilege) ---
+  // --- Optional 311 hand-off (moderator-triggered, least privilege) ---
+  // Provider is config-only (EXP-06): GOGov (bespoke, default) or Open311
+  // GeoReport v2 (vendor-neutral standard) — see `lib/handoff.ts`.
+  const handoffProviderConfig = {
+    handoffProvider: config.handoffProvider,
+    gogov: { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey, statusUrl: config.gogovStatusUrl },
+    open311: {
+      endpoint: config.open311Endpoint,
+      apiKey: config.open311ApiKey,
+      jurisdictionId: config.open311JurisdictionId,
+      serviceCode: config.open311ServiceCode,
+    },
+  };
+
   app.post('/api/moderation/:id/handoff', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const hazard = await repo.findById(id);
     if (!hazard) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
-    const result = await forwardToGogov(
-      hazard,
-      { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey },
-      fetchImpl,
-    );
-    // Record the hand-off on the hazard so its 311 status can be synced back and
+    const result = await forwardHandoff(hazard, handoffProviderConfig, fetchImpl);
+    // Record the hand-off on the hazard so its status can be synced back and
     // surfaced on the map/list. Even a dry-run records the intent.
-    const updated = await repo.update(id, { handoff: initialHandoff(hazard, now()), updatedAt: now() });
+    const updated = await repo.update(id, {
+      handoff: initialHandoff(hazard, now(), result.provider, result.reference),
+      updatedAt: now(),
+    });
     return { result, hazard: updated ? toPublic(updated) : toPublic(hazard) };
   });
 
   // --- 311 status sync-back: moderator-triggered poll ---
-  // Pulls the current status from 311 (dry-run without GOGOV_STATUS_URL) and
+  // Pulls the current status from whichever provider the hazard was handed
+  // off with (dry-run without that provider's endpoint/URL configured) and
   // reflects it onto the hazard; a "fixed" status resolves the hazard.
   app.post('/api/moderation/:id/handoff/sync', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -596,9 +609,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (!hazard.handoff) {
       return reply.status(409).send({ error: 'not_handed_off', message: 'Hazard was never handed off to 311.' });
     }
-    const status = await fetchGogovStatus(
+    const status = await syncHandoffStatus(
+      hazard.handoff.provider,
       hazard.handoff.reference,
-      { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey, statusUrl: config.gogovStatusUrl },
+      handoffProviderConfig,
       fetchImpl,
     );
     if (!status.status) {

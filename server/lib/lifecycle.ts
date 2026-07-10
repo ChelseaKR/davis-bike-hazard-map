@@ -72,11 +72,22 @@ export function applyHandoffStatus(
   return { patch, stage, resolved };
 }
 
-/** Build the initial hand-off record for a freshly forwarded hazard. */
-export function initialHandoff(hazard: StoredHazard, now: number): HandoffInfo {
+/**
+ * Build the initial hand-off record for a freshly forwarded hazard.
+ * `provider`/`reference` default to the original GOGov-only behavior
+ * (`'gogov'` / the hazard id) so existing call sites are unaffected; EXP-06's
+ * provider selector (`handoff.ts`) passes the actual provider used and, for
+ * Open311, the server-assigned `service_request_id`.
+ */
+export function initialHandoff(
+  hazard: StoredHazard,
+  now: number,
+  provider = 'gogov',
+  reference: string = hazard.id,
+): HandoffInfo {
   return {
-    provider: 'gogov',
-    reference: hazard.id,
+    provider,
+    reference,
     externalStatus: 'submitted',
     stage: 'submitted',
     submittedAt: now,

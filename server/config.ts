@@ -62,6 +62,22 @@ export const serverConfig = {
   gogovWebhookSecret: process.env.GOGOV_WEBHOOK_SECRET ?? '',
 
   /**
+   * 311 hand-off provider selector (EXP-06). `gogov` (default) uses the
+   * bespoke GOGov adapter above; `open311` uses the vendor-neutral Open311
+   * GeoReport v2 adapter (`server/lib/open311.ts`) instead — config-only
+   * switch, no code change, per the ideation doc's "switching providers is
+   * config-only" excellence bar. Unknown values fall back to `gogov`.
+   */
+  handoffProvider: process.env.HANDOFF_PROVIDER === 'open311' ? 'open311' : ('gogov' as 'gogov' | 'open311'),
+  /** Open311 GeoReport v2 base endpoint, e.g. https://311.example.gov/v2. Empty => dry-run. */
+  open311Endpoint: process.env.OPEN311_ENDPOINT ?? '',
+  open311ApiKey: process.env.OPEN311_API_KEY ?? '',
+  /** Required by multi-jurisdiction Open311 servers; optional for single-tenant ones. */
+  open311JurisdictionId: process.env.OPEN311_JURISDICTION_ID ?? '',
+  /** The single Open311 `service_code` this app's reports map onto. */
+  open311ServiceCode: process.env.OPEN311_SERVICE_CODE ?? 'bike-hazard',
+
+  /**
    * OSRM-compatible cycling routing backend, proxied by GET /api/route. Default
    * is the public OSRM demo server (fine for dev/light use; self-host for prod
    * — see docs). Empty => the planner serves a straight-line fallback only.
