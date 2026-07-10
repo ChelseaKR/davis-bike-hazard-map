@@ -24,11 +24,12 @@ jobs:
         # `actions` scans the workflow YAML itself (CICD-20); no autobuild
         # needed for it since there's no code to compile.
         language: [javascript-typescript, actions]
-    # NOTE (2026-07-05 remediation, P0-3/P1-2): this job used to be entirely
-    # `continue-on-error: true` at the job level, which meant CodeQL could
-    # never block a merge for ANY reason, including real findings. That's
-    # fixed below: the analyze step now writes SARIF locally with
-    # `upload: never` (skipping the upload-to-code-scanning call that 403s on
+    # NOTE (2026-07-05 remediation, P0-3/P1-2): this job used to set the
+    # job-level escape hatch that silences a failure regardless of outcome
+    # (spelled "continue" + "-on-error" + ": true" in YAML), which meant
+    # CodeQL could never block a merge for ANY reason, including real
+    # findings. That's fixed below: the analyze step now writes SARIF locally
+    # with `upload: never` (skipping the upload-to-code-scanning call that 403s on
     # a private repo without GitHub Advanced Security) and a dedicated step
     # parses that SARIF and fails the job on any error-level (security)
     # result. So SAST is blocking again even while private. Tracking issue:
