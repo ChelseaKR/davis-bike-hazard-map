@@ -77,7 +77,7 @@ jobs:
     # isolation): a release job builds, signs, and publishes, so a poisoned
     # cache entry is a real supply-chain risk here in a way it isn't in ci.yml.
     permissions:
-      contents: read
+      contents: write      # create the GitHub Release
       packages: write      # push image to GHCR
       id-token: write      # keyless cosign + SLSA provenance OIDC
       attestations: write  # actions/attest-build-provenance
