@@ -7,6 +7,7 @@
  *   - location fuzzing so the public feed never carries a precise coordinate.
  */
 import type { Hazard, Severity } from '../../shared/types.ts';
+import { canTransition, transition, type TransitionCause } from '../../shared/statusMachine.ts';
 import type { ValidatedReport } from '../../shared/validation.ts';
 import { fuzzCoordinate } from '../../shared/geo.ts';
 import { dataUrlToBytes, bytesToDataUrl } from '../../shared/exif.ts';
@@ -74,7 +75,21 @@ export async function createHazard(
   return repo.insert(stored);
 }
 
-/** Apply a moderation decision. Returns undefined if the hazard is unknown. */
+/** The target status + transition cause each moderation decision implies. */
+const MODERATION_TRANSITIONS: Record<
+  ModerationAction['decision'],
+  { to: 'approved' | 'rejected' | 'resolved'; cause: TransitionCause }
+> = {
+  approve: { to: 'approved', cause: 'moderate_approve' },
+  reject: { to: 'rejected', cause: 'moderate_reject' },
+  resolve: { to: 'resolved', cause: 'moderate_resolve' },
+};
+
+/**
+ * Apply a moderation decision. Returns undefined if the hazard is unknown OR
+ * the decision is illegal for its current status (per shared/statusMachine.ts)
+ * — e.g. re-moderating a hazard already rejected, resolved, or expired.
+ */
 export async function moderateHazard(
   repo: Repository,
   photos: PhotoStore,
@@ -87,14 +102,16 @@ export async function moderateHazard(
   const hazard = await repo.findById(id);
   if (!hazard) return undefined;
 
-  const status =
-    decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'resolved';
+  const { to, cause } = MODERATION_TRANSITIONS[decision];
+  const statusPatch = transition(hazard, to, cause, now);
+  if (!statusPatch) return undefined;
+
   const action: ModerationAction = { decision, reason, at: now, by };
 
   // Once a hazard reaches a terminal state, the precise location is no longer
   // needed (it was only for an optional 311 hand-off) — coarsen it to the
   // public grid so we don't retain a reporter's exact spot indefinitely.
-  const coarsen = status !== 'approved';
+  const coarsen = to !== 'approved';
 
   // The photo equivalent of location coarsening: a REJECTED photo is the one
   // most likely to contain faces/plates (often why it was rejected), so its
@@ -108,10 +125,8 @@ export async function moderateHazard(
   }
 
   return repo.update(id, {
-    status,
-    updatedAt: now,
+    ...statusPatch,
     moderation: [...hazard.moderation, action],
-    ...(status === 'resolved' ? { resolvedAt: now } : {}),
     ...(coarsen ? { preciseLocation: hazard.publicLocation } : {}),
     ...(dropPhoto ? { photo: null } : {}),
   });
@@ -129,7 +144,9 @@ export async function confirmHazard(
   opts: CreateOptions,
 ): Promise<StoredHazard | undefined> {
   const hazard = await repo.findById(id);
-  if (!hazard || hazard.status !== 'approved' || hazard.expiresAt <= now) {
+  // Confirming is a status-preserving self-edge; the table only permits it on
+  // approved hazards (never pending or terminal ones).
+  if (!hazard || !canTransition(hazard.status, hazard.status, 'confirm') || hazard.expiresAt <= now) {
     return undefined;
   }
   return repo.update(id, {

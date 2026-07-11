@@ -43,6 +43,7 @@
     "*.{ts,tsx,js,mjs}": "eslint --fix"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@aws-sdk/client-s3": "^3.1063.0",
     "@fastify/cors": "^10.0.1",
     "@fastify/helmet": "^12.0.1",
@@ -88,6 +89,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "fake-indexeddb": "^6.0.0",
+    "fast-check": "^4.8.0",
     "globals": "^15.14.0",
     "husky": "^9.1.7",
     "jsdom": "^25.0.1",
