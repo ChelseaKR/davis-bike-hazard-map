@@ -118,7 +118,7 @@ export async function moderateHazard(
   // bytes are deleted immediately. Resolved hazards keep theirs while publicly
   // visible (RESOLVED_VISIBLE_DAYS); sweepPhotoRetention GCs them afterwards.
   // See docs/audits/privacy-notes.md for the full retention table.
-  const dropPhoto = status === 'rejected' && hazard.photo !== null;
+  const dropPhoto = to === 'rejected' && hazard.photo !== null;
   if (dropPhoto) {
     await photos.delete(id);
     await photos.delete(thumbKey(id));
