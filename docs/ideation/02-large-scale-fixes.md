@@ -9,6 +9,15 @@ items; where one builds on an existing ID it says so. Effort tiers:
 ---
 
 ## FIX-01 — Remove the deletion-capability leak from the public feed
+**Status: DONE (2026-07-02; the code fix landed on `main` via #41's WIP
+commit, the audit trail below completes it)** — `clientId` dropped from
+`toPublic()` (`server/lib/hazards.ts`) and the public `Hazard` interface
+(`shared/types.ts`); merge-blocking regression test "never leaks the reporter
+clientId in any unauthenticated response (FIX-01)" in
+`tests/unit/server.test.ts`; recorded as R8 in `docs/audits/residual-risk.md`,
+including the residual: clientIds published by any pre-fix deployment remain
+valid deletion proofs until rotated — see R8 for operator guidance.
+
 **Pitch:** stop publishing `clientId` — currently anyone can delete anyone's report.
 
 - **Why it matters:** `toPublic()` (`server/lib/hazards.ts:143`) puts
@@ -147,6 +156,13 @@ items; where one builds on an existing ID it says so. Effort tiers:
 ## FIX-07 — Multi-instance-safe auth throttling (and bound the failure map)
 **Pitch:** login lockout and rate limits that survive `fly scale count 2`.
 
+- **Status:** ✅ DONE (S + doc branch) — the failure map is bounded and
+  self-pruning (`server/lib/loginThrottle.ts`, LRU cap 10k + lazy expiry +
+  opportunistic sweep; unit-tested in `tests/unit/loginThrottle.test.ts`,
+  including the 10k-spray bound), locked accounts survive cap eviction, and
+  "single instance only" is documented as a hard operational constraint in
+  the README runbook. The shared-store (`auth_throttle` table) path remains
+  the prerequisite for scaling out.
 - **Why it matters:** `loginFailures` is an unbounded per-process `Map`
   (`server/app.ts:213-215`) — an attacker spraying random usernames grows it
   forever (slow memory leak), and both lockout and `@fastify/rate-limit`
