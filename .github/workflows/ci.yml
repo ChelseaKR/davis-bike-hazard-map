@@ -24,8 +24,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # PRs exercise the current runtime; main keeps the compatibility range.
-        node: ${{ github.event_name == 'pull_request' && fromJSON('[22]') || fromJSON('[20, 22]') }}
+        # Full compatibility range on PRs and main: the main ruleset requires
+        # both "Node 20" and "Node 22" verify contexts, so a PR-only trim makes
+        # every PR unmergeable (the required context never reports).
+        node: [20, 22]
     services:
       postgres:
         image: postgres:16-alpine
