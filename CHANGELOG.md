@@ -14,6 +14,11 @@ PR history so the log isn't empty when the first release ships. Once `v0.1.0` is
 corresponding subset of these entries moves under that heading.
 
 ### Added
+- Tag-triggered release workflow (`.github/workflows/release.yml`, REL-14): re-runs `make verify`
+  at the tagged commit, builds + Trivy-scans the production image, publishes it to GHCR by digest
+  (never `:latest`), generates a CycloneDX SBOM, cosign-signs + attests SLSA build provenance
+  (keyless OIDC), cuts a GitHub Release, and pulls the published digest back down to prove it boots
+  and answers `/livez` before calling anything released (standards conformance remediation)
 - G10 logical-CSS i18n gate; G9 pseudolocale overflow check blocked-on-catalog (#39)
 - Structured JSON logging + `/livez` and `/readyz` probes; Sentry tracing enabled (#38)
 - SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md (#37)
@@ -37,6 +42,11 @@ corresponding subset of these entries moves under that heading.
   narrowed so the analysis step itself can fail CI even while SARIF upload stays skipped on a
   private repo (2026-07-05 remediation — see `audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md`
   P0-3)
+- `codeql.yml`'s explanatory comment about that same 2026-07-05 fix literally contained the text
+  `continue-on-error: true`, which made the portfolio's automated conformance checker (a naive
+  text scan) misreport the gate as still-silenced even though the actual gate has been real since
+  2026-07-05. Reworded the comment (no functional change) so the check reads the workflow
+  correctly (standards conformance remediation)
 
 ## Notes on pre-[Unreleased] history
 

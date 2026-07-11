@@ -18,7 +18,9 @@ on:
     branches: [main]
     paths: ['.github/workflows/**', '.github/actions/**']
   pull_request:
-    paths: ['.github/workflows/**', '.github/actions/**']
+    # No path filter: "zizmor (workflow SAST)" is a required status check in
+    # the main ruleset, so the context must report on every PR — a
+    # path-filtered run never reports and leaves non-workflow PRs unmergeable.
 
 permissions:
   contents: read

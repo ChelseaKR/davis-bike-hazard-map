@@ -24,8 +24,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # PRs exercise the current runtime; main keeps the compatibility range.
-        node: ${{ github.event_name == 'pull_request' && fromJSON('[22]') || fromJSON('[20, 22]') }}
+        # Full compatibility range on PRs and main: the main ruleset requires
+        # both "Node 20" and "Node 22" verify contexts, so a PR-only trim makes
+        # every PR unmergeable (the required context never reports).
+        node: [20, 22]
     services:
       postgres:
         image: postgres:16-alpine
@@ -173,7 +175,6 @@ jobs:
       - name: Dependency audit (production deps, fail on high/critical)
         run: npm audit --omit=dev --audit-level=high
       - name: Secret scan (gitleaks)
-        if: github.event_name != 'pull_request'
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
