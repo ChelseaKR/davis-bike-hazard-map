@@ -1,11 +1,12 @@
 /**
  * Browser-side Web Push registration for saved-route/area hazard alerts.
  *
- * STATUS: feature-flagged (config.pushEnabled). The server matcher, subscription
- * store, and dry-run delivery are complete and tested; the remaining production
- * infra is (1) a VAPID key pair, (2) a `push` + `notificationclick` handler in
- * the service worker, and (3) surfacing a "Watch this route/area" control in the
- * UI. This module is the client transport — it talks to the real PushManager and
+ * STATUS: feature-flagged (config.pushEnabled). The server matcher, Postgres
+ * subscription store, `web-push` delivery transport, and the service worker's
+ * `push`/`notificationclick` handlers (public/push-sw.js) are all in place; the
+ * remaining production steps are (1) provisioning a VAPID key pair and (2)
+ * surfacing a "Watch this route/area" control in the UI.
+ * This module is the client transport — it talks to the real PushManager and
  * our /api/alerts endpoints — and is covered by manual/e2e testing rather than
  * jsdom (jsdom has no Push API), so it is excluded from the unit-coverage gate.
  * Only the pure helpers below are unit-tested.

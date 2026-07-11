@@ -1,0 +1,227 @@
+name: release
+
+# Tag-triggered release (REL-14, RELEASE-AND-VERSIONING-STANDARD §4). Nothing
+# in ci.yml's PR green check is trusted here — this re-runs the full
+# `make verify` gate set at the exact tagged commit, then builds the same
+# production image Fly.io deploys, scans it, publishes it to GHCR by digest
+# (never `:latest`), generates a CycloneDX SBOM, signs + attests build
+# provenance (keyless OIDC — no stored signing key), cuts a GitHub Release,
+# and finally pulls the published digest back down to prove it actually boots
+# before calling anything "released".
+#
+# Mirrors this portfolio's existing Node/Docker release shape (see
+# trans-docs-navigator/.github/workflows/release.yml).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version-check:
+    name: tag matches package.json version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - name: Tag <-> package.json version consistency
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          echo "tag=$GITHUB_REF_NAME -> $tag_version   package.json=$pkg_version"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME (version $tag_version) does not match package.json version $pkg_version — bump package.json or retag"
+            exit 1
+          fi
+
+  verify:
+    name: re-verify at the tagged commit (REL-14)
+    needs: [version-check]
+    runs-on: ubuntu-latest
+    # No package-manager cache here (unlike ci.yml): a tag push builds an
+    # artifact that gets published later in this same workflow, so a poisoned
+    # cache entry is a real supply-chain risk in a way it isn't on ci.yml's
+    # mutable branches/PRs (CI-CD-STANDARD "caching is disabled" rule).
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      # This action has no input to disable its own Node-distribution tool-cache
+      # (unlike the `cache:` package-manager cache, which is opt-in and left
+      # unset below); zizmor itself notes Low confidence for this instance.
+      - name: Set up Node
+        # zizmor: ignore[cache-poisoning] no per-action toggle for the Node tool-cache; low-confidence finding
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # The exact same gate set (lint, lint:css, i18n gates, typecheck, unit
+      # tests, build) that guards every merge to main — a tag can never
+      # publish an image that didn't earn a green `make verify` of its own,
+      # independent of whatever the PR run reported.
+      - run: make verify
+
+  package:
+    name: build · scan · publish (GHCR, by digest) · SBOM · sign · attest
+    needs: [verify]
+    runs-on: ubuntu-latest
+    # No caching in this job (CI-CD-STANDARD §"Caching is disabled"/SLSA build
+    # isolation): a release job builds, signs, and publishes, so a poisoned
+    # cache entry is a real supply-chain risk here in a way it isn't in ci.yml.
+    permissions:
+      contents: write      # create the GitHub Release
+      packages: write      # push image to GHCR
+      id-token: write      # keyless cosign + SLSA provenance OIDC
+      attestations: write  # actions/attest-build-provenance
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Compute image reference (GHCR requires lowercase; github.repository is not)
+        id: image
+        run: echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build production image (same Dockerfile Fly.io deploys)
+        run: docker build -t "${STEPS_IMAGE_OUTPUTS_IMAGE}:${GITHUB_REF_NAME}" .
+        env:
+          STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
+
+      # SEC-28 again, at release time: container-scan.yml already gates pushes
+      # to main, but a release must not ship a fixable HIGH/CRITICAL CVE either,
+      # even if main drifted since the last scheduled scan.
+      - name: Container CVE scan (Trivy, fails on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.image }}:${{ github.ref_name }}
+          scan-type: image
+          vuln-type: os,library
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Push and capture the immutable digest (tagged version only, never :latest)
+        id: push
+        run: |
+          set -euo pipefail
+          out="$(docker push "${STEPS_IMAGE_OUTPUTS_IMAGE}:${GITHUB_REF_NAME}")"
+          echo "$out"
+          digest="$(echo "$out" | grep -oE 'sha256:[a-f0-9]{64}' | head -1)"
+          if [ -z "$digest" ]; then
+            echo "::error::could not parse the pushed image digest from docker push output"
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "published: ${STEPS_IMAGE_OUTPUTS_IMAGE}@$digest"
+        env:
+          STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
+
+      - name: Generate CycloneDX SBOM (from the published digest)
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0
+        with:
+          image: ${{ steps.image.outputs.image }}@${{ steps.push.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          artifact-name: sbom-${{ github.ref_name }}.cdx.json
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: cosign sign the image (keyless — Fulcio cert + Rekor log, no long-lived key)
+        run: cosign sign --yes "${STEPS_IMAGE_OUTPUTS_IMAGE}@${STEPS_PUSH_OUTPUTS_DIGEST}"
+        env:
+          STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
+          STEPS_PUSH_OUTPUTS_DIGEST: ${{ steps.push.outputs.digest }}
+
+      - name: cosign attest the SBOM (CycloneDX predicate, keyless)
+        run: cosign attest --yes --predicate sbom.cdx.json --type cyclonedx "${STEPS_IMAGE_OUTPUTS_IMAGE}@${STEPS_PUSH_OUTPUTS_DIGEST}"
+        env:
+          STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
+          STEPS_PUSH_OUTPUTS_DIGEST: ${{ steps.push.outputs.digest }}
+
+      - name: Attest SLSA build provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        with:
+          subject-name: ${{ steps.image.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
+          STEPS_PUSH_OUTPUTS_DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Image: \`${STEPS_IMAGE_OUTPUTS_IMAGE}@${STEPS_PUSH_OUTPUTS_DIGEST}\`. SBOM and signatures are attached to the image itself (cosign/attest-build-provenance) — verify with \`cosign verify\` / \`gh attestation verify\`." \
+            sbom.cdx.json
+
+  verify-published:
+    name: verify-published — pull by digest, cosign verify, boot, /livez (REL-16)
+    needs: [package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: Log in to GHCR (read)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: cosign verify (keyless — matches this repo's GitHub Actions OIDC identity)
+        run: |
+          cosign verify \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp="^https://github.com/${{ github.repository }}/" \
+            "${NEEDS_PACKAGE_OUTPUTS_IMAGE}@${NEEDS_PACKAGE_OUTPUTS_DIGEST}"
+        env:
+          NEEDS_PACKAGE_OUTPUTS_IMAGE: ${{ needs.package.outputs.image }}
+          NEEDS_PACKAGE_OUTPUTS_DIGEST: ${{ needs.package.outputs.digest }}
+
+      - name: Pull the published image BY DIGEST (never a mutable tag) and boot it
+        run: |
+          docker pull "${NEEDS_PACKAGE_OUTPUTS_IMAGE}@${NEEDS_PACKAGE_OUTPUTS_DIGEST}"
+          # ALLOW_INMEMORY opts an ephemeral run out of the production
+          # DATABASE_URL requirement (server/index.ts) — this smoke test only
+          # needs to prove the published image boots and answers its liveness
+          # probe, not that it can reach a real database.
+          docker run -d --name release-check -p 8787:8787 \
+            -e ALLOW_INMEMORY=true \
+            -e SESSION_SECRET=release-smoke-test-only \
+            "${NEEDS_PACKAGE_OUTPUTS_IMAGE}@${NEEDS_PACKAGE_OUTPUTS_DIGEST}"
+        env:
+          NEEDS_PACKAGE_OUTPUTS_IMAGE: ${{ needs.package.outputs.image }}
+          NEEDS_PACKAGE_OUTPUTS_DIGEST: ${{ needs.package.outputs.digest }}
+
+      - name: Wait for health, then prove /livez responds on the real published artifact
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:8787/livez >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8787/livez
+          echo
+          docker logs release-check
+
+      - name: Stop the container
+        if: always()
+        run: docker rm -f release-check || true

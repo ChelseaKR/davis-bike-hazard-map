@@ -12,6 +12,8 @@ import {
   createHazard,
   moderateHazard,
   sweepExpired,
+  sweepPhotoRetention,
+  thumbKey,
   toModeration,
   listPublicFeed,
 } from '../../server/lib/hazards.ts';
@@ -45,10 +47,86 @@ describe('sweepExpired', () => {
     const repo = new MemoryRepository();
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
-    await moderateHazard(repo, h.id, 'approve', NOW);
+    await moderateHazard(repo, photos, h.id, 'approve', NOW);
     expect(await sweepExpired(repo, NOW)).toBe(0); // not yet
     expect(await sweepExpired(repo, NOW + 2 * DAY)).toBe(1);
     expect((await repo.findById(h.id))!.status).toBe('expired');
+  });
+});
+
+/** Create a hazard and attach photo bytes (full + thumb) to the stores. */
+async function hazardWithPhoto(repo: MemoryRepository, photos: MemoryPhotoStore) {
+  const h = await createHazard(repo, photos, report(), NOW, ttl);
+  await photos.put(h.id, new Uint8Array([1, 2, 3]));
+  await photos.put(thumbKey(h.id), new Uint8Array([4, 5]));
+  return (await repo.update(h.id, { photo: { mime: 'image/jpeg' } }))!;
+}
+
+describe('photo retention', () => {
+  it('deletes blob + thumb immediately when a hazard is rejected', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await hazardWithPhoto(repo, photos);
+
+    const updated = await moderateHazard(repo, photos, h.id, 'reject', NOW);
+    expect(updated?.status).toBe('rejected');
+    expect(updated?.photo).toBeNull();
+    expect(await photos.has(h.id)).toBe(false);
+    expect(await photos.has(thumbKey(h.id))).toBe(false);
+  });
+
+  it('keeps the photo on approve and resolve (still publicly visible)', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await hazardWithPhoto(repo, photos);
+
+    await moderateHazard(repo, photos, h.id, 'approve', NOW);
+    const resolved = await moderateHazard(repo, photos, h.id, 'resolve', NOW);
+    expect(resolved?.photo).toEqual({ mime: 'image/jpeg' });
+    expect(await photos.has(h.id)).toBe(true);
+    expect(await photos.has(thumbKey(h.id))).toBe(true);
+  });
+
+  it('sweeps resolved photos only after the grace window', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await hazardWithPhoto(repo, photos);
+    await moderateHazard(repo, photos, h.id, 'approve', NOW);
+    await moderateHazard(repo, photos, h.id, 'resolve', NOW);
+
+    // Within the grace window: untouched.
+    expect(await sweepPhotoRetention(repo, photos, NOW + 6 * DAY, 7 * DAY)).toBe(0);
+    expect(await photos.has(h.id)).toBe(true);
+
+    // Past the grace window: blob + thumb gone, photo ref cleared.
+    expect(await sweepPhotoRetention(repo, photos, NOW + 8 * DAY, 7 * DAY)).toBe(1);
+    expect(await photos.has(h.id)).toBe(false);
+    expect(await photos.has(thumbKey(h.id))).toBe(false);
+    expect((await repo.findById(h.id))?.photo).toBeNull();
+  });
+
+  it('sweeps expired photos after the grace window', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await hazardWithPhoto(repo, photos);
+    await moderateHazard(repo, photos, h.id, 'approve', NOW);
+    await sweepExpired(repo, NOW + 2 * DAY); // ttl is 1 day
+
+    expect(await sweepPhotoRetention(repo, photos, NOW + 2 * DAY, 7 * DAY)).toBe(0);
+    expect(await sweepPhotoRetention(repo, photos, NOW + 10 * DAY, 7 * DAY)).toBe(1);
+    expect(await photos.has(h.id)).toBe(false);
+    expect(await photos.has(thumbKey(h.id))).toBe(false);
+  });
+
+  it('never touches pending hazards (moderation queue still needs the bytes)', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await hazardWithPhoto(repo, photos); // stays pending
+
+    expect(await sweepPhotoRetention(repo, photos, NOW + 100 * DAY, 7 * DAY)).toBe(0);
+    expect(await photos.has(h.id)).toBe(true);
+    expect(await photos.has(thumbKey(h.id))).toBe(true);
+    expect((await repo.findById(h.id))?.photo).toEqual({ mime: 'image/jpeg' });
   });
 });
 
@@ -70,8 +148,8 @@ describe('listPublicFeed', () => {
     const repo = new MemoryRepository();
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
-    await moderateHazard(repo, h.id, 'approve', NOW);
-    await moderateHazard(repo, h.id, 'resolve', NOW);
+    await moderateHazard(repo, photos, h.id, 'approve', NOW);
+    await moderateHazard(repo, photos, h.id, 'resolve', NOW);
     expect(await listPublicFeed(repo, NOW, 0)).toHaveLength(0);
   });
 });

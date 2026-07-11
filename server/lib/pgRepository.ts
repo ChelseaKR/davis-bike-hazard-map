@@ -183,6 +183,9 @@ export class PostgresRepository implements Repository {
   }
 
   async expire(now: number): Promise<number> {
+    // WHERE status='approved' mirrors the state machine's single `expire` edge
+    // (approved → expired, shared/statusMachine.ts); terminal states are never
+    // touched. Keep the predicate in lockstep with LEGAL_TRANSITIONS.
     const res = await this.pool.query(
       `UPDATE hazards
          SET status='expired', updated_at=$1,
@@ -191,6 +194,17 @@ export class PostgresRepository implements Repository {
       [now],
     );
     return res.rowCount ?? 0;
+  }
+
+  async listPhotoGcCandidates(cutoff: number): Promise<StoredHazard[]> {
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards
+       WHERE photo_mime IS NOT NULL
+         AND status IN ('expired', 'resolved')
+         AND COALESCE(resolved_at, updated_at) <= $1`,
+      [cutoff],
+    );
+    return res.rows.map(rowToHazard);
   }
 
   async deleteById(id: string): Promise<boolean> {

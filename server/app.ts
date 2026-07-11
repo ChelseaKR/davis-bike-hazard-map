@@ -38,6 +38,7 @@ import {
   type ModeratorStore,
 } from './lib/moderators.ts';
 import { verifyPassword } from './lib/password.ts';
+import { LoginThrottle } from './lib/loginThrottle.ts';
 import { issueToken, verifyToken } from './lib/token.ts';
 import { createMetrics } from './lib/metrics.ts';
 import { buildLoggerOptions } from './lib/logger.ts';
@@ -57,7 +58,7 @@ import {
   toPublic,
   thumbKey,
 } from './lib/hazards.ts';
-import { forwardToGogov, fetchGogovStatus } from './lib/gogov.ts';
+import { forwardHandoff, syncHandoffStatus } from './lib/handoff.ts';
 import { fetchRoutes } from './lib/routing.ts';
 import { applyHandoffStatus, initialHandoff } from './lib/lifecycle.ts';
 import {
@@ -65,7 +66,12 @@ import {
   buildSubscription,
   type SubscriptionStore,
 } from './lib/subscriptions.ts';
-import { notifyForHazard } from './lib/pushNotify.ts';
+import {
+  notifyForHazard,
+  isConfigured,
+  createWebPushSender,
+  type PushSender,
+} from './lib/pushNotify.ts';
 import { verifyWebhook, ReplayCache, WEBHOOK_TOLERANCE_MS } from './lib/webhookAuth.ts';
 
 export interface AppDeps {
@@ -73,6 +79,8 @@ export interface AppDeps {
   photos?: PhotoStore;
   moderators?: ModeratorStore;
   subscriptions?: SubscriptionStore;
+  /** Override the Web Push transport (tests inject fakes). */
+  pushSender?: PushSender;
   now?: () => number;
   config?: typeof serverConfig;
   fetchImpl?: typeof fetch;
@@ -111,6 +119,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const photos = deps.photos ?? new MemoryPhotoStore();
   const moderators = deps.moderators ?? new MemoryModeratorStore();
   const subscriptions = deps.subscriptions ?? new MemorySubscriptionStore();
+  // Real Web Push transport only when the flag + both VAPID keys are set;
+  // otherwise notifyForHazard's default no-op sender keeps delivery in dry-run.
+  const pushSender =
+    deps.pushSender ?? (isConfigured(config.push) ? createWebPushSender() : undefined);
 
   const app = Fastify({
     // Structured JSON logs with a redaction allow-list (never emit precise
@@ -214,11 +226,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     (req as AuthedRequest).moderatorUsername = payload.sub;
   };
 
-  // Per-account failed-login throttle (per-process; complements the per-IP rate
-  // limit). After MAX_LOGIN_FAILS misses an account is locked for LOCKOUT_MS.
-  const loginFailures = new Map<string, { count: number; until: number }>();
-  const MAX_LOGIN_FAILS = 5;
-  const LOCKOUT_MS = 15 * 60 * 1000;
+  // Per-account failed-login throttle (complements the per-IP rate limit).
+  // Bounded + self-pruning — see server/lib/loginThrottle.ts. NOTE: this
+  // counter, like the @fastify/rate-limit counters, lives in process memory,
+  // so throttling is PER-PROCESS: running a single app instance is an
+  // operational constraint (documented in the README runbook), and scaling
+  // out requires moving these counters to a shared store first.
+  const loginThrottle = new LoginThrottle();
 
   // Replay guard for the inbound 311 webhook: a verified signature may be
   // presented only once within its freshness window (FIX-02). Bounded + self-
@@ -300,8 +314,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const { username, password } = loginSchema.parse(req.body);
 
       // Per-account lockout after repeated misses.
-      const fail = loginFailures.get(username);
-      if (fail && fail.until > now()) {
+      if (loginThrottle.isLocked(username, now())) {
         return reply
           .status(429)
           .send({ error: 'too_many_attempts', message: 'Too many attempts. Try again later.' });
@@ -310,19 +323,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const moderator = await moderators.findByUsername(username);
       const ok = await verifyPassword(password, moderator?.passwordHash ?? DUMMY_PASSWORD_HASH);
       if (!moderator || !ok) {
-        const f = loginFailures.get(username) ?? { count: 0, until: 0 };
-        f.count += 1;
-        if (f.count >= MAX_LOGIN_FAILS) {
-          f.until = now() + LOCKOUT_MS;
-          f.count = 0;
-        }
-        loginFailures.set(username, f);
+        loginThrottle.recordFailure(username, now());
         return reply
           .status(401)
           .send({ error: 'invalid_credentials', message: 'Wrong username or password.' });
       }
 
-      loginFailures.delete(username); // success clears the counter
+      loginThrottle.clear(username); // success clears the counter
       const token = issueToken(
         username,
         config.sessionSecret,
@@ -514,21 +521,33 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { id } = req.params as { id: string };
     const { decision, reason } = moderationDecisionSchema.parse(req.body);
     const by = (req as AuthedRequest).moderatorUsername;
-    const updated = await moderateHazard(repo, id, decision, now(), reason, by);
+    const updated = await moderateHazard(repo, photos, id, decision, now(), reason, by);
     if (!updated) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
-    // A newly-approved hazard can fire saved-route/area push alerts (dry-run
-    // unless push is configured). Best-effort: never let it fail moderation.
+    // A newly-approved hazard can fire saved-route/area push alerts (real
+    // delivery when VAPID keys are configured, dry-run otherwise). Best-effort:
+    // never let it fail moderation.
     if (decision === 'approve') {
       try {
+        // TTL enforcement (FIX-10): drop expired subscriptions before matching
+        // so a lapsed watch can never fire — or linger in storage.
+        await subscriptions.prune(now());
         const result = await notifyForHazard(
           toPublic(updated),
           await subscriptions.all(),
           config.push,
+          pushSender,
         );
         if (result.matched > 0) {
           app.log.info({ hazard: id, ...result }, 'saved-route alert matched');
+        }
+        // Prune subscriptions the push service reported gone (HTTP 404/410).
+        for (const deadId of result.dead) {
+          await subscriptions.remove(deadId);
+        }
+        if (result.dead.length > 0) {
+          app.log.info({ pruned: result.dead.length }, 'removed dead push subscriptions');
         }
       } catch (err) {
         app.log.warn(err, 'alert notify failed');
@@ -559,6 +578,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       return reply.status(503).send({ error: 'disabled', message: 'Push alerts are not enabled.' });
     }
     const { id } = req.params as { id: string };
+    // Pruning first means an already-expired subscription 404s like a deleted
+    // one — from the client's perspective, expiry and deletion look the same.
+    await subscriptions.prune(now());
     const removed = await subscriptions.remove(id);
     if (!removed) {
       return reply.status(404).send({ error: 'not_found', message: 'No such subscription.' });
@@ -566,26 +588,39 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return reply.status(204).send();
   });
 
-  // --- Optional 311/GOGov hand-off (moderator-triggered, least privilege) ---
+  // --- Optional 311 hand-off (moderator-triggered, least privilege) ---
+  // Provider is config-only (EXP-06): GOGov (bespoke, default) or Open311
+  // GeoReport v2 (vendor-neutral standard) — see `lib/handoff.ts`.
+  const handoffProviderConfig = {
+    handoffProvider: config.handoffProvider,
+    gogov: { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey, statusUrl: config.gogovStatusUrl },
+    open311: {
+      endpoint: config.open311Endpoint,
+      apiKey: config.open311ApiKey,
+      jurisdictionId: config.open311JurisdictionId,
+      serviceCode: config.open311ServiceCode,
+    },
+  };
+
   app.post('/api/moderation/:id/handoff', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const hazard = await repo.findById(id);
     if (!hazard) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
-    const result = await forwardToGogov(
-      hazard,
-      { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey },
-      fetchImpl,
-    );
-    // Record the hand-off on the hazard so its 311 status can be synced back and
+    const result = await forwardHandoff(hazard, handoffProviderConfig, fetchImpl);
+    // Record the hand-off on the hazard so its status can be synced back and
     // surfaced on the map/list. Even a dry-run records the intent.
-    const updated = await repo.update(id, { handoff: initialHandoff(hazard, now()), updatedAt: now() });
+    const updated = await repo.update(id, {
+      handoff: initialHandoff(hazard, now(), result.provider, result.reference),
+      updatedAt: now(),
+    });
     return { result, hazard: updated ? toPublic(updated) : toPublic(hazard) };
   });
 
   // --- 311 status sync-back: moderator-triggered poll ---
-  // Pulls the current status from 311 (dry-run without GOGOV_STATUS_URL) and
+  // Pulls the current status from whichever provider the hazard was handed
+  // off with (dry-run without that provider's endpoint/URL configured) and
   // reflects it onto the hazard; a "fixed" status resolves the hazard.
   app.post('/api/moderation/:id/handoff/sync', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -596,9 +631,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (!hazard.handoff) {
       return reply.status(409).send({ error: 'not_handed_off', message: 'Hazard was never handed off to 311.' });
     }
-    const status = await fetchGogovStatus(
+    const status = await syncHandoffStatus(
+      hazard.handoff.provider,
       hazard.handoff.reference,
-      { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey, statusUrl: config.gogovStatusUrl },
+      handoffProviderConfig,
       fetchImpl,
     );
     if (!status.status) {

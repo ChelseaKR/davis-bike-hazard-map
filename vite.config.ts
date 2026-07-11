@@ -49,6 +49,10 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        // Web Push `push` + `notificationclick` handlers (public/push-sw.js)
+        // are appended to the generated SW so we keep generateSW (precache +
+        // runtime caching) instead of migrating to injectManifest.
+        importScripts: ['push-sw.js'],
         // App shell: navigations fall back to the cached index when offline, so
         // a cold launch with no network still boots the PWA (the last hazard
         // payload and map tiles come from the runtime caches below).
