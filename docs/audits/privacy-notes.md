@@ -10,6 +10,8 @@ Instantiates `/STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` §C for this repo.
 | Photo (EXIF-stripped, optionally blurred) | Evidence of hazard | PhotoStore (blob) | Rejected: deleted at decision; resolved/expired: deleted after `RESOLVED_VISIBLE_DAYS` (see retention table) | Public only after approval; moderators before |
 | Precise location | 311 dispatch (opt-in only) | Server store, internal | Same as hazard | Server + opt-in 311 hand-off only |
 | Public location (fuzzed ~70 m) | Map display | Server store | Same as hazard | Public |
+| Alert subscription: watch geometry (saved area box, or route polyline **simplified to ~35 m** — corridor precision, never the raw GPS trace) | Saved-route/area push alerts (opt-in, feature-flagged) | Server subscription store | **180-day TTL**, renewed on re-subscribe; expired records pruned before every match | Server only; never public |
+| Alert subscription: push endpoint + encryption keys, optional label | Web Push delivery | Server subscription store | Same 180-day TTL | Server only; endpoint/keys redacted from logs |
 | No accounts, no contact info, no analytics/trackers | — | — | — | — |
 
 **Threat model (specific people in the data):** a bystander photographed in a
@@ -58,6 +60,21 @@ street scene; a reporter whose home-adjacent report could reveal where they live
 - **Reporter deletion.** `DELETE /api/reports/<clientId>` removes a report
   (record + photo blobs); the clientId is the device-held capability. Exposed in
   the app's "My reports" and the privacy page.
+- **Alert-subscription minimization + TTL (FIX-10).** A saved route watch is a
+  home↔work corridor — treated as sensitive location data. Route geometry is
+  Douglas–Peucker-simplified to ~35 m (half the public fuzz grid) **before
+  storage** (`shared/simplify.ts`, applied in `server/lib/subscriptions.ts`);
+  matching is corridor-based so results are unchanged (auto-gated by
+  `tests/unit/alerts.test.ts`). Every subscription expires after **180 days**;
+  re-subscribing (deterministic id per endpoint) renews it, and expired records
+  are pruned before every match and on unsubscribe. Push endpoints (capability
+  URLs) and encryption keys (`p256dh`/`auth`/`keys`) are on the log redaction
+  list (`server/lib/logger.ts`).
+- **Subscription deletion.** `DELETE /api/alerts/subscribe/:id` removes a
+  subscription immediately, no auth required. The id is a SHA-1 hash prefix of
+  the push endpoint — unguessable to third parties, but derivable by the
+  client that holds the endpoint, so the subscriber can always delete their
+  own record.
 
 ## "Open-data export" schema
 
@@ -76,6 +93,9 @@ A user-facing **privacy page** (`/privacy.html`) and **accessibility statement**
 - [x] No PII in logs — **auto-gated** (logger redaction; no body logging).
 - [x] Blur offered on every photo — **auto-gated** (PhotoEditor a11y/render test).
 - [x] Retention/expiry enforced — **auto-gated** (server expiry test).
+- [x] Alert subscriptions minimized (≤ corridor precision) + 180-day TTL +
+      endpoint/keys log redaction — **auto-gated** (`alerts.test.ts` match-
+      equivalence/TTL tests; `observability.test.ts` redaction test).
 - [ ] Location-fuzzing policy sign-off — **review-gated** (privacy reviewer).
 
-**Last verified: 2026-05-31 · Recheck cadence: per data-flow change.**
+**Last verified: 2026-07-02 · Recheck cadence: per data-flow change.**

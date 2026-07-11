@@ -253,6 +253,16 @@ arbitrary operation sequences in `tests/unit/statusMachine.test.ts`.
 ## FIX-10 — Alert-subscription privacy: inventory, minimization, TTL
 **Pitch:** treat saved routes/areas as the sensitive location data they are, before delivery ships.
 
+**Status: ✅ DONE (2026-07-02).** Route geometry is Douglas–Peucker-simplified
+to ~35 m (half the fuzz grid) at storage time (`shared/simplify.ts`,
+`server/lib/subscriptions.ts`); subscriptions carry a 180-day TTL renewed on
+re-subscribe, with expired records pruned before matching and on unsubscribe;
+push endpoint/keys joined the log-redaction list (`server/lib/logger.ts`);
+inventory + retention + deletion documented in `docs/audits/privacy-notes.md`
+and `public/privacy.html`. Match-equivalence, deviation-bound, TTL, and
+redaction tests auto-gate it (`tests/unit/alerts.test.ts`,
+`tests/unit/observability.test.ts`).
+
 - **Why it matters:** a saved watch is a home↔work corridor — arguably the
   most sensitive data the system will hold, more identifying than any single
   report. Today it's stored verbatim (up to 2,000 exact polyline points,
