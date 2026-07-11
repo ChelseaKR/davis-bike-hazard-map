@@ -41,6 +41,12 @@ export interface Open311Request {
 export interface Open311Result {
   delivered: boolean;
   dryRun: boolean;
+  /**
+   * The request as sent, with `api_key` REDACTED: this result is echoed to the
+   * moderator UI in hand-off responses, and — matching the GOGov adapter,
+   * which carries its credential in a header and never echoes it — the
+   * deployment's city credential must not surface there.
+   */
   request: Open311Request;
   /** `service_request_id` returned by the server, when delivered. */
   serviceRequestId?: string;
@@ -81,9 +87,12 @@ export async function submitOpen311Request(
   fetchImpl: typeof fetch = fetch,
 ): Promise<Open311Result> {
   const request = buildOpen311Request(hazard, config);
+  // What callers see: the wire request minus the credential (see Open311Result).
+  const echo: Open311Request = { ...request };
+  delete echo.api_key;
 
   if (!config.endpoint) {
-    return { delivered: false, dryRun: true, request };
+    return { delivered: false, dryRun: true, request: echo };
   }
 
   try {
@@ -103,7 +112,7 @@ export async function submitOpen311Request(
       body: body.toString(),
     });
     if (!res.ok) {
-      return { delivered: false, dryRun: false, request, status: res.status, error: `Open311 responded ${res.status}` };
+      return { delivered: false, dryRun: false, request: echo, status: res.status, error: `Open311 responded ${res.status}` };
     }
     // GeoReport v2 returns an array (possibly of length 1) of request objects.
     const parsed = (await res.json()) as Array<{ service_request_id?: string; service_notice?: string }>;
@@ -112,7 +121,7 @@ export async function submitOpen311Request(
       return {
         delivered: false,
         dryRun: false,
-        request,
+        request: echo,
         status: res.status,
         error: 'Open311 response had no service_request_id',
       };
@@ -120,12 +129,12 @@ export async function submitOpen311Request(
     return {
       delivered: true,
       dryRun: false,
-      request,
+      request: echo,
       serviceRequestId: first.service_request_id,
       status: res.status,
     };
   } catch (err) {
-    return { delivered: false, dryRun: false, request, error: err instanceof Error ? err.message : 'hand-off failed' };
+    return { delivered: false, dryRun: false, request: echo, error: err instanceof Error ? err.message : 'hand-off failed' };
   }
 }
 

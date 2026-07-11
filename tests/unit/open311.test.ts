@@ -89,6 +89,26 @@ describe('submitOpen311Request', () => {
     expect(body.getAll('attribute[]')).toContain('reference:haz-1');
   });
 
+  it('never echoes api_key in the result, while still sending it on the wire', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => [{ service_request_id: '638344' }],
+    } as Response);
+    const config = { endpoint: 'https://311.example.gov/v2', serviceCode: 'bike-hazard', apiKey: 'k' };
+    const result = await submitOpen311Request(stored(), config, fetchMock);
+    // The credential goes to the 311 server…
+    const [, init] = fetchMock.mock.calls[0];
+    expect(new URLSearchParams((init as RequestInit).body as string).get('api_key')).toBe('k');
+    // …but never back to the caller (the hand-off route echoes this result to the moderator UI).
+    expect(result.request.api_key).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('"k"');
+    // Dry-run echoes are redacted the same way.
+    const dry = await submitOpen311Request(stored(), { ...config, endpoint: '' });
+    expect(dry.dryRun).toBe(true);
+    expect(dry.request.api_key).toBeUndefined();
+  });
+
   it('reports non-2xx as undelivered without throwing', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
     const result = await submitOpen311Request(
