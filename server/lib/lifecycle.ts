@@ -6,6 +6,7 @@
  * inbound webhook and the moderator-triggered poll share one mapping.
  */
 import type { HandoffInfo, HandoffStage } from '../../shared/types.ts';
+import { transition } from '../../shared/statusMachine.ts';
 import type { StoredHazard } from './types.ts';
 
 /**
@@ -62,10 +63,15 @@ export function applyHandoffStatus(
   };
 
   const patch: Partial<StoredHazard> = { handoff, updatedAt: now };
-  const resolved = isResolvingStage(stage) && hazard.status !== 'resolved';
-  if (resolved) {
-    patch.status = 'resolved';
-    patch.resolvedAt = now;
+  // Only a legal edge may resolve the hazard (shared/statusMachine.ts): the
+  // city fixing an APPROVED hazard resolves it, but a synced-back status can
+  // never pull a rejected/expired/pending hazard into `resolved`.
+  const statusPatch = isResolvingStage(stage)
+    ? transition(hazard, 'resolved', 'handoff_resolve', now)
+    : undefined;
+  const resolved = statusPatch !== undefined;
+  if (statusPatch) {
+    Object.assign(patch, statusPatch);
     // Terminal state: drop the precise location (only needed while actionable).
     patch.preciseLocation = hazard.publicLocation;
   }
