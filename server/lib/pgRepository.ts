@@ -183,6 +183,9 @@ export class PostgresRepository implements Repository {
   }
 
   async expire(now: number): Promise<number> {
+    // WHERE status='approved' mirrors the state machine's single `expire` edge
+    // (approved → expired, shared/statusMachine.ts); terminal states are never
+    // touched. Keep the predicate in lockstep with LEGAL_TRANSITIONS.
     const res = await this.pool.query(
       `UPDATE hazards
          SET status='expired', updated_at=$1,

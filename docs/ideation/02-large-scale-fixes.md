@@ -206,6 +206,15 @@ valid deletion proofs until rotated — see R8 for operator guidance.
   permalink cold and lands focused on it in both map and list.
 
 ## FIX-09 — Explicit status-transition state machine
+**Status: DONE (2026-07-02)** — `shared/statusMachine.ts` holds the
+legal-transition table (`LEGAL_TRANSITIONS`), `canTransition(from, to, cause)`
+and the `transition()` patch helper; `moderateHazard`/`confirmHazard`
+(`server/lib/hazards.ts`), `applyHandoffStatus` (`server/lib/lifecycle.ts` —
+closes the webhook-resolves-rejected hole) and `MemoryRepository.expire()` all
+route through it (the Postgres `expire()` predicate mirrors the table);
+exhaustive (from, to, cause) unit tests + fast-check property tests over
+arbitrary operation sequences in `tests/unit/statusMachine.test.ts`.
+
 **Pitch:** one module that says which `HazardStatus` transitions are legal, enforced everywhere state changes.
 
 - **Why it matters:** transitions are currently implied by call sites —
