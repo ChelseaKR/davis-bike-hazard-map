@@ -4,12 +4,54 @@ How to stand up the private beta of the Davis Bike Hazard Map, hand out a
 preview link, and run it safely while a small group tests it.
 
 The app is one container (Fastify API that also serves the built PWA) plus a
-PostgreSQL database. Target host below is **Fly.io** (config already in
-[`fly.toml`](./fly.toml)); any Docker host + managed Postgres works the same way.
+PostgreSQL database. It is currently deployed on **AWS** (see below); the
+**Fly.io** runbook that follows is the original target and works the same way on
+any Docker host + managed Postgres.
 
 ---
 
-## 1. One-time provisioning (Fly.io)
+## Live deployment (AWS App Runner + RDS)
+
+**The private beta is live at <https://ffvp3ctt7m.us-west-2.awsapprunner.com>.**
+
+It runs in `us-west-2`:
+
+- **AWS App Runner** serves the container (image built from this repo's
+  `Dockerfile`) on a managed HTTPS URL, egressing through a **VPC connector** so
+  it can reach the database privately.
+- **Amazon RDS for PostgreSQL** (`dbhm-pg`, db.t4g.micro, not publicly
+  accessible). The app connects with **full TLS verification**
+  (`sslmode=verify-full`); the Amazon RDS CA bundle is baked into the image via
+  `NODE_EXTRA_CA_CERTS`.
+- **Amazon S3** (`dbhm-photos-<acct>-us-west-2`) holds uploaded photos, reached
+  through a free S3 gateway VPC endpoint (no NAT).
+- Secrets (`DATABASE_URL`, `SESSION_SECRET`, `MODERATOR_PASSWORD`) live in **AWS
+  Secrets Manager** under the `dbhm/` prefix, injected as runtime environment
+  secrets. `MODERATOR_USERNAME` is a plain env var.
+
+Smoke test:
+
+```bash
+curl https://ffvp3ctt7m.us-west-2.awsapprunner.com/api/health   # {"status":"ok"}
+curl https://ffvp3ctt7m.us-west-2.awsapprunner.com/api/ready    # {"status":"ready"} (DB-aware)
+```
+
+Redeploy after a code change — rebuild the image, then roll App Runner:
+
+```bash
+# 1. refresh the build source, 2. build+push image, 3. redeploy
+aws s3 cp <(git -C . archive HEAD) s3://dbhm-build-<acct>-us-west-2/source/dbhm-src.zip  # or zip the tree
+aws codebuild start-build --project-name dbhm-image-build --region us-west-2
+aws apprunner start-deployment --region us-west-2 \
+  --service-arn arn:aws:apprunner:us-west-2:<acct>:service/davis-bike-hazard-map/<id>
+```
+
+The GitHub Actions Fly workflow (`.github/workflows/deploy.yml`) is unrelated to
+this AWS deployment and stays inert unless a `FLY_API_TOKEN` secret is set.
+
+---
+
+## 1. One-time provisioning (Fly.io — alternative)
 
 Requires a Fly account. `flyctl` is the CLI (`brew install flyctl` or
 `curl -L https://fly.io/install.sh | sh`).
