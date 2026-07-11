@@ -140,10 +140,10 @@ describe('mutation paths respect the machine', () => {
     const repo = new MemoryRepository();
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
-    await moderateHazard(repo, h.id, 'reject', NOW);
+    await moderateHazard(repo, photos, h.id, 'reject', NOW);
 
-    expect(await moderateHazard(repo, h.id, 'approve', NOW + 1)).toBeUndefined();
-    expect(await moderateHazard(repo, h.id, 'resolve', NOW + 1)).toBeUndefined();
+    expect(await moderateHazard(repo, photos, h.id, 'approve', NOW + 1)).toBeUndefined();
+    expect(await moderateHazard(repo, photos, h.id, 'resolve', NOW + 1)).toBeUndefined();
     const stored = (await repo.findById(h.id))!;
     expect(stored.status).toBe('rejected');
     expect(stored.moderation).toHaveLength(1); // illegal attempts are not logged
@@ -153,7 +153,7 @@ describe('mutation paths respect the machine', () => {
     const repo = new MemoryRepository();
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
-    await moderateHazard(repo, h.id, 'reject', NOW);
+    await moderateHazard(repo, photos, h.id, 'reject', NOW);
 
     const hazard = (await repo.findById(h.id))!;
     const { patch, resolved } = applyHandoffStatus(hazard, 'Closed - Resolved', NOW + 1);
@@ -176,7 +176,7 @@ describe('mutation paths respect the machine', () => {
     const repo = new MemoryRepository();
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
-    await moderateHazard(repo, h.id, 'approve', NOW);
+    await moderateHazard(repo, photos, h.id, 'approve', NOW);
     const hazard = (await repo.findById(h.id))!;
     const { patch, resolved } = applyHandoffStatus(hazard, 'Closed - Resolved', NOW + 1);
     expect(resolved).toBe(true);
@@ -189,9 +189,9 @@ describe('mutation paths respect the machine', () => {
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
     expect(await confirmHazard(repo, h.id, NOW, ttl)).toBeUndefined(); // pending
-    await moderateHazard(repo, h.id, 'approve', NOW);
+    await moderateHazard(repo, photos, h.id, 'approve', NOW);
     expect((await confirmHazard(repo, h.id, NOW, ttl))?.confirmations).toBe(1);
-    await moderateHazard(repo, h.id, 'resolve', NOW);
+    await moderateHazard(repo, photos, h.id, 'resolve', NOW);
     expect(await confirmHazard(repo, h.id, NOW, ttl)).toBeUndefined(); // terminal
   });
 
@@ -206,7 +206,7 @@ describe('mutation paths respect the machine', () => {
       NOW,
       ttl,
     );
-    await moderateHazard(repo, rejected.id, 'reject', NOW);
+    await moderateHazard(repo, photos, rejected.id, 'reject', NOW);
 
     expect(await sweepExpired(repo, NOW + 40 * DAY)).toBe(0);
     expect((await repo.findById(pending.id))!.status).toBe('pending');
@@ -268,7 +268,7 @@ describe('property: no operation sequence violates the machine', () => {
           clock += 1000;
           switch (op.kind) {
             case 'moderate':
-              await moderateHazard(repo, created.id, op.decision, clock);
+              await moderateHazard(repo, photos, created.id, op.decision, clock);
               break;
             case 'handoff': {
               // Mirrors the webhook/poll routes: compute the patch, apply it raw.

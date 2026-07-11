@@ -92,6 +92,7 @@ const MODERATION_TRANSITIONS: Record<
  */
 export async function moderateHazard(
   repo: Repository,
+  photos: PhotoStore,
   id: string,
   decision: ModerationAction['decision'],
   now: number,
@@ -112,10 +113,22 @@ export async function moderateHazard(
   // public grid so we don't retain a reporter's exact spot indefinitely.
   const coarsen = to !== 'approved';
 
+  // The photo equivalent of location coarsening: a REJECTED photo is the one
+  // most likely to contain faces/plates (often why it was rejected), so its
+  // bytes are deleted immediately. Resolved hazards keep theirs while publicly
+  // visible (RESOLVED_VISIBLE_DAYS); sweepPhotoRetention GCs them afterwards.
+  // See docs/audits/privacy-notes.md for the full retention table.
+  const dropPhoto = to === 'rejected' && hazard.photo !== null;
+  if (dropPhoto) {
+    await photos.delete(id);
+    await photos.delete(thumbKey(id));
+  }
+
   return repo.update(id, {
     ...statusPatch,
     moderation: [...hazard.moderation, action],
     ...(coarsen ? { preciseLocation: hazard.publicLocation } : {}),
+    ...(dropPhoto ? { photo: null } : {}),
   });
 }
 
@@ -151,6 +164,43 @@ export async function confirmHazard(
  */
 export function sweepExpired(repo: Repository, now: number): Promise<number> {
   return repo.expire(now);
+}
+
+/**
+ * Photo-blob garbage collection (see docs/audits/privacy-notes.md): delete the
+ * full + thumb bytes of hazards that left the actionable state — `expired` or
+ * `resolved` for at least `graceMs` (RESOLVED_VISIBLE_DAYS, so a fixed hazard's
+ * photo survives exactly as long as the hazard stays publicly visible).
+ * Rejected photos never reach this sweep; moderateHazard deletes them
+ * immediately. The photo ref is cleared so /api/photos/:id 404s cleanly.
+ * Returns the number of hazards whose photos were deleted.
+ */
+export async function sweepPhotoRetention(
+  repo: Repository,
+  photos: PhotoStore,
+  now: number,
+  graceMs: number,
+): Promise<number> {
+  const cutoff = now - graceMs;
+  let removed = 0;
+  for (const candidate of await repo.listPhotoGcCandidates(cutoff)) {
+    // Re-check right before deleting: the moderation queue inlines PENDING
+    // photos (toModeration), so never race a record that changed under us —
+    // only expired/resolved hazards past the grace window lose their bytes.
+    const h = await repo.findById(candidate.id);
+    if (
+      !h?.photo ||
+      (h.status !== 'expired' && h.status !== 'resolved') ||
+      (h.resolvedAt ?? h.updatedAt) > cutoff
+    ) {
+      continue;
+    }
+    await photos.delete(h.id);
+    await photos.delete(thumbKey(h.id));
+    await repo.update(h.id, { photo: null });
+    removed++;
+  }
+  return removed;
 }
 
 /**

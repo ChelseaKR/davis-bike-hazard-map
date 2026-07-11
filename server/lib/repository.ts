@@ -41,6 +41,13 @@ export interface Repository {
    * hazard is actionable. Returns the count expired.
    */
   expire(now: number): Promise<number>;
+  /**
+   * Hazards whose photo blobs are due for garbage collection: they still carry
+   * a photo ref, are `expired`/`resolved`, and left the actionable state at or
+   * before `cutoff` (resolvedAt for resolved rows, else updatedAt). Consumed by
+   * sweepPhotoRetention (see docs/audits/privacy-notes.md).
+   */
+  listPhotoGcCandidates(cutoff: number): Promise<StoredHazard[]>;
   /** Hard-delete a hazard by id (reporter data deletion). Returns true if found. */
   deleteById(id: string): Promise<boolean>;
   /** Moderation backlog stats for observability (cheap; no photos loaded). */
@@ -124,6 +131,15 @@ export class MemoryRepository implements Repository {
     }
     if (expired) this.persist();
     return expired;
+  }
+
+  async listPhotoGcCandidates(cutoff: number): Promise<StoredHazard[]> {
+    return [...this.store.values()].filter(
+      (h) =>
+        h.photo !== null &&
+        (h.status === 'expired' || h.status === 'resolved') &&
+        (h.resolvedAt ?? h.updatedAt) <= cutoff,
+    );
   }
 
   async deleteById(id: string): Promise<boolean> {

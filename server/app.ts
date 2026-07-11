@@ -510,7 +510,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { id } = req.params as { id: string };
     const { decision, reason } = moderationDecisionSchema.parse(req.body);
     const by = (req as AuthedRequest).moderatorUsername;
-    const updated = await moderateHazard(repo, id, decision, now(), reason, by);
+    const updated = await moderateHazard(repo, photos, id, decision, now(), reason, by);
     if (!updated) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }

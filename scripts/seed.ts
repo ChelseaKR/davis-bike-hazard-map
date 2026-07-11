@@ -80,7 +80,7 @@ async function main() {
       capturedAt: now - (i + 1) * 12 * 60 * 60 * 1000,
     };
     const stored = await createHazard(repo, photos, report, report.capturedAt, ttlOpts);
-    await moderateHazard(repo, stored.id, 'approve', report.capturedAt, undefined, 'seed');
+    await moderateHazard(repo, photos, stored.id, 'approve', report.capturedAt, undefined, 'seed');
     created++;
   }
 

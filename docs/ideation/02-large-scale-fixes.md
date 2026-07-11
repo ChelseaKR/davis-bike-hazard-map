@@ -63,8 +63,17 @@ valid deletion proofs until rotated — see R8 for operator guidance.
   never-handed-off requests all rejected; the threat-model row for 311
   ingress updated from implicit to explicit.
 
-## FIX-03 — Photo-blob retention & garbage collection
+## FIX-03 — Photo-blob retention & garbage collection ✅ DONE (2026-07-02)
 **Pitch:** delete photo bytes when a hazard leaves the actionable state, on a defined schedule.
+
+> **Done** — branch `roadmap/fix-03-photo-blob-retention-and-garbage-`:
+> `moderateHazard()` deletes blob + thumb (and clears the photo ref)
+> immediately on reject; `sweepPhotoRetention()` GCs expired/resolved photos
+> after a `RESOLVED_VISIBLE_DAYS` grace on the hourly sweep in
+> `server/index.ts` (with a status re-check so it can't race the pending
+> queue's inline read); retention table (state × asset × TTL) + the 1-hour
+> cache residual window documented in `docs/audits/privacy-notes.md`; unit
+> tests cover reject-deletes, sweep before/after grace, and pending untouched.
 
 - **Why it matters:** rejected photos are the ones most likely to contain
   faces/plates (that's often *why* they were rejected), yet
