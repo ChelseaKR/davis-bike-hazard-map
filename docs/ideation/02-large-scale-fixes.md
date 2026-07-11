@@ -9,6 +9,15 @@ items; where one builds on an existing ID it says so. Effort tiers:
 ---
 
 ## FIX-01 — Remove the deletion-capability leak from the public feed
+**Status: DONE (2026-07-02; the code fix landed on `main` via #41's WIP
+commit, the audit trail below completes it)** — `clientId` dropped from
+`toPublic()` (`server/lib/hazards.ts`) and the public `Hazard` interface
+(`shared/types.ts`); merge-blocking regression test "never leaks the reporter
+clientId in any unauthenticated response (FIX-01)" in
+`tests/unit/server.test.ts`; recorded as R8 in `docs/audits/residual-risk.md`,
+including the residual: clientIds published by any pre-fix deployment remain
+valid deletion proofs until rotated — see R8 for operator guidance.
+
 **Pitch:** stop publishing `clientId` — currently anyone can delete anyone's report.
 
 - **Why it matters:** `toPublic()` (`server/lib/hazards.ts:143`) puts
@@ -54,8 +63,17 @@ items; where one builds on an existing ID it says so. Effort tiers:
   never-handed-off requests all rejected; the threat-model row for 311
   ingress updated from implicit to explicit.
 
-## FIX-03 — Photo-blob retention & garbage collection
+## FIX-03 — Photo-blob retention & garbage collection ✅ DONE (2026-07-02)
 **Pitch:** delete photo bytes when a hazard leaves the actionable state, on a defined schedule.
+
+> **Done** — branch `roadmap/fix-03-photo-blob-retention-and-garbage-`:
+> `moderateHazard()` deletes blob + thumb (and clears the photo ref)
+> immediately on reject; `sweepPhotoRetention()` GCs expired/resolved photos
+> after a `RESOLVED_VISIBLE_DAYS` grace on the hourly sweep in
+> `server/index.ts` (with a status re-check so it can't race the pending
+> queue's inline read); retention table (state × asset × TTL) + the 1-hour
+> cache residual window documented in `docs/audits/privacy-notes.md`; unit
+> tests cover reject-deletes, sweep before/after grace, and pending untouched.
 
 - **Why it matters:** rejected photos are the ones most likely to contain
   faces/plates (that's often *why* they were rejected), yet
@@ -128,6 +146,13 @@ items; where one builds on an existing ID it says so. Effort tiers:
   by a sync-reconciliation test.
 
 ## FIX-06 — OpenAPI generated from the zod schemas + contract test
+**Status:** ✅ DONE (2026-07-02, branch `roadmap/fix-06-openapi-generated-from-zod-schema`).
+`server/openapi.ts` is now generated from the request/response zod schemas via
+`@asteasolutions/zod-to-openapi@^7` (the zod-v3-compatible line), registered in
+`server/lib/openapi-registry.ts`; `tests/unit/openapi-contract.test.ts` asserts
+the spec's paths equal the routes `buildApp` mounts (both directions) and that
+a golden set of live responses parses against the spec's schemas.
+
 **Pitch:** make the spec un-driftable by deriving it from `shared/validation.ts` and testing it against the live routes.
 
 - **Why it matters:** `server/openapi.ts` (171 lines) is hand-maintained
@@ -147,6 +172,13 @@ items; where one builds on an existing ID it says so. Effort tiers:
 ## FIX-07 — Multi-instance-safe auth throttling (and bound the failure map)
 **Pitch:** login lockout and rate limits that survive `fly scale count 2`.
 
+- **Status:** ✅ DONE (S + doc branch) — the failure map is bounded and
+  self-pruning (`server/lib/loginThrottle.ts`, LRU cap 10k + lazy expiry +
+  opportunistic sweep; unit-tested in `tests/unit/loginThrottle.test.ts`,
+  including the 10k-spray bound), locked accounts survive cap eviction, and
+  "single instance only" is documented as a hard operational constraint in
+  the README runbook. The shared-store (`auth_throttle` table) path remains
+  the prerequisite for scaling out.
 - **Why it matters:** `loginFailures` is an unbounded per-process `Map`
   (`server/app.ts:213-215`) — an attacker spraying random usernames grows it
   forever (slow memory leak), and both lockout and `@fastify/rate-limit`
@@ -190,6 +222,15 @@ items; where one builds on an existing ID it says so. Effort tiers:
   permalink cold and lands focused on it in both map and list.
 
 ## FIX-09 — Explicit status-transition state machine
+**Status: DONE (2026-07-02)** — `shared/statusMachine.ts` holds the
+legal-transition table (`LEGAL_TRANSITIONS`), `canTransition(from, to, cause)`
+and the `transition()` patch helper; `moderateHazard`/`confirmHazard`
+(`server/lib/hazards.ts`), `applyHandoffStatus` (`server/lib/lifecycle.ts` —
+closes the webhook-resolves-rejected hole) and `MemoryRepository.expire()` all
+route through it (the Postgres `expire()` predicate mirrors the table);
+exhaustive (from, to, cause) unit tests + fast-check property tests over
+arbitrary operation sequences in `tests/unit/statusMachine.test.ts`.
+
 **Pitch:** one module that says which `HazardStatus` transitions are legal, enforced everywhere state changes.
 
 - **Why it matters:** transitions are currently implied by call sites —
@@ -211,6 +252,16 @@ items; where one builds on an existing ID it says so. Effort tiers:
 
 ## FIX-10 — Alert-subscription privacy: inventory, minimization, TTL
 **Pitch:** treat saved routes/areas as the sensitive location data they are, before delivery ships.
+
+**Status: ✅ DONE (2026-07-02).** Route geometry is Douglas–Peucker-simplified
+to ~35 m (half the fuzz grid) at storage time (`shared/simplify.ts`,
+`server/lib/subscriptions.ts`); subscriptions carry a 180-day TTL renewed on
+re-subscribe, with expired records pruned before matching and on unsubscribe;
+push endpoint/keys joined the log-redaction list (`server/lib/logger.ts`);
+inventory + retention + deletion documented in `docs/audits/privacy-notes.md`
+and `public/privacy.html`. Match-equivalence, deviation-bound, TTL, and
+redaction tests auto-gate it (`tests/unit/alerts.test.ts`,
+`tests/unit/observability.test.ts`).
 
 - **Why it matters:** a saved watch is a home↔work corridor — arguably the
   most sensitive data the system will hold, more identifying than any single

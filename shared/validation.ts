@@ -21,7 +21,7 @@ export const MAX_PHOTO_BYTES = 3_000_000; // ~3 MB keeps mobile-data uploads san
 
 export const MAX_DESCRIPTION_LEN = 500;
 
-const geoPointSchema = z.object({
+export const geoPointSchema = z.object({
   lat: z.number().gte(-90).lte(90),
   lng: z.number().gte(-180).lte(180),
 });

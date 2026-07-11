@@ -51,6 +51,13 @@ export interface AlertSubscription {
   /** Optional human label for the saved watch ("Commute to campus"). */
   label?: string;
   createdAt: number;
+  /**
+   * TTL: the subscription stops matching and is pruned once `now >= expiresAt`.
+   * Re-subscribing (same endpoint ⇒ same deterministic id ⇒ upsert replaces)
+   * is the renewal path. Privacy control: a saved watch is sensitive location
+   * data and must not live in storage unbounded (see docs/audits/privacy-notes.md).
+   */
+  expiresAt: number;
 }
 
 /** Pick the subscriptions whose watch contains a hazard location. */

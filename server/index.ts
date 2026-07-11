@@ -84,14 +84,22 @@ async function main() {
     }
   }
 
-  // Periodic expiry sweep so the map self-cleans even with no traffic.
+  // Periodic expiry sweep so the map self-cleans even with no traffic, plus
+  // photo-blob GC on the documented retention schedule (privacy-notes.md):
+  // expired/resolved hazards lose their photo bytes once the
+  // RESOLVED_VISIBLE_DAYS grace window has passed.
+  const photoGraceMs = serverConfig.resolvedVisibleDays * 24 * 60 * 60 * 1000;
   const sweep = setInterval(
     () => {
       // listPublic sweeps as a side effect; calling the route logic directly
       // would be cleaner, but a lightweight import keeps this file small.
-      void import('./lib/hazards.ts').then(({ sweepExpired }) =>
-        sweepExpired(repo, Date.now()),
-      );
+      void import('./lib/hazards.ts')
+        .then(async ({ sweepExpired, sweepPhotoRetention }) => {
+          await sweepExpired(repo, Date.now());
+          const gcd = await sweepPhotoRetention(repo, photos, Date.now(), photoGraceMs);
+          if (gcd > 0) app.log.info(`Photo retention sweep deleted ${gcd} photo(s).`);
+        })
+        .catch((err) => app.log.warn(err, 'periodic sweep failed'));
     },
     60 * 60 * 1000,
   );

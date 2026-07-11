@@ -10,7 +10,9 @@
  *   2. A hard redaction allow-list so the log stream can NEVER carry the
  *      privacy-sensitive or secret fields this app handles — precise
  *      coordinates, auth headers/cookies, session tokens, passwords, shared
- *      secrets. This is the non-negotiable "no secrets/PII in logs" gate.
+ *      secrets, and Web Push subscription material (endpoint capability URLs
+ *      and encryption keys). This is the non-negotiable "no secrets/PII in
+ *      logs" gate.
  */
 import type { FastifyServerOptions } from 'fastify';
 
@@ -25,6 +27,9 @@ export const SERVICE_NAME = 'davis-bike-hazard-map';
  * catches Fastify's request serializer output. Coordinates are treated as
  * sensitive: `preciseLocation` (the un-fuzzed point) and any raw `location`
  * (a submission carries the reporter's precise point) never reach the logs.
+ * Web Push subscription material is treated the same way: `endpoint` is a
+ * capability URL (whoever holds it can address that device) and `keys`/
+ * `p256dh`/`auth` are the push encryption secrets — none may reach the logs.
  */
 export const LOG_REDACT_PATHS: string[] = [
   // Auth material on the incoming request.
@@ -52,6 +57,15 @@ export const LOG_REDACT_PATHS: string[] = [
   '*.preciseLocation',
   'location',
   '*.location',
+  // Web Push subscription material (endpoint = capability URL; keys = secrets).
+  'endpoint',
+  '*.endpoint',
+  'p256dh',
+  '*.p256dh',
+  'auth',
+  '*.auth',
+  'keys',
+  '*.keys',
 ];
 
 /** The redaction config applied to the server's Pino logger. */

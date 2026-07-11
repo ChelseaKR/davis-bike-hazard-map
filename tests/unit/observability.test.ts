@@ -5,7 +5,8 @@
  *     unreachable — whether repo.ping() returns false or throws.
  *   - The structured JSON log stream is valid JSON and REDACTS the fields this
  *     privacy-first app must never leak: precise coordinates, session tokens,
- *     passwords, and auth headers.
+ *     passwords, auth headers, and Web Push subscription material (endpoint
+ *     capability URLs + encryption keys).
  *
  * The health apps run with `logger: false` (quiet); the redaction test injects a
  * capture stream so it can assert on the actual emitted records.
@@ -118,6 +119,15 @@ describe('structured JSON logging redacts sensitive fields', () => {
         token: 'super-secret-session-token',
         password: 'hunter2',
         headers: { authorization: 'Bearer super-secret-session-token' },
+        // Web Push subscription material (FIX-10): the endpoint is a
+        // capability URL and the keys are encryption secrets.
+        endpoint: 'https://push.example/capability-url-abc123',
+        subscription: {
+          endpoint: 'https://push.example/capability-url-abc123',
+          keys: { p256dh: 'p256dh-key-material', auth: 'auth-secret-16b' },
+        },
+        p256dh: 'p256dh-key-material',
+        auth: 'auth-secret-16b',
       },
       'sensitive-marker',
     );
@@ -138,12 +148,21 @@ describe('structured JSON logging redacts sensitive fields', () => {
     expect(record.token).toBe('[redacted]');
     expect(record.password).toBe('[redacted]');
     expect(record.headers.authorization).toBe('[redacted]');
+    // Push subscription material is censored at top level and one level deep.
+    expect(record.endpoint).toBe('[redacted]');
+    expect(record.subscription.endpoint).toBe('[redacted]');
+    expect(record.subscription.keys).toBe('[redacted]');
+    expect(record.p256dh).toBe('[redacted]');
+    expect(record.auth).toBe('[redacted]');
 
     // Belt and braces: the raw values never appear anywhere in the stream.
     const blob = lines.join('');
     expect(blob).not.toContain('super-secret-session-token');
     expect(blob).not.toContain('hunter2');
     expect(blob).not.toContain('-121.7405');
+    expect(blob).not.toContain('capability-url-abc123');
+    expect(blob).not.toContain('p256dh-key-material');
+    expect(blob).not.toContain('auth-secret-16b');
 
     await app.close();
   });
