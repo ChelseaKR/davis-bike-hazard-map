@@ -137,6 +137,13 @@ valid deletion proofs until rotated — see R8 for operator guidance.
   by a sync-reconciliation test.
 
 ## FIX-06 — OpenAPI generated from the zod schemas + contract test
+**Status:** ✅ DONE (2026-07-02, branch `roadmap/fix-06-openapi-generated-from-zod-schema`).
+`server/openapi.ts` is now generated from the request/response zod schemas via
+`@asteasolutions/zod-to-openapi@^7` (the zod-v3-compatible line), registered in
+`server/lib/openapi-registry.ts`; `tests/unit/openapi-contract.test.ts` asserts
+the spec's paths equal the routes `buildApp` mounts (both directions) and that
+a golden set of live responses parses against the spec's schemas.
+
 **Pitch:** make the spec un-driftable by deriving it from `shared/validation.ts` and testing it against the live routes.
 
 - **Why it matters:** `server/openapi.ts` (171 lines) is hand-maintained
