@@ -39,6 +39,17 @@ export default tseslint.config(
     },
   },
 
+  // Service-worker extensions (plain JS, loaded via workbox importScripts —
+  // classic-script scope, so `self` is the ServiceWorkerGlobalScope).
+  {
+    files: ['public/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { ...globals.serviceworker },
+    },
+  },
+
   // Browser / React code.
   {
     files: ['src/**/*.{ts,tsx}'],

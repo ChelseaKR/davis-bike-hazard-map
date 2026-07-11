@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   hazardMatchesWatch,
   matchingSubscriptions,
@@ -18,9 +18,19 @@ import {
   notifyForHazard,
   isConfigured,
   buildAlertPayload,
+  createWebPushSender,
+  PushSubscriptionGoneError,
   type PushConfig,
 } from '../../server/lib/pushNotify.ts';
 import type { GeoPoint, Hazard } from '../../shared/types.ts';
+
+// The real transport is exercised against a mocked `web-push` module (the
+// encrypted-payload wire protocol itself is the library's responsibility).
+const webPushMock = vi.hoisted(() => ({
+  setVapidDetails: vi.fn(),
+  sendNotification: vi.fn(),
+}));
+vi.mock('web-push', () => ({ default: webPushMock }));
 
 const CAMPUS = { lat: 38.5421, lng: -121.7494 };
 const DOWNTOWN = { lat: 38.5447, lng: -121.7405 };
@@ -273,10 +283,22 @@ describe('notifyForHazard', () => {
 
   it('keeps going when one send throws (best-effort)', async () => {
     const two = [...subs, { ...subs[0], id: 'b', endpoint: 'https://push/b' }];
-    const send = vi.fn().mockRejectedValueOnce(new Error('gone')).mockResolvedValueOnce(true);
+    const send = vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(true);
     const res = await notifyForHazard(hazard(), two, liveConfig, send);
     expect(res.matched).toBe(2);
     expect(res.sent).toBe(1);
+    expect(res.dead).toEqual([]); // a transient failure is NOT a prune signal
+  });
+
+  it('collects gone subscriptions (404/410) for pruning and keeps sending', async () => {
+    const two = [...subs, { ...subs[0], id: 'b', endpoint: 'https://push/b' }];
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(new PushSubscriptionGoneError(410))
+      .mockResolvedValueOnce(true);
+    const res = await notifyForHazard(hazard(), two, liveConfig, send);
+    expect(res.sent).toBe(1);
+    expect(res.dead).toEqual(['a']); // the 410 endpoint, by subscription id
   });
 
   it('uses the no-op sender by default (configured but nothing wired ⇒ sent 0)', async () => {
@@ -286,9 +308,68 @@ describe('notifyForHazard', () => {
     expect(res.sent).toBe(0); // default sender is a stub until web-push is wired
   });
 
-  it('buildAlertPayload describes the hazard', () => {
+  it('buildAlertPayload describes the hazard (with a severity tag)', () => {
     const p = buildAlertPayload(hazard());
     expect(p.title).toMatch(/saved route/i);
     expect(p.body).toMatch(/high pothole/i);
+    expect(p.tag).toBe('hazard-high');
+  });
+});
+
+describe('createWebPushSender (real transport, mocked web-push)', () => {
+  const config: PushConfig = {
+    enabled: true,
+    vapidPublicKey: 'pub',
+    vapidPrivateKey: 'priv',
+    subject: 'mailto:a@b.c',
+  };
+  const sub: AlertSubscription = {
+    id: 'a',
+    endpoint: 'https://push/a',
+    keys: { p256dh: 'p', auth: 'x' },
+    watch: area,
+    createdAt: 1,
+    expiresAt: Number.MAX_SAFE_INTEGER,
+  };
+  const payload = buildAlertPayload(hazard());
+
+  beforeEach(() => {
+    webPushMock.setVapidDetails.mockClear();
+    webPushMock.sendNotification.mockReset();
+  });
+
+  it('sets VAPID details once and sends the JSON payload', async () => {
+    webPushMock.sendNotification.mockResolvedValue({ statusCode: 201 });
+    const send = createWebPushSender();
+    expect(await send(sub, payload, config)).toBe(true);
+    expect(await send(sub, payload, config)).toBe(true);
+    expect(webPushMock.setVapidDetails).toHaveBeenCalledTimes(1); // lazy, once
+    expect(webPushMock.setVapidDetails).toHaveBeenCalledWith('mailto:a@b.c', 'pub', 'priv');
+    expect(webPushMock.sendNotification).toHaveBeenCalledWith(
+      { endpoint: sub.endpoint, keys: sub.keys },
+      JSON.stringify(payload),
+      { TTL: 60 * 60 },
+    );
+  });
+
+  it('maps a 410 (and 404) response to PushSubscriptionGoneError', async () => {
+    webPushMock.sendNotification.mockRejectedValue(
+      Object.assign(new Error('subscription gone'), { statusCode: 410 }),
+    );
+    const send = createWebPushSender();
+    await expect(send(sub, payload, config)).rejects.toBeInstanceOf(PushSubscriptionGoneError);
+
+    webPushMock.sendNotification.mockRejectedValue(
+      Object.assign(new Error('not found'), { statusCode: 404 }),
+    );
+    await expect(send(sub, payload, config)).rejects.toBeInstanceOf(PushSubscriptionGoneError);
+  });
+
+  it('rethrows other transport errors untouched (best-effort upstream)', async () => {
+    webPushMock.sendNotification.mockRejectedValue(
+      Object.assign(new Error('push service 5xx'), { statusCode: 502 }),
+    );
+    const send = createWebPushSender();
+    await expect(send(sub, payload, config)).rejects.toThrow('push service 5xx');
   });
 });

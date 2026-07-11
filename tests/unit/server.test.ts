@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../../server/app.ts';
+import { buildApp, type AppDeps } from '../../server/app.ts';
 import { MemoryRepository } from '../../server/lib/repository.ts';
 import { MemoryModeratorStore } from '../../server/lib/moderators.ts';
+import { PushSubscriptionGoneError } from '../../server/lib/pushNotify.ts';
 import { hashPassword } from '../../server/lib/password.ts';
 import { serverConfig } from '../../server/config.ts';
 import { signWebhookBody } from '../../server/lib/webhookAuth.ts';
@@ -87,10 +88,11 @@ function post(url: string, body: unknown, headers: Record<string, string> = {}) 
 
 const auth = () => ({ authorization: `Bearer ${token}` });
 
-/** Build a second app (custom config / fetch) with a logged-in moderator. */
+/** Build a second app (custom config / fetch / deps) with a logged-in moderator. */
 async function buildAppWithModerator(
   config: typeof serverConfig,
   fetchImpl?: typeof fetch,
+  extraDeps: Partial<AppDeps> = {},
 ): Promise<{ app: FastifyInstance; token: string; repo: MemoryRepository }> {
   const r = new MemoryRepository();
   const moderators = new MemoryModeratorStore();
@@ -100,7 +102,15 @@ async function buildAppWithModerator(
     createdAt: clock,
     tokenVersion: 0,
   });
-  const a = await buildApp({ repo: r, moderators, config, now: () => clock, fetchImpl, logger: false });
+  const a = await buildApp({
+    repo: r,
+    moderators,
+    config,
+    now: () => clock,
+    fetchImpl,
+    logger: false,
+    ...extraDeps,
+  });
   await a.ready();
   const login = await a.inject({
     method: 'POST',
@@ -910,6 +920,44 @@ describe('saved-route push alerts (feature-flagged)', () => {
     // Unsubscribe.
     const del = await a.inject({ method: 'DELETE', url: `/api/alerts/subscribe/${id}` });
     expect(del.statusCode).toBe(204);
+    await a.close();
+  });
+
+  it('delivers via the injected sender when VAPID is configured, pruning gone endpoints', async () => {
+    // The push service says the subscription is gone (410) — the server should
+    // prune it so we never keep pushing at a dead endpoint.
+    const sender = vi.fn().mockRejectedValue(new PushSubscriptionGoneError(410));
+    const { app: a, token: tok } = await buildAppWithModerator(
+      {
+        ...testConfig,
+        push: { enabled: true, vapidPublicKey: 'pub', vapidPrivateKey: 'priv', subject: 'mailto:a@b.c' },
+      },
+      undefined,
+      { pushSender: sender },
+    );
+    const sub = await a.inject({
+      method: 'POST',
+      url: '/api/alerts/subscribe',
+      payload: subBody,
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(sub.statusCode).toBe(201);
+    const id = sub.json().id;
+
+    const rep = await a.inject({ method: 'POST', url: '/api/reports', payload: baseReport, headers: { 'content-type': 'application/json' } });
+    const hid = rep.json().hazard.id;
+    const decided = await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${hid}`,
+      payload: { decision: 'approve' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+    expect(decided.statusCode).toBe(200); // a dead endpoint never fails moderation
+    expect(sender).toHaveBeenCalledTimes(1);
+
+    // The 410 pruned the subscription: deleting it now reports "already gone".
+    const del = await a.inject({ method: 'DELETE', url: `/api/alerts/subscribe/${id}` });
+    expect(del.statusCode).toBe(404);
     await a.close();
   });
 
