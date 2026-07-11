@@ -308,10 +308,11 @@ describe('notifyForHazard', () => {
     expect(res.sent).toBe(0); // default sender is a stub until web-push is wired
   });
 
-  it('buildAlertPayload describes the hazard (with a severity tag)', () => {
+  it('buildAlertPayload describes the hazard, deep-links to it, and tags by severity', () => {
     const p = buildAlertPayload(hazard());
     expect(p.title).toMatch(/saved route/i);
     expect(p.body).toMatch(/high pothole/i);
+    expect(p.url).toBe('/#/hazard/h1');
     expect(p.tag).toBe('hazard-high');
   });
 });
