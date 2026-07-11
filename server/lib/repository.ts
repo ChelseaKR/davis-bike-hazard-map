@@ -14,6 +14,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { transition } from '../../shared/statusMachine.ts';
 import type { StoredHazard } from './types.ts';
 
 /** A geographic bounding box for spatial culling of the public feed. */
@@ -40,6 +41,13 @@ export interface Repository {
    * hazard is actionable. Returns the count expired.
    */
   expire(now: number): Promise<number>;
+  /**
+   * Hazards whose photo blobs are due for garbage collection: they still carry
+   * a photo ref, are `expired`/`resolved`, and left the actionable state at or
+   * before `cutoff` (resolvedAt for resolved rows, else updatedAt). Consumed by
+   * sweepPhotoRetention (see docs/audits/privacy-notes.md).
+   */
+  listPhotoGcCandidates(cutoff: number): Promise<StoredHazard[]>;
   /** Hard-delete a hazard by id (reporter data deletion). Returns true if found. */
   deleteById(id: string): Promise<boolean>;
   /** Moderation backlog stats for observability (cheap; no photos loaded). */
@@ -112,19 +120,26 @@ export class MemoryRepository implements Repository {
   async expire(now: number): Promise<number> {
     let expired = 0;
     for (const h of this.store.values()) {
-      if (h.status === 'approved' && h.expiresAt <= now) {
-        // Coarsen the precise location away once the hazard is no longer active.
-        this.store.set(h.id, {
-          ...h,
-          status: 'expired',
-          updatedAt: now,
-          preciseLocation: h.publicLocation,
-        });
-        expired++;
-      }
+      if (h.expiresAt > now) continue;
+      // Route through the state machine: only `approved` hazards have an
+      // `expire` edge, so terminal (or pending) hazards are never touched.
+      const patch = transition(h, 'expired', 'expire', now);
+      if (!patch) continue;
+      // Coarsen the precise location away once the hazard is no longer active.
+      this.store.set(h.id, { ...h, ...patch, preciseLocation: h.publicLocation });
+      expired++;
     }
     if (expired) this.persist();
     return expired;
+  }
+
+  async listPhotoGcCandidates(cutoff: number): Promise<StoredHazard[]> {
+    return [...this.store.values()].filter(
+      (h) =>
+        h.photo !== null &&
+        (h.status === 'expired' || h.status === 'resolved') &&
+        (h.resolvedAt ?? h.updatedAt) <= cutoff,
+    );
   }
 
   async deleteById(id: string): Promise<boolean> {
