@@ -680,6 +680,41 @@ describe('data lifecycle & privacy', () => {
   });
 });
 
+describe('reporter feedback loop (status by clientId)', () => {
+  it('returns my report status while it is still pending (not in the public feed)', async () => {
+    await post('/api/reports', baseReport);
+    const res = await app.inject({ method: 'GET', url: `/api/reports/${baseReport.clientId}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().hazard.status).toBe('pending');
+    // The fuzzed (public) location is returned, never the precise one.
+    expect(res.json().hazard.location).not.toEqual(baseReport.location);
+  });
+
+  it('reflects approval and a 311 hand-off back to the reporter', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+    await post(`/api/moderation/${id}/handoff`, {}, auth());
+    const res = await app.inject({ method: 'GET', url: `/api/reports/${baseReport.clientId}` });
+    expect(res.json().hazard.status).toBe('approved');
+    expect(res.json().hazard.handoff?.stage).toBe('submitted');
+  });
+
+  it('lets the reporter see a rejected report (the public feed never would)', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'reject' }, auth());
+    const res = await app.inject({ method: 'GET', url: `/api/reports/${baseReport.clientId}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().hazard.status).toBe('rejected');
+  });
+
+  it('404s for an unknown clientId', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/reports/no-such-id' });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe('hazard-aware route planner', () => {
   it('plans a route and detects a hazard sitting on it (fallback, no network)', async () => {
     const rep = await post('/api/reports', baseReport);

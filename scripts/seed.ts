@@ -60,6 +60,13 @@ const SEEDS: Omit<ValidatedReport, 'clientId' | 'capturedAt'>[] = [
     location: { lat: 38.5557, lng: -121.7592 },
     photo: null,
   },
+  {
+    category: 'near_miss',
+    severity: 'high',
+    description: 'Right-hook near miss: turning car cut across the bike lane at 8th & B.',
+    location: { lat: 38.5482, lng: -121.7421 },
+    photo: null,
+  },
 ];
 
 async function main() {

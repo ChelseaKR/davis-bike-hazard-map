@@ -281,6 +281,18 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'get',
+  path: '/reports/{clientId}',
+  tags: ['reports'],
+  summary: 'Status of my own report (clientId is the capability)',
+  request: { params: z.object({ clientId: z.string().uuid() }) },
+  responses: {
+    200: { description: 'current report status', content: json(hazardResponseSchema) },
+    404: { description: 'not found', content: errorContent },
+  },
+});
+
+registry.registerPath({
   method: 'delete',
   path: '/reports/{clientId}',
   tags: ['reports'],

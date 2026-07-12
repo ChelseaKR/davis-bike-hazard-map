@@ -32,6 +32,19 @@ describe('CoverageView', () => {
     expect(screen.getByText(/1 report\b/i)).toBeInTheDocument();
   });
 
+  it('calls out data deserts and pairs normalization with a limits note', () => {
+    // Only North Davis has a report; the high-ridership campus is empty.
+    render(<CoverageView hazards={[at(38.57, -121.74, 'n')]} />);
+    const callout = screen.getByRole('note');
+    expect(callout).toHaveTextContent(/data deserts/i);
+    expect(callout).toHaveTextContent(/UC Davis campus/);
+    // The limits note must be present so normalization is never read as ranking.
+    expect(screen.getByText(/rough heuristic, not measured exposure data/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/absence of reports is absence of/i),
+    ).toBeInTheDocument();
+  });
+
   it('has no accessibility violations', async () => {
     const { container } = render(<CoverageView hazards={[at(38.57, -121.74, 'n')]} />);
     await checkA11y(container);

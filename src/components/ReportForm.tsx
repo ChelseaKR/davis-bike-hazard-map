@@ -11,6 +11,7 @@ import {
   HAZARD_CATEGORIES,
   SEVERITIES,
   type GeoPoint,
+  type Hazard,
   type HazardCategory,
   type ReportSubmission,
   type Severity,
@@ -24,8 +25,9 @@ import { enqueueReport } from '../lib/db.ts';
 import { syncOnce, isOnline } from '../lib/sync.ts';
 import { getCurrentLocation, GeolocationError } from '../lib/geolocation.ts';
 import { newId } from '../lib/id.ts';
-import { formatLatLng } from '../lib/format.ts';
+import { formatDistance, formatLatLng } from '../lib/format.ts';
 import { useLabels } from '../i18n/labels.ts';
+import { findNearbyDuplicates } from '../lib/dedupe.ts';
 import { PhotoEditor } from './PhotoEditor.tsx';
 
 // Leaflet is heavy; only pull it in when the user opens the map picker.
@@ -33,6 +35,16 @@ const LocationPicker = lazy(() => import('./LocationPicker.tsx'));
 
 interface ReportFormProps {
   onSubmitted?: () => void;
+  /**
+   * The live public hazard feed, used to spot likely duplicates near the chosen
+   * spot so the reporter can confirm an existing hazard instead of filing a new
+   * one (research roadmap R1). Optional — without it the nudge simply never
+   * shows.
+   */
+  nearbyHazards?: Hazard[];
+  /** Confirm an existing hazard ("I saw it too"); wired to the same endpoint
+   *  the map/list use. */
+  onConfirmExisting?: (id: string) => void | Promise<void>;
 }
 
 type Status =
@@ -41,7 +53,7 @@ type Status =
   | { kind: 'saved'; online: boolean }
   | { kind: 'error'; message: string };
 
-export function ReportForm({ onSubmitted }: ReportFormProps) {
+export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: ReportFormProps) {
   const intl = useIntl();
   const labels = useLabels();
   const [category, setCategory] = useState<HazardCategory>('pothole');
@@ -53,9 +65,25 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
   const [showMap, setShowMap] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  const [confirmedExisting, setConfirmedExisting] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
   const locationValid = location !== null && isWithinDavis(location);
+
+  // Likely duplicates of the same kind near the chosen spot (R1 dedupe nudge).
+  const duplicates =
+    location && locationValid
+      ? findNearbyDuplicates(nearbyHazards ?? [], location, category)
+      : [];
+
+  const confirmExisting = async (id: string) => {
+    try {
+      await onConfirmExisting?.(id);
+      setConfirmedExisting(true);
+    } catch {
+      // Best-effort: leave the nudge up so they can retry or file fresh.
+    }
+  };
 
   const useMyLocation = async () => {
     setGeoError(null);
@@ -99,6 +127,7 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
     setShowEditor(false);
     setShowMap(false);
     setGeoError(null);
+    setConfirmedExisting(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -368,6 +397,69 @@ export function ReportForm({ onSubmitted }: ReportFormProps) {
           />
         </p>
       </fieldset>
+
+      {duplicates.length > 0 && !confirmedExisting && (
+        <section
+          className="dupe-nudge"
+          aria-label={intl.formatMessage({
+            id: 'report.duplicates.aria',
+            defaultMessage: 'Possible duplicates nearby',
+          })}
+        >
+          <h2 className="dupe-nudge-title">
+            <FormattedMessage
+              id="report.duplicates.heading"
+              defaultMessage="Already reported nearby?"
+            />
+          </h2>
+          <p className="hint">
+            <FormattedMessage
+              id="report.duplicates.explanation"
+              defaultMessage="{count, plural, one {A similar hazard was} other {# similar hazards were}} reported close to here. Confirming an existing report (I saw it too) is more useful than filing a duplicate — it strengthens the one report the city sees."
+              values={{ count: duplicates.length }}
+            />
+          </p>
+          <ul className="dupe-list">
+            {duplicates.map(({ hazard, distanceMeters }) => (
+              <li key={hazard.id} className="dupe-item">
+                <span className="dupe-meta">
+                  <FormattedMessage
+                    id="report.duplicates.meta"
+                    defaultMessage="{category} · {severity} severity · {distance} away · {confirmations, plural, one {# confirmation} other {# confirmations}}"
+                    values={{
+                      category: labels.category(hazard.category),
+                      severity: labels.severity(hazard.severity),
+                      distance: formatDistance(distanceMeters),
+                      confirmations: hazard.confirmations,
+                    }}
+                  />
+                </span>
+                {onConfirmExisting && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    onClick={() => void confirmExisting(hazard.id)}
+                  >
+                    <FormattedMessage
+                      id="report.duplicates.confirm"
+                      defaultMessage="Confirm it instead"
+                    />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {confirmedExisting && (
+        <p className="dupe-confirmed" role="status">
+          <FormattedMessage
+            id="report.duplicates.confirmed"
+            defaultMessage={'Thanks — we counted your "I saw it too." You don\'t need to file a duplicate. If this is a different hazard, you can still submit it below.'}
+          />
+        </p>
+      )}
 
       {status.kind === 'error' && (
         <p role="alert" className="error-text">
