@@ -78,6 +78,17 @@ describe('POST /api/metrics/web-vitals', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('rejects query strings and fragments so logs cannot capture sensitive URL data', async () => {
+    expect(
+      (await post({ name: 'LCP', value: 900, rating: 'good', path: '/map?token=secret' }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await post({ name: 'LCP', value: 900, rating: 'good', path: '/map#private' }))
+        .statusCode,
+    ).toBe(400);
+  });
+
   it('is documented in the OpenAPI spec', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/openapi.json' });
     expect(res.statusCode).toBe(200);
