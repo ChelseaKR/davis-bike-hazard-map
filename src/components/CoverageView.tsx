@@ -9,17 +9,29 @@
  * paired with an explicit limits note. Counts and flags are conveyed as text
  * (the bar is decorative / aria-hidden).
  */
-import { FormattedMessage, useIntl } from 'react-intl';
+import { defineMessages, FormattedMessage, useIntl } from 'react-intl';
 import type { Hazard } from '../../shared/types.ts';
-import { normalizeCoverage, type Representation } from '../lib/areas.ts';
+import { normalizeCoverage } from '../lib/areas.ts';
 
 /** Short, plain-text read of an area's report share vs. its estimated ridership. */
-const REPRESENTATION_NOTE: Record<Representation, string> = {
-  none: 'No reports yet — a likely data desert (busy enough to expect some).',
-  under: 'Under-reported for its estimated ridership.',
-  over: 'Heavily reported relative to its estimated ridership.',
-  typical: 'About what its estimated ridership would suggest.',
-};
+const REPRESENTATION_NOTE = defineMessages({
+  none: {
+    id: 'coverage.representation.none',
+    defaultMessage: 'No reports yet — a likely data desert (busy enough to expect some).',
+  },
+  under: {
+    id: 'coverage.representation.under',
+    defaultMessage: 'Under-reported for its estimated ridership.',
+  },
+  over: {
+    id: 'coverage.representation.over',
+    defaultMessage: 'Heavily reported relative to its estimated ridership.',
+  },
+  typical: {
+    id: 'coverage.representation.typical',
+    defaultMessage: 'About what its estimated ridership would suggest.',
+  },
+});
 
 export function CoverageView({ hazards }: { hazards: Hazard[] }) {
   const intl = useIntl();
@@ -45,10 +57,14 @@ export function CoverageView({ hazards }: { hazards: Hazard[] }) {
 
       {deserts.length > 0 && (
         <p className="coverage-desert-callout" role="note">
-          <strong>Data deserts:</strong>{' '}
-          {deserts.map((d) => d.name).join(', ')} have meaningful ridership but{' '}
-          <strong>no reports yet</strong>. Treat these as gaps in the data, not as
-          safe streets.
+          <FormattedMessage
+            id="coverage.deserts"
+            defaultMessage="<strong>Data deserts:</strong> {areas} have meaningful ridership but <strong>no reports yet</strong>. Treat these as gaps in the data, not as safe streets."
+            values={{
+              areas: deserts.map((d) => d.name).join(', '),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            }}
+          />
         </p>
       )}
 
@@ -73,7 +89,7 @@ export function CoverageView({ hazards }: { hazards: Hazard[] }) {
             </span>
             {a.exposureWeight > 0 && (
               <span className={`coverage-flag coverage-flag-${a.representation}`}>
-                {REPRESENTATION_NOTE[a.representation]}
+                {intl.formatMessage(REPRESENTATION_NOTE[a.representation])}
               </span>
             )}
           </li>
@@ -81,11 +97,14 @@ export function CoverageView({ hazards }: { hazards: Hazard[] }) {
       </ul>
 
       <p className="hint coverage-limits">
-        <strong>How to read this:</strong> the "estimated ridership" comparison
-        is a rough heuristic, not measured exposure data, and can itself be
-        biased. It's here to stop scarce reports being mistaken for safety — never
-        to rank neighbourhoods. Absence of reports is absence of <em>reports</em>,
-        not absence of hazards.
+        <FormattedMessage
+          id="coverage.limits"
+          defaultMessage={'<strong>How to read this:</strong> the "estimated ridership" comparison is a rough heuristic, not measured exposure data, and can itself be biased. It\'s here to stop scarce reports being mistaken for safety — never to rank neighbourhoods. Absence of reports is absence of <em>reports</em>, not absence of hazards.'}
+          values={{
+            strong: (chunks) => <strong>{chunks}</strong>,
+            em: (chunks) => <em>{chunks}</em>,
+          }}
+        />
       </p>
     </section>
   );

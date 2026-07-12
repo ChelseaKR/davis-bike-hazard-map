@@ -9,7 +9,6 @@ import type { Hazard } from '../../shared/types.ts';
 function nearbyPothole(): Hazard {
   return {
     id: 'dup-1',
-    clientId: 'dup-1',
     category: 'pothole',
     severity: 'high',
     description: null,

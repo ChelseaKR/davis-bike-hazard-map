@@ -142,7 +142,13 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
                 <p className="error-text">{r.lastError}</p>
               )}
               {status && (
-                <ol className="report-trail" aria-label="Report progress">
+                <ol
+                  className="report-trail"
+                  aria-label={intl.formatMessage({
+                    id: 'myReports.progress.aria',
+                    defaultMessage: 'Report progress',
+                  })}
+                >
                   {reportTrail(status).map((step) => (
                     <li
                       key={step.key}

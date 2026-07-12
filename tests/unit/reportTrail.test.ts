@@ -5,7 +5,6 @@ import type { Hazard, HandoffInfo } from '../../shared/types.ts';
 function hazard(over: Partial<Hazard> = {}): Hazard {
   return {
     id: 'h1',
-    clientId: 'c1',
     category: 'pothole',
     severity: 'high',
     description: null,

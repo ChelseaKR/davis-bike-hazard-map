@@ -399,24 +399,40 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
       </fieldset>
 
       {duplicates.length > 0 && !confirmedExisting && (
-        <section className="dupe-nudge" aria-label="Possible duplicates nearby">
-          <h2 className="dupe-nudge-title">Already reported nearby?</h2>
+        <section
+          className="dupe-nudge"
+          aria-label={intl.formatMessage({
+            id: 'report.duplicates.aria',
+            defaultMessage: 'Possible duplicates nearby',
+          })}
+        >
+          <h2 className="dupe-nudge-title">
+            <FormattedMessage
+              id="report.duplicates.heading"
+              defaultMessage="Already reported nearby?"
+            />
+          </h2>
           <p className="hint">
-            {duplicates.length === 1
-              ? 'A similar hazard was'
-              : `${duplicates.length} similar hazards were`}{' '}
-            reported close to here. Confirming an existing report ("I saw it too")
-            is more useful than filing a duplicate — it strengthens the one report
-            the city sees.
+            <FormattedMessage
+              id="report.duplicates.explanation"
+              defaultMessage="{count, plural, one {A similar hazard was} other {# similar hazards were}} reported close to here. Confirming an existing report (I saw it too) is more useful than filing a duplicate — it strengthens the one report the city sees."
+              values={{ count: duplicates.length }}
+            />
           </p>
           <ul className="dupe-list">
             {duplicates.map(({ hazard, distanceMeters }) => (
               <li key={hazard.id} className="dupe-item">
                 <span className="dupe-meta">
-                  {CATEGORY_LABELS[hazard.category]} ·{' '}
-                  {SEVERITY_LABELS[hazard.severity]} severity ·{' '}
-                  {formatDistance(distanceMeters)} away · {hazard.confirmations}{' '}
-                  confirmation{hazard.confirmations === 1 ? '' : 's'}
+                  <FormattedMessage
+                    id="report.duplicates.meta"
+                    defaultMessage="{category} · {severity} severity · {distance} away · {confirmations, plural, one {# confirmation} other {# confirmations}}"
+                    values={{
+                      category: labels.category(hazard.category),
+                      severity: labels.severity(hazard.severity),
+                      distance: formatDistance(distanceMeters),
+                      confirmations: hazard.confirmations,
+                    }}
+                  />
                 </span>
                 {onConfirmExisting && (
                   <button
@@ -424,7 +440,10 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
                     className="btn btn-small"
                     onClick={() => void confirmExisting(hazard.id)}
                   >
-                    Confirm it instead
+                    <FormattedMessage
+                      id="report.duplicates.confirm"
+                      defaultMessage="Confirm it instead"
+                    />
                   </button>
                 )}
               </li>
@@ -435,8 +454,10 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
 
       {confirmedExisting && (
         <p className="dupe-confirmed" role="status">
-          Thanks — we counted your "I saw it too." You don't need to file a
-          duplicate. If this is a different hazard, you can still submit it below.
+          <FormattedMessage
+            id="report.duplicates.confirmed"
+            defaultMessage={'Thanks — we counted your "I saw it too." You don\'t need to file a duplicate. If this is a different hazard, you can still submit it below.'}
+          />
         </p>
       )}
 

@@ -600,12 +600,12 @@ textarea {
 }
 .trail-step {
   position: relative;
-  padding-left: 1.4rem;
+  padding-inline-start: 1.4rem;
 }
 .trail-step::before {
   content: '';
   position: absolute;
-  left: 0.15rem;
+  inset-inline-start: 0.15rem;
   top: 0.25rem;
   width: 0.7rem;
   height: 0.7rem;

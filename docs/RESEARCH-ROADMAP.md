@@ -69,10 +69,10 @@ Effort: **S** ≈ an afternoon · **M** ≈ a day or two · **L** ≈ a week+.
 
 | ID | Remediation | Personas | Pri | Effort | Evidence · reuses / notes |
 | --- | --- | --- | --- | --- | --- |
-| **R1** | **"Me too / still here" confirmation + lightweight comment** on an existing hazard instead of a duplicate filing | P1,P8,P9,P11 | P0 | M | EV-COLLECTIVE, EV-ABANDON · confirmations already feed lifecycle + routing weight. **[corroborates ROADMAP §3 "duplicate clustering" / "comments"]** · **✅ Implemented 2026-06-30 (working tree, uncommitted)** — confirm/dedupe nudge at report time (`src/lib/dedupe.ts` + `ReportForm`); the *comment* sub-feature is deferred (it would add an un-moderated text channel). |
-| **R2** | **Reporter-facing feedback loop** — post-submit "in review" confirmation + a visible per-hazard trail (*reported → approved → handed to city → fixed*) | P1,P5,P11 | P0 | S–M | EV-ABANDON, EV-COLLECTIVE · `lifecycleStage` + resolved-lingers exist; the *reporter view* is thin. **[corroborates ADR-6, extends]** · **✅ Implemented 2026-06-30 (working tree, uncommitted)** — `GET /api/reports/:clientId` (clientId capability) + `reportTrail` rendered in `MyReports`. |
+| **R1** | **"Me too / still here" confirmation + lightweight comment** on an existing hazard instead of a duplicate filing | P1,P8,P9,P11 | P0 | M | EV-COLLECTIVE, EV-ABANDON · confirmations already feed lifecycle + routing weight. **[corroborates ROADMAP §3 "duplicate clustering" / "comments"]** · **✅ Implemented in this PR** — confirm/dedupe nudge at report time (`src/lib/dedupe.ts` + `ReportForm`); the *comment* sub-feature is deferred (it would add an un-moderated text channel). |
+| **R2** | **Reporter-facing feedback loop** — post-submit "in review" confirmation + a visible per-hazard trail (*reported → approved → handed to city → fixed*) | P1,P5,P11 | P0 | S–M | EV-ABANDON, EV-COLLECTIVE · `lifecycleStage` + resolved-lingers exist; the *reporter view* is thin. **[corroborates ADR-6, extends]** · **✅ Implemented in this PR** — `GET /api/reports/:clientId` (clientId capability) + `reportTrail` rendered in `MyReports`. |
 | **R3** | **311 hand-off delivery receipts + reconciliation/retry** — never let a forwarded report vanish silently | P9,P8,P15 | P0 | M | EV-ABANDON · hand-off + pull/push sync-back shipped; no receipt/retry. **[corroborates ADR-6, extends]** |
-| **R4** | **Equity-aware coverage** — normalize reports by ridership/population + explicit "data desert" call-outs in the coverage view | P10,P8,P13,P11 | P1 | M | EV-SKEW, EV-UNDERREPORT · `CoverageView`/`areas.ts` lists zero-report areas today (passive). **[corroborates coverage-equity.md, extends]** · **✅ Implemented 2026-06-30 (working tree, uncommitted)** — `normalizeCoverage` (coarse exposure weights) + data-desert call-outs + limits note in `CoverageView`. |
+| **R4** | **Equity-aware coverage** — normalize reports by ridership/population + explicit "data desert" call-outs in the coverage view | P10,P8,P13,P11 | P1 | M | EV-SKEW, EV-UNDERREPORT · `CoverageView`/`areas.ts` lists zero-report areas today (passive). **[corroborates coverage-equity.md, extends]** · **✅ Implemented in this PR** — `normalizeCoverage` (coarse exposure weights) + data-desert call-outs + limits note in `CoverageView`. |
 | **R5** | **Anti-Sybil confirmations** — weight/limit confirmations per actor-device, not per-IP only, so a target can't be inflated | P12,P14,P8 | P1 | M | EV-GAMING · moderation rate-limit is per-IP/hour; confirmations exist. **[corroborates moderation-policy.md, extends]** |
 | **R6** | **Burst / coordinated-spam moderator tooling** — cluster near-identical reports, bulk-reject, surface single-source spikes | P12,P9 | P1 | M | EV-GAMING · queue is single-item today; metrics expose depth/oldest. **[NET-NEW tooling]** |
 | **R7** | **Legible privacy + accessible capture** — a "what's protected / what the city sees" explainer + fuzzed-point preview, and a fully SR-narrated (or photo-optional) capture/blur path | P6,P7 | P1 | M–L | EV-EXIF · privacy stack + list parity shipped but invisible; SR walkthrough still review-gated. **[corroborates privacy-notes.md + a11y gate, extends]** |
@@ -184,9 +184,10 @@ committing engineering:
   the Davis Bicycling Advisory Commission / local advocacy orgs; UC Davis
   Transportation + Unitrans; and — non-negotiable for **R7** — at least one daily
   screen-reader user and a privacy-sensitive reporter.
-- **Validate the taxonomy before E1 ships** (ROADMAP §4 already calls for this): do
-  Davis riders think in "near miss / scary intersection," and which categories
-  matter most? Don't hard-code a taxonomy off the panel.
+- **Validate the E1 beta taxonomy before declaring it stable** (ROADMAP §4 already
+  calls for this): the implemented near-miss category is a testable hypothesis,
+  not evidence that Davis riders use this wording. Confirm which categories and
+  labels matter most with real riders before public launch.
 - **Pilot R4 (equity normalization) carefully:** ridership/exposure denominators are
   themselves uncertain and can *introduce* bias; pair with the still-open equity
   reviewer sign-off, and never publish a normalized map without the limits note (R10).

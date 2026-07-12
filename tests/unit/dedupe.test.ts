@@ -4,7 +4,6 @@ import type { Hazard } from '../../shared/types.ts';
 
 function hazard(over: Partial<Hazard> & { id: string }): Hazard {
   return {
-    clientId: over.id,
     category: 'pothole',
     severity: 'moderate',
     description: null,
