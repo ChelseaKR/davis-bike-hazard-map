@@ -100,26 +100,27 @@ Then in the app: file a report → open **Moderate**, sign in with your
 - **WebKit e2e** is non-blocking: WebKit-on-Linux fails to render headlessly in
   CI (a tooling issue, not a product bug — Chromium + Firefox are the required
   gate). Real Safari/iOS coverage is the manual device pass before public launch.
-- **CodeQL** runs but its result upload needs **GitHub Advanced Security**,
-  which private repos lack by default. Enable it under *Settings → Code security
-  → Code scanning* (or when the repo goes public) to surface results, then make
-  the job required.
+- **CodeQL** analyzes application code and workflows and publishes results to
+  the Security tab. The repository is public, so code scanning is available;
+  keep both matrix jobs green even though they are not currently required by
+  the `protect-main` ruleset.
 
-## Branch protection (needs Pro or a public repo)
+## Branch protection (active)
 
-Protecting `main` (require green CI + a PR before merge) needs GitHub Pro on a
-**private** repo, or the repo to be **public**. The ruleset is pre-written at
-[`docs/ops/branch-ruleset.json`](./docs/ops/branch-ruleset.json) — apply it in
-one command once either is true:
+The public repository already has an active `protect-main` ruleset. It blocks
+force-pushes and deletion of `main` and requires seven checks: Node 20, Node 22,
+Chromium + Firefox e2e, security, Lighthouse, workflow SAST, and standards.
+Inspect the live rule before changing it:
 
 ```bash
-gh api -X POST repos/ChelseaKR/davis-bike-hazard-map/rulesets \
-  --input docs/ops/branch-ruleset.json
+gh api repos/ChelseaKR/davis-bike-hazard-map/rulesets \
+  --jq '.[] | {id, name, enforcement}'
 ```
 
-It requires the four hard-gate checks (unit/build on Node 20 + 22, Chromium+
-Firefox e2e, security) and a PR before merge; Lighthouse and WebKit stay
-advisory. Making the repo public also unblocks CodeQL result upload.
+[`docs/ops/branch-ruleset.json`](./docs/ops/branch-ruleset.json) mirrors the
+live rule as a recovery/import template. POST it only if the live rule is
+missing; creating it while `protect-main` already exists would duplicate the
+policy. WebKit remains advisory and CodeQL remains visible but non-required.
 
 ## Rollback
 
