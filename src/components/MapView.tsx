@@ -225,8 +225,12 @@ function FlyTo({ focusHazard }: { focusHazard?: Hazard | null }) {
   const map = useMap();
   useEffect(() => {
     if (focusHazard) {
-      map.flyTo([focusHazard.location.lat, focusHazard.location.lng], 17, {
-        duration: 0.6,
+      // A deep link is navigation state, not a decorative transition. An
+      // immediate view update makes marker-cluster reconciliation deterministic
+      // on cold Firefox loads; the previous animated flyTo could race the lazy
+      // map chunk and leave the focused marker represented only by a cluster.
+      map.setView([focusHazard.location.lat, focusHazard.location.lng], 17, {
+        animate: false,
       });
     }
   }, [focusHazard, map]);
