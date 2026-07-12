@@ -105,6 +105,22 @@ Then in the app: file a report → open **Moderate**, sign in with your
   → Code scanning* (or when the repo goes public) to surface results, then make
   the job required.
 
+## Branch protection (needs Pro or a public repo)
+
+Protecting `main` (require green CI + a PR before merge) needs GitHub Pro on a
+**private** repo, or the repo to be **public**. The ruleset is pre-written at
+[`docs/ops/branch-ruleset.json`](./docs/ops/branch-ruleset.json) — apply it in
+one command once either is true:
+
+```bash
+gh api -X POST repos/ChelseaKR/davis-bike-hazard-map/rulesets \
+  --input docs/ops/branch-ruleset.json
+```
+
+It requires the four hard-gate checks (unit/build on Node 20 + 22, Chromium+
+Firefox e2e, security) and a PR before merge; Lighthouse and WebKit stay
+advisory. Making the repo public also unblocks CodeQL result upload.
+
 ## Rollback
 
 ```bash
