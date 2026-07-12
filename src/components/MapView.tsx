@@ -136,7 +136,7 @@ function makeMarker(hazard: Hazard, intl: IntlShape, onConfirm?: (id: string) =>
   return marker;
 }
 
-function ClusterLayer({ hazards, onConfirm, intl }: MapViewProps & { intl: IntlShape }) {
+function ClusterLayer({ hazards, onConfirm, focusHazard, intl }: MapViewProps & { intl: IntlShape }) {
   const map = useMap();
   const groupRef = useRef<L.MarkerClusterGroup | null>(null);
   const markersRef = useRef<Map<string, MarkerEntry>>(new Map());
@@ -163,7 +163,9 @@ function ClusterLayer({ hazards, onConfirm, intl }: MapViewProps & { intl: IntlS
     const group = groupRef.current;
     if (!group) return;
     const entries = markersRef.current;
-    const nextIds = new Set(hazards.map((h) => h.id));
+    // The permalink target is rendered by FocusMarker so it can never be
+    // hidden inside an asynchronously populated cluster.
+    const nextIds = new Set(hazards.filter((h) => h.id !== focusHazard?.id).map((h) => h.id));
 
     // Remove markers for hazards that are gone.
     for (const [id, entry] of entries) {
@@ -176,6 +178,7 @@ function ClusterLayer({ hazards, onConfirm, intl }: MapViewProps & { intl: IntlS
     // Add new markers; update in place only when the hazard actually changed.
     const toAdd: L.Marker[] = [];
     for (const hazard of hazards) {
+      if (hazard.id === focusHazard?.id) continue;
       const existing = entries.get(hazard.id);
       if (!existing) {
         const marker = makeMarker(hazard, intl, onConfirm);
@@ -189,8 +192,29 @@ function ClusterLayer({ hazards, onConfirm, intl }: MapViewProps & { intl: IntlS
       }
     }
     if (toAdd.length) group.addLayers(toAdd);
-  }, [hazards, onConfirm, intl]);
+  }, [hazards, onConfirm, focusHazard, intl]);
 
+  return null;
+}
+
+/** Keep a permalink target visible independently of marker-cluster timing. */
+function FocusMarker({
+  hazard,
+  onConfirm,
+  intl,
+}: {
+  hazard?: Hazard | null;
+  onConfirm?: (id: string) => void;
+  intl: IntlShape;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!hazard) return;
+    const marker = makeMarker(hazard, intl, onConfirm).addTo(map);
+    return () => {
+      map.removeLayer(marker);
+    };
+  }, [hazard, onConfirm, intl, map]);
   return null;
 }
 
@@ -251,7 +275,13 @@ export function MapView({ hazards, onConfirm, focusHazard }: MapViewProps) {
         })}
       >
         <TileLayer attribution={config.tileAttribution} url={config.tileUrl} />
-        <ClusterLayer hazards={hazards} onConfirm={onConfirm} intl={intl} />
+        <ClusterLayer
+          hazards={hazards}
+          onConfirm={onConfirm}
+          focusHazard={focusHazard}
+          intl={intl}
+        />
+        <FocusMarker hazard={focusHazard} onConfirm={onConfirm} intl={intl} />
         <FlyTo focusHazard={focusHazard} />
         <MapA11y intl={intl} />
       </MapContainer>
