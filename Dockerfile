@@ -29,6 +29,15 @@ COPY server ./server
 COPY shared ./shared
 COPY migrations ./migrations
 
+# Trust the Amazon RDS certificate authorities so the Postgres client can do
+# full TLS verification (DATABASE_URL sslmode=verify-full) against RDS. The
+# bundle is fetched at build time; NODE_EXTRA_CA_CERTS appends it to Node's
+# default trust store (public CAs still trusted). Chmod so the non-root `node`
+# user can read it (ADD-from-URL defaults to 0600, root-owned).
+ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
+RUN chmod 0644 /etc/ssl/certs/rds-global-bundle.pem
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/rds-global-bundle.pem
+
 EXPOSE 8787
 # Liveness: the API health endpoint.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
