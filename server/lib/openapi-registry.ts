@@ -26,6 +26,7 @@ import {
   moderationDecisionSchema,
   loginSchema,
   clientErrorSchema,
+  webVitalSchema,
   handoffStatusSchema,
   alertSubscriptionSchema,
 } from '../../shared/validation.ts';
@@ -96,6 +97,7 @@ const reportSubmission = registry.register('ReportSubmission', reportSubmissionS
 const moderationDecision = registry.register('ModerationDecision', moderationDecisionSchema);
 const loginRequest = registry.register('LoginRequest', loginSchema);
 const clientError = registry.register('ClientError', clientErrorSchema);
+const webVital = registry.register('WebVital', webVitalSchema);
 const handoffStatus = registry.register('HandoffStatus', handoffStatusSchema);
 const alertSubscription = registry.register('AlertSubscription', alertSubscriptionSchema);
 
@@ -297,6 +299,18 @@ registry.registerPath({
   summary: 'Client error telemetry sink',
   request: { body: { required: true, content: json(clientError) } },
   responses: { 204: { description: 'accepted' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/metrics/web-vitals',
+  tags: ['ops'],
+  summary: 'Cookieless Core Web Vitals RUM sink (log-only)',
+  request: { body: { required: true, content: json(webVital) } },
+  responses: {
+    204: { description: 'accepted' },
+    400: { description: 'validation error', content: errorContent },
+  },
 });
 
 registry.registerPath({

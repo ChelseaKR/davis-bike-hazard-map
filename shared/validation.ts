@@ -169,3 +169,18 @@ export const clientErrorSchema = z.object({
 });
 
 export type ClientError = z.infer<typeof clientErrorSchema>;
+
+/**
+ * A cookieless Core Web Vitals field sample (see src/lib/vitals.ts). No
+ * cookies, no IPs, no identifiers: just the metric, its value/rating and the
+ * path (never a query string), per OBSERVABILITY-STANDARD section 8.
+ */
+export const webVitalSchema = z.object({
+  type: z.literal('vital').optional(),
+  name: z.enum(['CLS', 'INP', 'LCP']),
+  value: z.number().finite().nonnegative(),
+  rating: z.enum(['good', 'needs-improvement', 'poor']),
+  path: z.string().trim().max(200).regex(/^\/[^?#]*$/, 'path must not contain a query or fragment'),
+});
+
+export type WebVital = z.infer<typeof webVitalSchema>;
