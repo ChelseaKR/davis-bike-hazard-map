@@ -1,5 +1,5 @@
 import { defineConfig, type UserConfig } from 'vite';
-import type { UserConfig as VitestUserConfig } from 'vitest/config';
+import type {} from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -9,7 +9,7 @@ const API_PORT = process.env.API_PORT ?? '8787';
 // Plugins are typed against the root `vite`; the Vitest `test` field is typed
 // via a type-only import so there's no cross-`vite`-instance plugin clash.
 // https://vitejs.dev/config/
-const config: UserConfig & { test: VitestUserConfig['test'] } = {
+const config: UserConfig = {
   plugins: [
     react(),
     VitePWA({
@@ -123,10 +123,15 @@ const config: UserConfig & { test: VitestUserConfig['test'] } = {
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
+        // Rolldown (Vite 8) accepts the Rollup-compatible function form.
+        manualChunks(id) {
           // Keep Leaflet in its own chunk so the report flow loads fast on
           // mobile data even before the map bundle arrives.
-          leaflet: ['leaflet', 'react-leaflet', 'leaflet.markercluster'],
+          if (
+            /node_modules\/(?:leaflet|react-leaflet|leaflet\.markercluster)\//.test(id)
+          ) {
+            return 'leaflet';
+          }
         },
       },
     },

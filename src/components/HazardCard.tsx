@@ -5,6 +5,7 @@
  * alone — accessibility), and every card carries the "reported, not verified"
  * framing the transparency audit requires.
  */
+import { useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { lifecycleStage, type Hazard } from '../../shared/types.ts';
 import { timeAgo, formatLatLng } from '../lib/format.ts';
@@ -28,8 +29,10 @@ export function HazardCard({
   hazard,
   onConfirm,
   onFocusOnMap,
-  now = Date.now(),
+  now,
 }: HazardCardProps) {
+  const [renderedAt] = useState(Date.now);
+  const effectiveNow = now ?? renderedAt;
   const intl = useIntl();
   const labels = useLabels();
   const stage = lifecycleStage(hazard);
@@ -65,7 +68,7 @@ export function HazardCard({
           <FormattedMessage
             id="hazard.card.resolvedNote"
             defaultMessage="Reported fixed{when} — shown briefly so you know it was addressed."
-            values={{ when: hazard.resolvedAt ? ` ${timeAgo(hazard.resolvedAt, now)}` : '' }}
+            values={{ when: hazard.resolvedAt ? ` ${timeAgo(hazard.resolvedAt, effectiveNow)}` : '' }}
           />
         </p>
       )}
@@ -98,7 +101,7 @@ export function HazardCard({
           <dt>
             <FormattedMessage id="hazard.card.reportedLabel" defaultMessage="Reported" />
           </dt>
-          <dd>{timeAgo(hazard.updatedAt, now)}</dd>
+          <dd>{timeAgo(hazard.updatedAt, effectiveNow)}</dd>
         </div>
         <div>
           <dt>

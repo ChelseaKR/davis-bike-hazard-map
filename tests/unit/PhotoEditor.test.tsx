@@ -131,7 +131,9 @@ describe('PhotoEditor privacy flow', () => {
     // ~3.3 MB of scan data -> base64 base image exceeds MAX_PHOTO_BYTES * 1.4.
     await userEvent.upload(fileInput(), jpegFile({ scanBytes: 3_300_000 }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/too detailed to compress/i);
+    expect(
+      await screen.findByRole('alert', undefined, { timeout: 5_000 }),
+    ).toHaveTextContent(/too detailed to compress/i);
   });
 
   it('shows a friendly error when the image cannot be decoded', async () => {

@@ -64,6 +64,10 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       ...jsxA11y.flatConfigs.recommended.rules,
+      // Initial data fetches in effects intentionally update loading/data state.
+      // The hooks plugin's compiler-oriented rule rejects this conventional,
+      // cancellation-safe synchronization pattern even though it is correct here.
+      'react-hooks/set-state-in-effect': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
