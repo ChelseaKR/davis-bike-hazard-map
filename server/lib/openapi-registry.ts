@@ -31,8 +31,6 @@ import {
   alertSubscriptionSchema,
 } from '../../shared/validation.ts';
 
-// Adds .openapi() to zod. Patching the prototype also covers the schema
-// instances shared/validation.ts already created before this module loaded.
 extendZodWithOpenApi(z);
 
 export const registry = new OpenAPIRegistry();
@@ -46,7 +44,10 @@ const bearerAuth = [{ bearerAuth: [] }];
 
 // --- Components (named schemas) ---
 
-const geoPoint = registry.register('GeoPoint', geoPointSchema);
+// Shared schemas are constructed before this server-only module runs. Under
+// Zod 4, clone them after installing the extension so the cloned instances
+// carry `.openapi()` without pulling zod-to-openapi into the browser bundle.
+const geoPoint = registry.register('GeoPoint', geoPointSchema.clone());
 
 const handoffInfo = registry.register(
   'HandoffInfo',
@@ -93,13 +94,13 @@ export const hazardSchema = registry.register(
   }) satisfies z.ZodType<Hazard>,
 );
 
-const reportSubmission = registry.register('ReportSubmission', reportSubmissionSchema);
-const moderationDecision = registry.register('ModerationDecision', moderationDecisionSchema);
-const loginRequest = registry.register('LoginRequest', loginSchema);
-const clientError = registry.register('ClientError', clientErrorSchema);
-const webVital = registry.register('WebVital', webVitalSchema);
-const handoffStatus = registry.register('HandoffStatus', handoffStatusSchema);
-const alertSubscription = registry.register('AlertSubscription', alertSubscriptionSchema);
+const reportSubmission = registry.register('ReportSubmission', reportSubmissionSchema.clone());
+const moderationDecision = registry.register('ModerationDecision', moderationDecisionSchema.clone());
+const loginRequest = registry.register('LoginRequest', loginSchema.clone());
+const clientError = registry.register('ClientError', clientErrorSchema.clone());
+const webVital = registry.register('WebVital', webVitalSchema.clone());
+const handoffStatus = registry.register('HandoffStatus', handoffStatusSchema.clone());
+const alertSubscription = registry.register('AlertSubscription', alertSubscriptionSchema.clone());
 
 const errorSchema = registry.register(
   'Error',
