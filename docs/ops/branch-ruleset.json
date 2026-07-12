@@ -1,23 +1,30 @@
 {
-  "name": "main: require green CI + PRs",
+  "name": "protect-main",
   "target": "branch",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
   "rules": [
-    { "type": "pull_request", "parameters": {
-        "required_approving_review_count": 0,
-        "dismiss_stale_reviews_on_push": false,
-        "require_code_owner_review": false,
-        "require_last_push_approval": false,
-        "required_review_thread_resolution": false } },
-    { "type": "required_status_checks", "parameters": {
+    {
+      "type": "required_status_checks",
+      "parameters": {
         "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": false,
         "required_status_checks": [
+          { "context": "Lighthouse performance budget" },
+          { "context": "zizmor (workflow SAST)" },
           { "context": "Lint · Typecheck · Unit · Build (Node 20)" },
           { "context": "Lint · Typecheck · Unit · Build (Node 22)" },
+          { "context": "Security (dependency audit + secret scan)" },
           { "context": "End-to-end (Chromium + Firefox)" },
-          { "context": "Security (dependency audit + secret scan)" }
-        ] } },
+          { "context": "standards" }
+        ]
+      }
+    },
     { "type": "non_fast_forward" },
     { "type": "deletion" }
   ]

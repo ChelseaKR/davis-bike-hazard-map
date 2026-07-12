@@ -23,6 +23,26 @@
 
 ---
 
+## Delivery status — reconciled 2026-07-11
+
+This file is an evidence-driven option set, not a promise that every idea is an
+active engineering ticket. The active implementation lane has been drained; the
+remaining proposals stay behind the explicit product, operations, or human gates
+below rather than being represented as silently open work.
+
+| State | Items | Evidence / gate |
+| --- | --- | --- |
+| **Delivered** | R1, R2, R4, R9, R11, E1, E7 | Duplicate nudge + confirmations; reporter trail; normalized coverage; manual + optional `FaceDetector` blur; durable Web Push delivery; near-miss taxonomy; recently resolved hazards remain visible. |
+| **Delivered foundation; external completion remains** | R3, R7 | 311 references and pull/webhook status reconciliation ship, but live delivery/retry requires a real provider contract; privacy copy and accessible/photo-optional capture ship, while the human screen-reader walkthrough remains review-gated. |
+| **Operations/partner-gated** | R8, E5 | Self-hosted routing requires hosting and an OSM extract; the campus on-ramp requires a real UC Davis/Unitrans partner and distribution plan. |
+| **Future options, not activated commitments** | R5, R6, R10, R12, E2, E3, E4, E6, E8, E9 | These require additional product scope, threat-model decisions, real-user validation, operating capacity, or partner/legal review. Promote one to an implementation ticket only when its gate and owner are explicit. |
+
+The detailed entries below remain as the decision record and evidence base. The
+status table is authoritative when older prose says a delivered foundation is
+still absent.
+
+---
+
 ## Framing — how this fits the existing roadmap
 
 The existing roadmap's MoSCoW already shipped the **Must** and most of the
