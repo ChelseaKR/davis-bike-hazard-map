@@ -109,33 +109,27 @@ Dated: 2026-07-05. See the Standards Conformance table below (§Standards) for t
 Inherits [`/STANDARDS`](../STANDARDS/). Responsible-tech findings are committed in [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and [`docs/audits/`](./docs/audits/).
 
 ### Standards Conformance
-Per `/STANDARDS/README.md` §"How a repo declares conformance," every standard gets an explicit
-row: **Applies** (with the honest state and where the gap is tracked) or **N/A** (with a reason).
-Silent omission is itself a defect, so this table exists even though it shows real gaps rather than
-a clean sweep. Full evidence: the 2026-07-05 conformance audit,
-`audit-2026-07-05/davis-bike-hazard-map-AUDIT.md`
-(≈48% weighted conformance), and the corresponding
-`audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md`
-(work plan + live execution status per item). Regenerate this table whenever a re-audit lands.
+Per `/STANDARDS/README.md` §"How a repo declares conformance," every standard is
+explicitly scoped. Project-specific evidence lives here; shared requirements
+remain in `/STANDARDS`. This declaration was verified on 2026-07-11.
 
-| Standard | Applies? | State | Gap tracking |
-|---|---|---|---|
-| QUALITY-AND-METRICS | Applies | Partial (coverage/e2e/a11y gated; DORA ledger, perf budgets, PR-template DoD owed) | REMEDIATION.md P2-4, P3 |
-| CODE-QUALITY | Applies (TS/frontend sections; Python-only controls N/A) | Partial (strict TS + ESLint recommended in place; strictTypeChecked, Prettier, size-limit, ADR extraction owed) | REMEDIATION.md P1-3, P1-4, P1-6, P2-3 |
-| SECURITY-AND-SUPPLY-CHAIN | Applies (ships code + container) | Partial (SHA-pinned actions, Trivy, npm audit, gitleaks CI all blocking; ASVS now declared — see Responsible-Tech §F; CodeQL's `analyze` step blocks on error-level findings and runs on push/PR to `main` + weekly schedule (push/PR triggers restored 2026-07-11 in #74, see `codeql.yml`); CycloneDX SBOM + cosign sign + SLSA provenance now wired into `release.yml`, unexercised pending the first tag; Scorecard owed) | REMEDIATION.md P1-7, P2-1 |
-| CI-CD | Applies (5 workflows) | Partial (single ordered `ci.yml`, least-privilege `permissions:` blocks, concurrency groups all in place; **branch protection/rulesets absent — see below**, CODEOWNERS added 2026-07-05, zizmor owed) | REMEDIATION.md P0-2 (BLOCKED, manual), P1-2 |
-| RELEASE-AND-VERSIONING | Applies — **no releases yet**; pipeline intent: tagged betas `vX.Y.Z` once cut, deployed image maps to tag | Partial (`.github/workflows/release.yml` added: version-check, re-`make verify` at the tag, build + Trivy scan, GHCR publish by digest, CycloneDX SBOM, cosign sign + SLSA provenance attest, GitHub Release, verify-published boot check — **not yet exercised**, zero `v*` tags cut; cutting `v0.1.0` is a maintainer decision, not something this remediation pass performs) | REMEDIATION.md P2-1 |
-| ACCESSIBILITY | Applies (frontend emitting HTML; repo-stated gate) | Partial (axe + Lighthouse a11y merge-blocking, WCAG 2.2 AA tagged; ACR/VPAT, dated SR-matrix, reading-level gate owed) | REMEDIATION.md P2-5, P3 |
-| OBSERVABILITY | Applies (Server → Tier A, PWA → Tier B — see `## Observability` above, declared 2026-07-05) | Partial (probes/metrics/logging solid; OTel spans, SLO yaml, RUM beacon owed) | REMEDIATION.md P1-9, P2-7, P3 |
-| INTERNATIONALIZATION | Applies (explicitly in-scope, STANDARDS §1/§11) | Strongest standard in the repo (see [`docs/I18N.md`](./docs/I18N.md)) — **catalog + gates exist only on the unmerged `i18n-catalog-retrofit` branch as of 2026-07-05**, not on `main`; Spanish translation still skeleton-only (documented deferral) | REMEDIATION.md P1-1 (merge decision — not automated, see Execution Log), P2-6 |
-| AI-EVALUATION | **N/A** — no LLM SDK, no AI/agent code paths anywhere in `package.json` or `src/`/`server/` (verified 2026-07-05) | N/A | — |
-| DOCUMENTATION | Applies | Partial (this table + `CHANGELOG.md` close two gaps as of 2026-07-05; ADRs still inline in `ARCHITECTURE.md` rather than `docs/adr/`, currency stamps incomplete) | REMEDIATION.md P2-3, P3 |
-| RESPONSIBLE-TECH-FRAMEWORK | Applies | Strong (ethics/bias/privacy/transparency sign-offs committed in `docs/RESPONSIBLE-TECH-AUDITS.md` + `docs/audits/`; ASVS level now declared §F; audit artifacts dated 2026-05-31, predate the June feature wave — regeneration owed) | REMEDIATION.md P2-2 |
+| Standard | State | Project-specific evidence |
+|---|---|---|
+| Responsible-Tech Framework | Applies | [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and dated artifacts under [`docs/audits/`](./docs/audits/) |
+| Code Quality | Applies | Strict TypeScript, ESLint/stylelint, coverage-gated Vitest, `make verify`, and the MADR log under [`docs/adr/`](./docs/adr/) |
+| Security & Supply-Chain | Applies | ASVS declaration, SHA-pinned Actions, blocking CodeQL/npm-audit/gitleaks/Trivy, and signed/SBOM-attested release workflow |
+| CI/CD | Applies | Least-privilege workflows, CODEOWNERS, committed [`main` ruleset](./docs/ops/branch-ruleset.json), and local/CI `make verify` parity |
+| Release & Versioning | Applies | SemVer package metadata, Keep-a-Changelog file, and tag-triggered build/scan/SBOM/sign/provenance/boot verification; no release tag has been cut yet |
+| Accessibility | Applies | WCAG 2.2 AA axe and Lighthouse gates, map/list parity, and dated accessibility and screen-reader artifacts |
+| Observability | Applies | Tier A server and Tier B PWA declaration, liveness/readiness probes, structured redacted logs, Prometheus metrics, Sentry, and cookieless Web Vitals |
+| Performance | Applies | Blocking Lighthouse job with explicit budgets in [`lighthouserc.json`](./lighthouserc.json); service load-baseline expansion remains release-scoped |
+| Internationalization | Applies | FormatJS catalogs in `src/i18n/locales`, extraction/parity/BCP-47/CLDR/logical-CSS gates, and pseudolocale browser coverage; reviewed Spanish copy is still required before Spanish is enabled |
+| AI Evaluation | N/A — no prompt, model, retrieval, or agent surface exists in this application | Applicability registry sets `llm: false` |
+| Documentation | Applies | Root operator/contributor/security/release docs, docs index/scope/audit, and sequential ADR log |
+| Quality & Metrics | Applies | Coverage thresholds, accessibility/e2e/security gates, project metrics ledger in [`docs/ROADMAP.md`](./docs/ROADMAP.md), and the attached PR Definition of Done |
+| Incident Response | Applies | Severity/label conventions and secret-response procedure inherit from `/STANDARDS`; project security reporting and operational recovery are documented in [`SECURITY.md`](./SECURITY.md) and [`BETA.md`](./BETA.md) |
+| Data Governance | Applies | L2 precise-location/photo handling, minimization, EXIF stripping, retention/GC, coarsened public exports, PostgreSQL backup expectations, and privacy artifacts |
 
-**Branch protection / rulesets (CI-CD, CODE-QUALITY):** `main` currently has no branch protection
-and no rulesets configured on GitHub (verified by API at audit time: `.../branches/main/protection`
-→ 404, `.../rulesets` → `[]`), so every merge-blocking CI gate above is advisory, not enforced —
-direct push, force-push, and self-merge are all technically possible. This is a live GitHub setting
-outside this repo's files; see `audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md` P0-2 for the
-exact decision and commands needed (repo-visibility/plan choice, then a ruleset). **BLOCKED pending
-a maintainer decision** — not something a code change can fix.
+The live `protect-main` ruleset blocks force-pushes and deletion and requires the
+documented status checks. [`docs/ops/branch-ruleset.json`](./docs/ops/branch-ruleset.json)
+is the recovery/import mirror; verify live enforcement before changing it.
