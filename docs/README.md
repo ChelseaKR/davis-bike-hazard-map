@@ -1,6 +1,6 @@
 # Davis Bike Hazard Map Docs
 
-This index is the handoff point for the documentation sweep last reviewed on 2026-07-08. It keeps the project map, audit record, and main operating docs in one place.
+This index is the handoff point for the documentation sweep last reviewed on 2026-07-11. It keeps the project map, audit record, and main operating docs in one place.
 
 ## Documentation Audit
 
@@ -13,9 +13,7 @@ This index is the handoff point for the documentation sweep last reviewed on 202
 - [Project Scope](PROJECT-SCOPE.md)
 - [Documentation Audit](DOCUMENTATION-AUDIT.md)
 - [Architecture](ARCHITECTURE.md)
-- [Architecture](architecture.md)
 - [Roadmap](ROADMAP.md)
-- [Roadmap](roadmap.md)
 - [Responsible Tech Audits](RESPONSIBLE-TECH-AUDITS.md)
 - [Security](../SECURITY.md)
 - [Contributing](../CONTRIBUTING.md)

@@ -1,6 +1,6 @@
 # Project Scope
 
-Last reviewed: 2026-07-08. Base branch: `main`.
+Last reviewed: 2026-07-11. Base branch: `main`.
 
 This file is a plain-language map of the project as it exists on `main`. It does not replace the README, roadmap, audit docs, or source comments. It points to them so a reviewer can see the whole shape without reading every file first.
 
@@ -52,6 +52,7 @@ GitHub workflow files checked:
 - `.github/workflows/codeql.yml`
 - `.github/workflows/container-scan.yml`
 - `.github/workflows/deploy.yml`
+- `.github/workflows/release.yml`
 - `.github/workflows/secret-audit.yml`
 - `.github/workflows/standards.yml`
 - `.github/workflows/workflow-lint.yml`
@@ -70,11 +71,11 @@ GitHub workflow files checked:
 
 ## Docs And Evidence Checked
 
-This pass checked 25 hand-authored doc or metadata files, 60 test files, and 7 workflow files on `main`. The count excludes vendored provider licenses, dependency folders, generated cache files, and large generated artifact history.
+This pass checked the current hand-authored documentation and metadata surfaces, 68 test files, and 8 workflow files on `main`. The inventory excludes vendored provider licenses, dependency folders, generated cache files, and large generated artifact history.
 
 Large content groups were counted rather than listed file by file:
 
-- `public/`: 1 files
+- `public/`: 9 files
 
 Primary docs checked:
 

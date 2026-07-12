@@ -1,6 +1,6 @@
 # Documentation Audit
 
-Last reviewed: 2026-07-08. Base branch: `main`.
+Last reviewed: 2026-07-11. Base branch: `main`.
 
 This audit records the documentation sweep and remediation loop for this repository. It checks the docs as a system: entry points, root-level process and legal files, project scope, setup and validation notes, safety and privacy posture, architecture and planning docs, local links, and the places where code, tests, workflows, and docs meet.
 
@@ -12,7 +12,7 @@ This audit records the documentation sweep and remediation loop for this reposit
 | Security/process docs | pass | CONTRIBUTING.md, SECURITY.md, CHANGELOG.md |
 | Architecture/planning docs | pass | 1 architecture/interface docs; 6 planning/research docs |
 | Safety/privacy/audit docs | pass | 8 safety/privacy/accessibility/audit docs |
-| Validation surface | pass | 56 test files; 7 workflow files |
+| Validation surface | pass | 68 test files; 8 workflow files |
 | Local doc links | pass | 60 authored-doc links checked; 0 unresolved |
 
 ## Root-Level Documentation Audit
@@ -80,6 +80,7 @@ Workflow files checked:
 - `.github/workflows/codeql.yml`
 - `.github/workflows/container-scan.yml`
 - `.github/workflows/deploy.yml`
+- `.github/workflows/release.yml`
 - `.github/workflows/secret-audit.yml`
 - `.github/workflows/standards.yml`
 - `.github/workflows/workflow-lint.yml`
