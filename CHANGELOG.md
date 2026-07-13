@@ -38,6 +38,11 @@ corresponding subset of these entries moves under that heading.
   `CITATION.cff` added (#34)
 
 ### Fixed
+- Offline synchronization no longer retries permanently failed reports every 30 seconds;
+  user-triggered retries remain available, and reports orphaned in `syncing` after an interrupted
+  submission return to the idempotent retry queue after ten minutes.
+- Production now defaults to same-origin CORS when `CORS_ORIGINS` is unset while still honoring an
+  explicit allow-list; regression tests cover both production configuration paths.
 - CodeQL was fully non-blocking (`continue-on-error: true`) pending code-scanning enablement;
   narrowed so the analysis step itself can fail CI even while SARIF upload stays skipped on a
   private repo (2026-07-05 remediation — see `audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md`

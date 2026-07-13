@@ -122,6 +122,7 @@ describe('startSync', () => {
     // The loop calls the (mocked) db getter; return an empty queue so it's a
     // no-op that still records the call.
     vi.mocked(db.getPendingReports).mockReset().mockResolvedValue([]);
+    vi.mocked(db.updateReport).mockReset().mockResolvedValue(undefined);
   });
 
   it('drains the queue once immediately on start', async () => {
@@ -154,5 +155,27 @@ describe('startSync', () => {
     window.dispatchEvent(new Event('online'));
     await Promise.resolve();
     expect(db.getPendingReports).not.toHaveBeenCalled();
+  });
+
+  it('skips error records automatically but syncOnce permits a manual retry', async () => {
+    const errored = queued({ state: 'error', attempts: MAX_SYNC_ATTEMPTS });
+    vi.mocked(db.getPendingReports).mockResolvedValue([errored]);
+    const onResult = vi.fn();
+    const stop = startSync(onResult);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(db.updateReport).not.toHaveBeenCalled();
+    expect(onResult).not.toHaveBeenCalled();
+    stop();
+
+    const update = vi.fn().mockResolvedValue(undefined);
+    const submit = vi.fn().mockResolvedValue({ hazard: fakeHazard });
+    const result = await syncOnce({
+      getPending: async () => [errored],
+      update,
+      submit,
+    });
+    expect(result).toEqual({ attempted: 1, synced: 1, failed: 0 });
+    expect(submit).toHaveBeenCalledOnce();
   });
 });

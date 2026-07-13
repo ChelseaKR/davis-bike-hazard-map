@@ -86,12 +86,29 @@ export async function enqueueReport(submission: ReportSubmission): Promise<Queue
   return record;
 }
 
-/** All queued/erroring reports that still need to reach the server. */
-export async function getPendingReports(): Promise<QueuedReport[]> {
+/**
+ * A report stuck in 'syncing' longer than this is treated as orphaned (the app
+ * was killed mid-request) and becomes retryable again. Generous enough that no
+ * live upload — even a photo on slow mobile data — is still in flight.
+ */
+export const STALE_SYNCING_MS = 10 * 60 * 1000;
+
+/**
+ * All reports that still need to reach the server: queued, errored, and
+ * orphaned 'syncing' ones (stuck longer than {@link STALE_SYNCING_MS} — e.g.
+ * the app was killed mid-request, so no outcome was ever recorded). Re-trying
+ * a stale 'syncing' report is safe: submission is idempotent on clientId.
+ */
+export async function getPendingReports(now: number = Date.now()): Promise<QueuedReport[]> {
   const db = await getDB();
   const all = await db.getAll('reports');
   return all
-    .filter((r) => r.state === 'queued' || r.state === 'error')
+    .filter(
+      (r) =>
+        r.state === 'queued' ||
+        r.state === 'error' ||
+        (r.state === 'syncing' && now - r.updatedAt > STALE_SYNCING_MS),
+    )
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 

@@ -122,7 +122,10 @@ export const serverConfig = {
   },
 
   /** CORS allow-list for the dev client. Empty in prod (same-origin). */
-  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:4173')
+  corsOrigins: (
+    process.env.CORS_ORIGINS ??
+    (isProd ? '' : 'http://localhost:5173,http://localhost:4173')
+  )
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
