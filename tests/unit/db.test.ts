@@ -7,6 +7,7 @@ import {
   updateReport,
   deleteReport,
   countByState,
+  STALE_SYNCING_MS,
   _resetDbForTests,
 } from '../../src/lib/db.ts';
 import type { ReportSubmission } from '../../shared/types.ts';
@@ -40,6 +41,17 @@ describe('offline report queue', () => {
     await updateReport('b', { state: 'synced' });
     const pending = await getPendingReports();
     expect(pending.map((r) => r.clientId)).toEqual(['a']);
+  });
+
+  it('recovers a report stranded in "syncing" once it goes stale', async () => {
+    await enqueueReport(submission('a'));
+    await updateReport('a', { state: 'syncing' });
+    // Freshly 'syncing' is presumed in flight, so it is not pending…
+    expect((await getPendingReports()).map((r) => r.clientId)).toEqual([]);
+    // …but once stuck past the staleness window (app killed mid-request, no
+    // outcome recorded) it becomes retryable again.
+    const later = Date.now() + STALE_SYNCING_MS + 1;
+    expect((await getPendingReports(later)).map((r) => r.clientId)).toEqual(['a']);
   });
 
   it('updates state and records errors', async () => {

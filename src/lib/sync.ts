@@ -93,7 +93,15 @@ export function startSync(onResult?: (r: SyncResult) => void): () => void {
   const tick = async () => {
     if (stopped || !isOnline()) return;
     try {
-      const r = await syncOnce();
+      // Auto-retry everything pending EXCEPT reports in 'error' (a permanent
+      // 4xx rejection, or MAX_SYNC_ATTEMPTS exhausted) so the loop never
+      // retries those forever; the manual "Sync now" button in My Reports
+      // calls syncOnce() with the default getPending, which does include them
+      // — that is the user-driven retry path.
+      const r = await syncOnce({
+        getPending: async () =>
+          (await getPendingReports()).filter((report) => report.state !== 'error'),
+      });
       if (!stopped && r.attempted > 0) onResult?.(r);
     } catch {
       // syncOnce already records per-report errors; nothing else to do.
