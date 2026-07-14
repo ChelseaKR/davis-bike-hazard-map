@@ -32,12 +32,19 @@ function toRad(deg: number): number {
 export const DEFAULT_FUZZ_METERS = 70;
 
 /**
- * Snap a coordinate to the centre of a fixed grid cell of `gridMeters`.
+ * Snap a coordinate onto a fixed grid of `gridMeters` cells.
  *
- * Snapping (rather than random jitter) is deliberate: it is deterministic, so
- * repeated reports from the same spot map to the same published cell and cannot
- * be averaged back to the true point, and it bounds the exposed precision to
- * the cell size regardless of how many reports exist.
+ * Every true point in a cell maps to the one published point for that cell, so
+ * the exposed precision is bounded by the cell size regardless of how many
+ * reports exist. Snapping (rather than random jitter) is deliberate: it is
+ * deterministic, so repeated reports from the same spot map to the same
+ * published point and cannot be averaged back to the true point.
+ *
+ * The published point is a fixed per-cell representative (the cell's upper
+ * edge), not the geometric centre: it sits within one grid step per axis of the
+ * true point, worst case the cell diagonal — √2 · `gridMeters` ≈ 99 m at the
+ * default 70 m. Both the bound and the same-cell collapse are property-tested in
+ * tests/unit/geo.test.ts; see docs/audits/privacy-notes.md.
  */
 export function fuzzCoordinate(point: GeoPoint, gridMeters: number = DEFAULT_FUZZ_METERS): GeoPoint {
   const latStep = gridMeters / METERS_PER_DEG_LAT;

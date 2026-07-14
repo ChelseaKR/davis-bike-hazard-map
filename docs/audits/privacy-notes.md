@@ -9,7 +9,7 @@ Instantiates `/STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` §C for this repo.
 | Hazard type/severity/description | Core function | Server store | Until resolved/expired (14–30 d by severity) | Public (after approval) |
 | Photo (EXIF-stripped, optionally blurred) | Evidence of hazard | PhotoStore (blob) | Rejected: deleted at decision; resolved/expired: deleted after `RESOLVED_VISIBLE_DAYS` (see retention table) | Public only after approval; moderators before |
 | Precise location | 311 dispatch (opt-in only) | Server store, internal | Same as hazard | Server + opt-in 311 hand-off only |
-| Public location (fuzzed ~70 m) | Map display | Server store | Same as hazard | Public |
+| Public location (fuzzed to a ~70 m grid, ≤~99 m from true) | Map display | Server store | Same as hazard | Public |
 | Alert subscription: watch geometry (saved area box, or route polyline **simplified to ~35 m** — corridor precision, never the raw GPS trace) | Saved-route/area push alerts (opt-in, feature-flagged) | Server subscription store | **180-day TTL**, renewed on re-subscribe; expired records pruned before every match | Server only; never public |
 | Alert subscription: push endpoint + encryption keys, optional label | Web Push delivery | Server subscription store | Same 180-day TTL | Server only; endpoint/keys redacted from logs |
 | No accounts, no contact info, no analytics/trackers | — | — | — | — |
@@ -26,9 +26,14 @@ street scene; a reporter whose home-adjacent report could reveal where they live
   server test "strips EXIF server-side and gates the photo behind approval".
 - **Face/plate blur** offered on every photo (`PhotoEditor`), baked in via
   canvas re-encode (irreversible pixelation, `src/lib/blur.ts`).
-- **Location fuzzing.** Every public coordinate is grid-snapped (~70 m,
-  deterministic so it can't be averaged back), `shared/geo.ts`. The precise
-  point is exposed only in an opt-in, moderator-triggered 311 hand-off.
+- **Location fuzzing.** Every public coordinate is snapped onto a fixed ~70 m
+  grid (`shared/geo.ts`): every true point in a cell publishes as the one
+  representative point for that cell, so repeated reports can't be averaged back
+  to the true point, and the published point sits within one grid step per axis
+  of the true point — worst case the cell diagonal, √2 · 70 m ≈ 99 m. Both the
+  ≈99 m bound and the same-cell collapse are property-tested over the Davis bbox
+  in `tests/unit/geo.test.ts`, not just asserted by example. The precise point is
+  exposed only in an opt-in, moderator-triggered 311 hand-off.
 - **Moderation before public.** No unmoderated public photo feed; the photo
   route 404s for any non-approved hazard.
 - **No PII in logs.** Fastify logger redacts `authorization`; request bodies

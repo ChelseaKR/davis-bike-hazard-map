@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest';
+import fc from 'fast-check';
 import {
   haversineMeters,
   fuzzCoordinate,
   isWithinDavis,
   DEFAULT_FUZZ_METERS,
 } from '../../shared/geo.ts';
-import { DAVIS_CENTER } from '../../shared/validation.ts';
+import { DAVIS_CENTER, DAVIS_BOUNDS } from '../../shared/validation.ts';
+
+const METERS_PER_DEG_LAT = 111_320;
+const davisPoint = fc.record({
+  lat: fc.double({ min: DAVIS_BOUNDS.minLat, max: DAVIS_BOUNDS.maxLat, noNaN: true }),
+  lng: fc.double({ min: DAVIS_BOUNDS.minLng, max: DAVIS_BOUNDS.maxLng, noNaN: true }),
+});
 
 describe('haversineMeters', () => {
   it('is zero for identical points', () => {
@@ -50,6 +57,50 @@ describe('fuzzCoordinate', () => {
     const fuzzed = fuzzCoordinate(p, 70);
     // The fuzzed point should differ from the precise input (privacy).
     expect(fuzzed).not.toEqual(p);
+  });
+});
+
+// Property tests for the privacy control: the measured guarantees quoted in
+// docs/audits/privacy-notes.md are enforced here rather than asserted by example.
+describe('fuzzCoordinate (privacy properties over the Davis bbox)', () => {
+  it('is a pure, deterministic function of the point', () => {
+    fc.assert(
+      fc.property(davisPoint, (p) => {
+        expect(fuzzCoordinate(p)).toEqual(fuzzCoordinate(p));
+      }),
+    );
+  });
+
+  it('publishes a point within one grid step per axis (< 100 m overall) of the true point', () => {
+    // snap() moves each axis by at most one full DEFAULT_FUZZ_METERS step, so
+    // the worst case is the cell diagonal, √2 · 70 m ≈ 99 m. This bounds how far
+    // a public point can sit from the reporter's true location.
+    fc.assert(
+      fc.property(davisPoint, (p) => {
+        const moved = haversineMeters(p, fuzzCoordinate(p, DEFAULT_FUZZ_METERS));
+        expect(moved).toBeLessThan(100);
+      }),
+    );
+  });
+
+  it('collapses every true point in a grid cell to one public point (not averageable)', () => {
+    // Two true reports that share a cell publish identically, so repeated
+    // reports from around one spot cannot be averaged back to the true point.
+    fc.assert(
+      fc.property(
+        davisPoint,
+        fc.double({ min: -0.49, max: 0.49, noNaN: true }),
+        (p, fraction) => {
+          const metersPerDegLng = METERS_PER_DEG_LAT * Math.cos((p.lat * Math.PI) / 180);
+          const lngStep = DEFAULT_FUZZ_METERS / Math.max(1, metersPerDegLng);
+          const cellIndex = Math.round(p.lng / lngStep);
+          // A sibling at the same latitude whose longitude stays inside p's cell
+          // (offset < half a step from the cell index) must fuzz identically.
+          const sibling = { lat: p.lat, lng: (cellIndex + fraction) * lngStep };
+          expect(fuzzCoordinate(sibling)).toEqual(fuzzCoordinate(p));
+        },
+      ),
+    );
   });
 });
 
