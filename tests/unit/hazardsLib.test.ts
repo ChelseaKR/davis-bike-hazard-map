@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -168,8 +168,48 @@ describe('createRepository', () => {
     const photos = new MemoryPhotoStore();
     const h = await createHazard(repo, photos, report(), NOW, ttl);
 
-    // A fresh store over the same file sees the persisted record.
+    // A fresh store over the same file (after the first releases its lock, as a
+    // real restart would) sees the persisted record.
+    await repo.close();
     const reloaded = new JsonFileRepository(path);
     expect((await reloaded.findById(h.id))?.id).toBe(h.id);
+    await reloaded.close();
+  });
+
+  it('refuses a second live instance on the same data file (FIX-13)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    const repo = new JsonFileRepository(path);
+    try {
+      // A second instance while the first holds the lock must fail loudly,
+      // before it can write and corrupt the file.
+      expect(() => new JsonFileRepository(path)).toThrow(/single-process|already open|locked/i);
+    } finally {
+      await repo.close();
+    }
+  });
+
+  it('reclaims a stale lock left by a dead process (FIX-13)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    // A lock naming a pid well above any OS pid_max cannot be a live process,
+    // so an unclean-shutdown lock is treated as stale and reclaimed, not fatal.
+    writeFileSync(`${path}.lock`, '2147483647', 'utf8');
+    const repo = new JsonFileRepository(path);
+    expect(readFileSync(`${path}.lock`, 'utf8').trim()).toBe(String(process.pid));
+    await repo.close();
+  });
+
+  it('close() releases the lock so a new instance can open (FIX-13)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    const repo = new JsonFileRepository(path);
+    await repo.close();
+    expect(existsSync(`${path}.lock`)).toBe(false);
+    const repo2 = new JsonFileRepository(path);
+    await repo2.close();
   });
 });

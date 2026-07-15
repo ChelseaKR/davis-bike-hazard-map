@@ -12,10 +12,30 @@
  *   - JsonFileRepository — single-process dev/MVP persistence (atomic writes).
  *   - MemoryRepository   — tests and zero-config dev.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { transition } from '../../shared/statusMachine.ts';
 import type { StoredHazard } from './types.ts';
+
+/**
+ * Lock paths held by a live JsonFileRepository in *this* process. The on-disk
+ * `.lock` file guards against a second OS process on the same data file; this
+ * set additionally catches a second instance inside one process (which shares
+ * the same pid and so would slip past the file check).
+ */
+const heldLocks = new Set<string>();
+
+/** True if `pid` is a running process. `kill(pid, 0)` sends no signal; ESRCH
+ * means the process is gone (a stale lock), EPERM means it exists but isn't
+ * ours (still alive). */
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
 
 /** A geographic bounding box for spatial culling of the public feed. */
 export interface BBox {
@@ -175,9 +195,74 @@ export class MemoryRepository implements Repository {
  * never corrupts the data file. SINGLE-PROCESS ONLY (see server/config.ts).
  */
 export class JsonFileRepository extends MemoryRepository {
+  private readonly lockPath: string;
+  private readonly lockKey: string;
+  private lockReleased = false;
+
   constructor(private readonly path: string) {
     super();
+    this.lockPath = `${this.path}.lock`;
+    this.lockKey = resolve(this.lockPath);
+    this.acquireLock();
     this.load();
+  }
+
+  /**
+   * Acquire the single-process advisory lock, or throw loudly. The README and
+   * server/config.ts both warn that two processes on one data file corrupt it;
+   * FIX-13 makes that documented rule fail fast instead of silently. A lock left
+   * by a dead process (unclean shutdown) is treated as stale and reclaimed.
+   */
+  private acquireLock(): void {
+    if (heldLocks.has(this.lockKey)) {
+      throw new Error(
+        `JsonFileRepository: ${this.path} is already open in this process. ` +
+          `Use a single repository instance per data file (single-process only).`,
+      );
+    }
+    const dir = dirname(this.path);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    if (existsSync(this.lockPath)) {
+      const holder = Number.parseInt(readFileSync(this.lockPath, 'utf8').trim(), 10);
+      if (Number.isInteger(holder) && holder !== process.pid && isProcessAlive(holder)) {
+        throw new Error(
+          `JsonFileRepository: ${this.path} is locked by a live process (pid ${holder}). ` +
+            `Running two processes on one data file corrupts it (single-process only). ` +
+            `Stop the other process, or delete ${this.lockPath} if it is stale.`,
+        );
+      }
+      // Otherwise the lock is stale (dead holder, unparsable, or our own pid) — reclaim it.
+    }
+    writeFileSync(this.lockPath, String(process.pid), 'utf8');
+    heldLocks.add(this.lockKey);
+    process.once('exit', this.releaseLock);
+  }
+
+  /** Release the advisory lock. Bound so it can be an `exit` handler; idempotent
+   * and best-effort (a leftover file is reclaimed as stale on the next boot). */
+  private readonly releaseLock = (): void => {
+    if (this.lockReleased) return;
+    this.lockReleased = true;
+    heldLocks.delete(this.lockKey);
+    try {
+      if (
+        existsSync(this.lockPath) &&
+        readFileSync(this.lockPath, 'utf8').trim() === String(process.pid)
+      ) {
+        rmSync(this.lockPath);
+      }
+    } catch {
+      // Best effort.
+    }
+  };
+
+  /**
+   * Release the lock so another instance may open this file. Async to satisfy
+   * the `Repository.close` contract; the release itself is synchronous, so a
+   * caller that does not await still frees the lock immediately.
+   */
+  async close(): Promise<void> {
+    this.releaseLock();
   }
 
   private load(): void {
