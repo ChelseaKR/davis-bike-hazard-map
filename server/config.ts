@@ -26,8 +26,10 @@ const databaseUrl = process.env.DATABASE_URL ?? '';
 //
 // IMPORTANT: the JSON file store assumes a SINGLE server process. Writes are
 // atomic per process (temp + rename), but two processes pointed at the same
-// file WILL corrupt it — there is no cross-process lock. Use Postgres
-// (DATABASE_URL) for any multi-process deployment.
+// file WILL corrupt it. This is now enforced, not just documented: the store
+// takes an advisory `{path}.lock` at startup and refuses to boot if a live
+// process already holds it (FIX-13). Use Postgres (DATABASE_URL) for any
+// multi-process deployment.
 const dataFile = process.env.DATABASE_PATH ?? '';
 
 export const serverConfig = {
