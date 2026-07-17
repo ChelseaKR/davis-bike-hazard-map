@@ -21,6 +21,7 @@ import {
   reportSubmissionSchema,
   hazardFiltersSchema,
   moderationDecisionSchema,
+  moderationQueueQuerySchema,
   clientErrorSchema,
   webVitalSchema,
   loginSchema,
@@ -209,22 +210,31 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return reply.status(500).send({ error: 'internal_error', message: 'Something went wrong.' });
   });
 
-  const requireModerator = async (req: FastifyRequest, reply: FastifyReply) => {
+  /**
+   * Resolve the request's bearer token to a moderator username, or null.
+   * Shared by the hard gate (requireModerator) and the photo route's optional
+   * moderator branch (FIX-04), so both apply identical verification +
+   * revocation rules.
+   */
+  const authenticateModerator = async (req: FastifyRequest): Promise<string | null> => {
     const header = req.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     const payload = token ? verifyToken(token, config.sessionSecret, now()) : null;
-    if (!payload) {
-      await reply.status(401).send({ error: 'unauthorized', message: 'Moderator sign-in required.' });
-      return;
-    }
+    if (!payload) return null;
     // Revocation: the token's version must still match the account's current
     // one (a bump signs everyone out / kills a leaked token).
     const moderator = await moderators.findByUsername(payload.sub);
-    if (!moderator || (payload.ver ?? 0) !== moderator.tokenVersion) {
-      await reply.status(401).send({ error: 'unauthorized', message: 'Session no longer valid.' });
+    if (!moderator || (payload.ver ?? 0) !== moderator.tokenVersion) return null;
+    return payload.sub;
+  };
+
+  const requireModerator = async (req: FastifyRequest, reply: FastifyReply) => {
+    const username = await authenticateModerator(req);
+    if (!username) {
+      await reply.status(401).send({ error: 'unauthorized', message: 'Moderator sign-in required.' });
       return;
     }
-    (req as AuthedRequest).moderatorUsername = payload.sub;
+    (req as AuthedRequest).moderatorUsername = username;
   };
 
   // Per-account failed-login throttle (complements the per-IP rate limit).
@@ -524,13 +534,28 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return { hazard: toPublic(updated) };
   });
 
-  // --- Serve a moderated photo (approved + live only) ---
+  // --- Serve a moderated photo ---
+  // Public branch: approved + live hazards only (cacheable). Moderator branch
+  // (FIX-04): a PENDING photo streams to an authenticated moderator so the
+  // queue no longer inlines photo bytes — rejected/expired/resolved photos are
+  // never served to anyone (they await GC, see sweepPhotoRetention).
   app.get('/api/photos/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const { size } = req.query as { size?: string };
     const hazard = await repo.findById(id);
-    if (!hazard || !hazard.photo || hazard.status !== 'approved' || hazard.expiresAt <= now()) {
+    if (!hazard?.photo) {
       return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
+    }
+    const publiclyVisible = hazard.status === 'approved' && hazard.expiresAt > now();
+    let cacheControl = 'public, max-age=3600';
+    if (!publiclyVisible) {
+      // 404 (not 401/403) for non-moderators: don't confirm a pending photo exists.
+      const moderator = hazard.status === 'pending' ? await authenticateModerator(req) : null;
+      if (!moderator) {
+        return reply.status(404).send({ error: 'not_found', message: 'Photo not available.' });
+      }
+      // Auth-gated response: never let a shared cache retain it.
+      cacheControl = 'private, no-store';
     }
     // ?size=thumb serves the small variant, falling back to the full image.
     const bytes =
@@ -540,14 +565,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }
     return reply
       .header('content-type', hazard.photo.mime)
-      .header('cache-control', 'public, max-age=3600')
+      .header('cache-control', cacheControl)
       .send(Buffer.from(bytes));
   });
 
   // --- Moderation (auth) ---
-  app.get('/api/moderation/queue', { preHandler: requireModerator }, async () => ({
-    hazards: await listModerationQueue(repo, photos),
-  }));
+  // Keyset-paged (FIX-04): the response carries at most `limit` hazards plus
+  // an opaque `nextCursor`, so its size is independent of queue depth.
+  app.get('/api/moderation/queue', { preHandler: requireModerator }, async (req) => {
+    const { limit, cursor } = moderationQueueQuerySchema.parse(req.query);
+    return listModerationQueue(repo, { limit, cursor });
+  });
 
   app.post('/api/moderation/:id', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };

@@ -83,6 +83,20 @@ export const hazardFiltersSchema = z.object({
 });
 
 /**
+ * Query for one page of the moderation queue (FIX-04). The cursor is the
+ * opaque keyset token a previous page returned (`<createdAt>:<id>`); anything
+ * else is rejected up front so a corrupt cursor can never silently restart
+ * the traversal from the top.
+ */
+export const moderationQueueQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z
+    .string()
+    .regex(/^\d+:.+$/, 'cursor must be a token returned by a previous page')
+    .optional(),
+});
+
+/**
  * A hazard-aware route request: a start and end point, both inside Davis. The
  * planner only routes within the mapped area (and refuses GPS-error inputs).
  */

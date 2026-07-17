@@ -7,7 +7,7 @@ import { PushSubscriptionGoneError } from '../../server/lib/pushNotify.ts';
 import { hashPassword } from '../../server/lib/password.ts';
 import { serverConfig } from '../../server/config.ts';
 import { signWebhookBody } from '../../server/lib/webhookAuth.ts';
-import { bytesToDataUrl, hasExif, dataUrlToBytes } from '../../shared/exif.ts';
+import { bytesToDataUrl, hasExif } from '../../shared/exif.ts';
 import sharp from 'sharp';
 
 const MOD_USER = 'mod';
@@ -327,6 +327,72 @@ describe('moderation auth', () => {
   });
 });
 
+describe('moderation queue pagination (FIX-04)', () => {
+  /** File `n` pending reports, one minute apart. */
+  async function seedPending(n: number) {
+    for (let i = 0; i < n; i++) {
+      await post('/api/reports', {
+        ...baseReport,
+        clientId: `22222222-2222-4222-8222-2222222222${String(i).padStart(2, '0')}`,
+      });
+      clock += 60_000;
+    }
+  }
+
+  it('serves bounded keyset pages, oldest first, with a stable total', async () => {
+    await seedPending(5);
+    const q = (qs: string) =>
+      app.inject({
+        method: 'GET',
+        url: `/api/moderation/queue${qs}`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+    const page1 = (await q('?limit=2')).json();
+    expect(page1.hazards).toHaveLength(2);
+    expect(page1.total).toBe(5);
+    expect(page1.nextCursor).toEqual(expect.any(String));
+    expect(page1.hazards[0].createdAt).toBeLessThan(page1.hazards[1].createdAt);
+
+    const page2 = (await q(`?limit=2&cursor=${encodeURIComponent(page1.nextCursor)}`)).json();
+    const page3 = (await q(`?limit=2&cursor=${encodeURIComponent(page2.nextCursor)}`)).json();
+    expect(page3.hazards).toHaveLength(1);
+    expect(page3.nextCursor).toBeNull();
+
+    // The pages tile the queue exactly — no overlap, nothing skipped.
+    const ids = [...page1.hazards, ...page2.hazards, ...page3.hazards].map(
+      (h: { id: string }) => h.id,
+    );
+    expect(new Set(ids).size).toBe(5);
+  });
+
+  it('keeps the response size independent of queue depth (the default limit)', async () => {
+    await seedPending(25);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/moderation/queue',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.json().hazards).toHaveLength(20); // default limit
+    expect(res.json().total).toBe(25);
+  });
+
+  it('rejects a malformed cursor and an out-of-range limit (400)', async () => {
+    const bad = await app.inject({
+      method: 'GET',
+      url: '/api/moderation/queue?cursor=garbage',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(bad.statusCode).toBe(400);
+    const big = await app.inject({
+      method: 'GET',
+      url: '/api/moderation/queue?limit=101',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(big.statusCode).toBe(400);
+  });
+});
+
 describe('moderator accounts', () => {
   it('issues a session on correct credentials', async () => {
     const res = await post('/api/auth/login', { username: MOD_USER, password: MOD_PASS });
@@ -452,16 +518,61 @@ describe('photo privacy', () => {
     expect(stored.photo).toBeNull();
   });
 
-  it('inlines the full photo (auth-gated) in the moderation queue', async () => {
-    await post('/api/reports', { ...baseReport, photo: await realPhoto() });
+  it('references (never inlines) the photo in the moderation queue (FIX-04)', async () => {
+    const created = await post('/api/reports', { ...baseReport, photo: await realPhoto() });
+    const id = created.json().hazard.id;
     const res = await app.inject({
       method: 'GET',
       url: '/api/moderation/queue',
       headers: { authorization: `Bearer ${token}` },
     });
-    const photoUrl = res.json().hazards[0].photoUrl as string;
-    expect(photoUrl.startsWith('data:image/jpeg;base64,')).toBe(true);
-    expect(hasExif(dataUrlToBytes(photoUrl).bytes)).toBe(false);
+    expect(res.json().hazards[0].photoUrl).toBe(`/api/photos/${id}`);
+    // The queue payload carries no photo bytes at all.
+    expect(res.body).not.toContain('base64');
+  });
+
+  it('streams a PENDING photo to an authenticated moderator only (FIX-04)', async () => {
+    const created = await post('/api/reports', { ...baseReport, photo: await realPhoto() });
+    const id = created.json().hazard.id;
+
+    // Public request: 404 — a pending photo's existence is not confirmed.
+    const anon = await app.inject({ method: 'GET', url: `/api/photos/${id}` });
+    expect(anon.statusCode).toBe(404);
+    const badToken = await app.inject({
+      method: 'GET',
+      url: `/api/photos/${id}`,
+      headers: { authorization: 'Bearer nope' },
+    });
+    expect(badToken.statusCode).toBe(404);
+
+    // Moderator request: the bytes stream, privately (no shared caching).
+    const mod = await app.inject({
+      method: 'GET',
+      url: `/api/photos/${id}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(mod.statusCode).toBe(200);
+    expect(mod.headers['content-type']).toContain('image/jpeg');
+    expect(mod.headers['cache-control']).toBe('private, no-store');
+    expect(hasExif(new Uint8Array(mod.rawPayload))).toBe(false);
+
+    // A rejected hazard's photo is served to no one, moderator included.
+    await post(`/api/moderation/${id}`, { decision: 'reject' }, { authorization: `Bearer ${token}` });
+    const afterReject = await app.inject({
+      method: 'GET',
+      url: `/api/photos/${id}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(afterReject.statusCode).toBe(404);
+  });
+
+  it('keeps approved photos public and shared-cacheable (unchanged)', async () => {
+    const created = await post('/api/reports', { ...baseReport, photo: await realPhoto() });
+    const id = created.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
+    const anon = await app.inject({ method: 'GET', url: `/api/photos/${id}` });
+    expect(anon.statusCode).toBe(200);
+    expect(anon.headers['cache-control']).toBe('public, max-age=3600');
   });
 
   it('keeps photo bytes OUT of the persisted record (only a { mime } ref)', async () => {

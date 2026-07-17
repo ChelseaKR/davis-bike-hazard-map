@@ -14,7 +14,15 @@
 import { Pool, type PoolClient } from 'pg';
 import type { StoredHazard, ModerationAction, PhotoRef } from './types.ts';
 import type { HandoffInfo } from '../../shared/types.ts';
-import type { BBox, PendingStats, Repository } from './repository.ts';
+import {
+  decodePendingCursor,
+  encodePendingCursor,
+  type BBox,
+  type PendingPage,
+  type PendingPageOptions,
+  type PendingStats,
+  type Repository,
+} from './repository.ts';
 import { runMigrations } from './migrate.ts';
 
 interface HazardRow {
@@ -180,6 +188,30 @@ export class PostgresRepository implements Repository {
       params,
     );
     return res.rows.map(rowToHazard);
+  }
+
+  async listPending(opts: PendingPageOptions): Promise<PendingPage> {
+    // Keyset pagination on (created_at, id): stable under concurrent inserts
+    // and O(page) regardless of queue depth (FIX-04). COLLATE "C" pins the id
+    // tiebreak to byte order, matching the in-memory store's code-unit compare.
+    const after = opts.cursor ? decodePendingCursor(opts.cursor) : null;
+    const params: unknown[] = [];
+    let where = `status = 'pending'`;
+    if (after) {
+      params.push(after.createdAt, after.id);
+      where += ` AND (created_at, id COLLATE "C") > ($1, $2)`;
+    }
+    params.push(opts.limit + 1); // one extra row detects whether more remain
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards WHERE ${where}
+       ORDER BY created_at, id COLLATE "C" LIMIT $${params.length}`,
+      params,
+    );
+    const rows = res.rows.map(rowToHazard);
+    const page = rows.slice(0, opts.limit);
+    const last = page.at(-1);
+    const nextCursor = rows.length > page.length && last ? encodePendingCursor(last) : null;
+    return { hazards: page, nextCursor };
   }
 
   async expire(now: number): Promise<number> {

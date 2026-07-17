@@ -29,6 +29,7 @@ import {
   webVitalSchema,
   handoffStatusSchema,
   alertSubscriptionSchema,
+  moderationQueueQuerySchema,
 } from '../../shared/validation.ts';
 
 extendZodWithOpenApi(z);
@@ -115,8 +116,19 @@ export const healthResponseSchema = z.object({ status: z.literal('ok'), time: z.
 
 export const readyResponseSchema = z.object({ status: z.literal('ready'), time: z.number().int() });
 
-/** Body of GET /hazards; the moderation queue reuses the same envelope. */
+/** Body of GET /hazards. */
 export const hazardFeedResponseSchema = z.object({ hazards: z.array(hazardSchema) });
+
+/**
+ * Body of GET /moderation/queue — one keyset page (FIX-04). Photo fields are
+ * references into GET /photos/{id} (which streams pending bytes to
+ * authenticated moderators only), never inline data URLs.
+ */
+export const moderationQueueResponseSchema = z.object({
+  hazards: z.array(hazardSchema),
+  nextCursor: z.string().nullable(),
+  total: z.number().int(),
+});
 
 export const hazardResponseSchema = z.object({ hazard: hazardSchema });
 
@@ -256,7 +268,13 @@ registry.registerPath({
   method: 'get',
   path: '/photos/{id}',
   tags: ['public'],
-  summary: 'Moderated photo (approved only)',
+  summary: 'Hazard photo (approved publicly; pending only with a moderator bearer token)',
+  description:
+    'Approved, unexpired hazard photos are public and cacheable. A PENDING ' +
+    'photo is served only when the request carries a valid moderator bearer ' +
+    'token (FIX-04 — the moderation queue references photos instead of ' +
+    'inlining them); without one the route answers 404, never 401/403. ' +
+    'Rejected/expired/resolved photos are not served to anyone.',
   request: {
     params: z.object({ id: z.string() }),
     query: z.object({ size: z.enum(['thumb']).optional() }),
@@ -362,9 +380,15 @@ registry.registerPath({
   path: '/moderation/queue',
   tags: ['moderation'],
   security: bearerAuth,
-  summary: 'Pending review queue',
+  summary: 'Pending review queue (keyset-paged, oldest first)',
+  description:
+    'One page of the moderation backlog (FIX-04). Pass the returned ' +
+    '`nextCursor` to fetch the next page; `total` is the full backlog count. ' +
+    'Photo fields are references into GET /photos/{id} — bytes are never inlined.',
+  request: { query: moderationQueueQuerySchema.clone() },
   responses: {
-    200: { description: 'queue', content: json(hazardFeedResponseSchema) },
+    200: { description: 'queue page', content: json(moderationQueueResponseSchema) },
+    400: { description: 'invalid limit/cursor', content: errorContent },
     401: { description: 'unauthorized', content: errorContent },
   },
 });

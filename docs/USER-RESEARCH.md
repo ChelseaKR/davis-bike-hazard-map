@@ -214,7 +214,7 @@ next**, and **Adopts / walks** (the one thing that wins or loses them).
 
 ### P12 — Jordan, community moderator
 - **Goal:** clear the queue inside the **48 h SLA** — approve real hazards, reject PII/abuse — without burning out.
-- **Values today:** the **moderation queue** with the photo **inlined only in the auth-gated response** (never public while pending); **named accounts + attributable audit trail** (`moderation[]` records *who* acted); **approve / reject / resolve**; mechanical defenses already in place — **per-IP rate-limit, idempotent UUIDs, out-of-area rejection**; **queue-depth + oldest-pending metrics** to watch the SLA.
+- **Values today:** the **moderation queue** (keyset-paged) with the pending photo **streamed only to an authenticated moderator** (never public while pending); **named accounts + attributable audit trail** (`moderation[]` records *who* acted); **approve / reject / resolve**; mechanical defenses already in place — **per-IP rate-limit, idempotent UUIDs, out-of-area rejection**; **queue-depth + oldest-pending metrics** to watch the SLA.
 - **Gets stuck:** **burst or coordinated spam** (the VOICE-line pattern) and **un-blurred faces/plates** are hard to catch one-by-one at volume; there's no batch action, no similar-report grouping, and no signal that a wave is coordinated.
 - **Wants next:** **moderator tooling for bursts** (cluster near-identical reports, bulk reject, flag suspected coordinated floods), an auto-blur *pre-pass* that flags likely faces for review, and a clear escalation when a single source spikes.
 - **Adopts if:** one volunteer can hold the line solo. **Walks if:** a motivated spammer can out-pace human review.

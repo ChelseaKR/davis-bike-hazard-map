@@ -13,8 +13,10 @@ unmoderated public photo feed** — this is a launch gate, not a nice-to-have.
    is not servable to the public (`GET /api/photos/:id` 404s until approved).
 2. A moderator signs in to their **named account** (username + scrypt-hashed
    password → a signed, expiring session token) and reviews the queue
-   (`GET /api/moderation/queue`). The photo is inlined in that auth-gated
-   response so it can be judged; it is never exposed publicly while pending.
+   (`GET /api/moderation/queue`, keyset-paged — FIX-04). The photo is served by
+   reference: `GET /api/photos/:id` streams a pending photo only to a request
+   carrying a valid moderator token (`private, no-store`), so it can be judged;
+   it is never exposed publicly while pending.
 3. The moderator **approves** (becomes public, fuzzed), **rejects** (never
    public), or later **resolves** (cleared from the map). Every decision is
    recorded in the report's `moderation[]` trail **with the moderator's name**,
