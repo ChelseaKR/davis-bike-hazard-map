@@ -111,6 +111,16 @@ export interface Repository {
    * sweepPhotoRetention (see docs/audits/privacy-notes.md).
    */
   listPhotoGcCandidates(cutoff: number): Promise<StoredHazard[]>;
+  /**
+   * Hazards whose hand-off retry is due: delivery receipt in `retrying` with
+   * `nextRetryAt` at/before `now` (R3 — consumed by sweepHandoffRetries).
+   */
+  listHandoffRetryDue(now: number): Promise<StoredHazard[]>;
+  /**
+   * Dead-lettered hand-offs: delivery receipt in `failed` (retry budget
+   * exhausted), oldest attempt first — the moderator's re-send surface (R3).
+   */
+  listHandoffFailed(): Promise<StoredHazard[]>;
   /** Hard-delete a hazard by id (reporter data deletion). Returns true if found. */
   deleteById(id: string): Promise<boolean>;
   /** Moderation backlog stats for observability (cheap; no photos loaded). */
@@ -223,6 +233,21 @@ export class MemoryRepository implements Repository {
         (h.status === 'expired' || h.status === 'resolved') &&
         (h.resolvedAt ?? h.updatedAt) <= cutoff,
     );
+  }
+
+  async listHandoffRetryDue(now: number): Promise<StoredHazard[]> {
+    return [...this.store.values()].filter(
+      (h) =>
+        h.handoffDelivery?.state === 'retrying' &&
+        h.handoffDelivery.nextRetryAt !== null &&
+        h.handoffDelivery.nextRetryAt <= now,
+    );
+  }
+
+  async listHandoffFailed(): Promise<StoredHazard[]> {
+    return [...this.store.values()]
+      .filter((h) => h.handoffDelivery?.state === 'failed')
+      .sort((a, b) => (a.handoffDelivery?.lastAttemptAt ?? 0) - (b.handoffDelivery?.lastAttemptAt ?? 0));
   }
 
   async deleteById(id: string): Promise<boolean> {

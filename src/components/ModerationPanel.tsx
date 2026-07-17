@@ -21,6 +21,7 @@ import {
 import { timeAgo } from '../lib/format.ts';
 import { useLabels } from '../i18n/labels.ts';
 import { HazardPhoto } from './HazardPhoto.tsx';
+import { HandoffFailures } from './HandoffFailures.tsx';
 
 /**
  * A pending hazard's photo. Pending photo bytes are auth-gated on the server
@@ -369,6 +370,7 @@ export function ModerationPanel() {
           />
         </button>
       )}
+      <HandoffFailures token={session.token} />
     </section>
   );
 }

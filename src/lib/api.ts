@@ -207,6 +207,45 @@ export async function fetchModerationPhoto(
   return URL.createObjectURL(await res.blob());
 }
 
+/** A 311 hand-off delivery receipt (R3). Auth-gated, moderator-only data. */
+export interface HandoffDeliveryReceipt {
+  state: 'submitted' | 'acked' | 'retrying' | 'failed';
+  dryRun: boolean;
+  attempts: number;
+  lastAttemptAt: number;
+  nextRetryAt: number | null;
+  lastError: string | null;
+}
+
+/** A dead-lettered hand-off: the hazard plus its delivery receipt. */
+export interface HandoffFailure {
+  hazard: Hazard;
+  delivery: HandoffDeliveryReceipt | null;
+}
+
+/**
+ * Moderation: hand-offs whose delivery exhausted the automatic retry budget
+ * (R3 dead letters). Requires a moderator session token.
+ */
+export async function fetchHandoffFailures(token: string): Promise<HandoffFailure[]> {
+  const { failures } = await request<{ failures: HandoffFailure[] }>(
+    '/moderation/handoff-failures',
+    { headers: { authorization: `Bearer ${token}` } },
+  );
+  return failures;
+}
+
+/**
+ * Moderation: re-send a hazard to 311 (same route as the initial hand-off —
+ * the server records a fresh delivery receipt for the attempt).
+ */
+export async function retryHandoff(id: string, token: string): Promise<void> {
+  await request<unknown>(`/moderation/${id}/handoff`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+  });
+}
+
 /** Moderation: approve, reject, or resolve a hazard (requires a moderator token). */
 export async function decideModeration(
   id: string,

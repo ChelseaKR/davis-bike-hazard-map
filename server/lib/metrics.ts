@@ -6,13 +6,14 @@
  * moderation-queue gauges that drive the SLA alerts. Route labels use the
  * Fastify route *pattern* (not the raw URL) to keep cardinality bounded.
  */
-import { Registry, Histogram, Gauge, collectDefaultMetrics } from 'prom-client';
+import { Registry, Histogram, Gauge, Counter, collectDefaultMetrics } from 'prom-client';
 
 export interface Metrics {
   registry: Registry;
   httpDuration: Histogram<'method' | 'route' | 'status'>;
   queueDepth: Gauge;
   oldestPending: Gauge;
+  handoffFailures: Counter;
 }
 
 export function createMetrics(): Metrics {
@@ -39,5 +40,14 @@ export function createMetrics(): Metrics {
     registers: [registry],
   });
 
-  return { registry, httpDuration, queueDepth, oldestPending };
+  // R3: every failed 311 hand-off forward attempt (initial or retry). A rising
+  // rate here means forwarded reports are at risk of vanishing silently — the
+  // exact failure mode the delivery receipts exist to prevent.
+  const handoffFailures = new Counter({
+    name: 'dbhm_handoff_failures_total',
+    help: 'Failed 311 hand-off forward attempts (transport or provider error).',
+    registers: [registry],
+  });
+
+  return { registry, httpDuration, queueDepth, oldestPending, handoffFailures };
 }

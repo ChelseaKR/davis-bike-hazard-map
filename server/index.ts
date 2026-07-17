@@ -119,6 +119,23 @@ async function main() {
   );
   sweep.unref?.();
 
+  // 311 hand-off retry sweep (R3): re-forward failed hand-offs on their
+  // exponential schedule. Every 5 minutes — the smallest backoff step — so a
+  // due retry never waits much past its scheduled time. Dry-run-safe: with no
+  // provider configured there is never anything in the retrying state.
+  const handoffRetry = setInterval(
+    () => {
+      void app
+        .runHandoffRetrySweep()
+        .then((r) => {
+          if (r.attempted > 0) app.log.info(r, '311 hand-off retry sweep');
+        })
+        .catch((err) => app.log.warn(err, '311 hand-off retry sweep failed'));
+    },
+    5 * 60 * 1000,
+  );
+  handoffRetry.unref?.();
+
   // Periodic timestamped snapshots of the JSON store (no-op in-memory).
   startBackups(
     {

@@ -14,6 +14,14 @@ PR history so the log isn't empty when the first release ships. Once `v0.1.0` is
 corresponding subset of these entries moves under that heading.
 
 ### Added
+- 311 hand-off delivery receipts + reconciliation/retry (R3): every forward attempt records a
+  server-internal `HandoffDelivery` receipt (submitted/acked/retrying/failed) on the hazard;
+  failed transports retry on an exponential schedule (5 min doubling, capped 6 h, 6-attempt
+  budget) via a periodic sweep; exhausted hand-offs dead-letter into the auth-gated
+  `GET /api/moderation/handoff-failures` + a moderator re-send panel; any synced-back city
+  status acks the receipt and cancels retries; `dbhm_handoff_failures_total` counts failed
+  attempts. Fully dry-run testable — actual delivery to the city still requires provider
+  credentials (external gate)
 - Moderation queue pagination + photo streaming (FIX-04): `GET /api/moderation/queue` is
   keyset-paged (`limit`/`cursor`, response size independent of queue depth) and references photos
   by URL instead of inlining base64; `GET /api/photos/:id` streams a PENDING photo to an

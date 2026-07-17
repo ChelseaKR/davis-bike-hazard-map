@@ -35,6 +35,7 @@ function hazard(over: Partial<StoredHazard> = {}): StoredHazard {
     expiresAt: 9_999_999_999_999,
     resolvedAt: null,
     handoff: null,
+    handoffDelivery: null,
     moderation: [],
     ...over,
   };
@@ -181,6 +182,33 @@ suite('PostgresRepository', () => {
     const page = await repo.listPending({ limit: 1 });
     expect(page.hazards.map((h) => h.id)).toEqual(['p1']);
     expect(page.nextCursor).toBeNull();
+  });
+
+  it('round-trips the hand-off delivery receipt and lists retry-due + failed rows (R3)', async () => {
+    const retrying = {
+      state: 'retrying' as const,
+      dryRun: false,
+      attempts: 2,
+      lastAttemptAt: 900,
+      nextRetryAt: 1000,
+      lastError: '311 responded 502',
+    };
+    const failed = { ...retrying, state: 'failed' as const, attempts: 6, nextRetryAt: null };
+    await repo.insert(hazard({ id: 'r1', clientId: 'r1', handoffDelivery: retrying }));
+    await repo.insert(
+      hazard({
+        id: 'r2',
+        clientId: 'r2',
+        handoffDelivery: { ...retrying, nextRetryAt: 5000 },
+      }),
+    );
+    await repo.insert(hazard({ id: 'f1', clientId: 'f1', handoffDelivery: failed }));
+    await repo.insert(hazard({ id: 'none', clientId: 'none' }));
+
+    expect((await repo.findById('r1'))?.handoffDelivery).toEqual(retrying);
+    expect((await repo.listHandoffRetryDue(1000)).map((h) => h.id)).toEqual(['r1']);
+    expect((await repo.listHandoffRetryDue(9000)).map((h) => h.id).sort()).toEqual(['r1', 'r2']);
+    expect((await repo.listHandoffFailed()).map((h) => h.id)).toEqual(['f1']);
   });
 
   it('expire transitions rows past TTL and coarsens their precise location', async () => {

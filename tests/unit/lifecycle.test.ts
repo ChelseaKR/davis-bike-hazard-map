@@ -84,6 +84,34 @@ describe('applyHandoffStatus', () => {
     expect(resolved).toBe(false);
     expect(patch.status).toBeUndefined();
   });
+
+  it('acks the delivery receipt and cancels pending retries on any sync-back (R3)', () => {
+    const h = stored({
+      handoff: initialHandoff(stored(), NOW),
+      handoffDelivery: {
+        state: 'retrying',
+        dryRun: false,
+        attempts: 2,
+        lastAttemptAt: NOW,
+        nextRetryAt: NOW + 60_000,
+        lastError: '311 responded 502',
+      },
+    });
+    const { patch } = applyHandoffStatus(h, 'Received', NOW + 1000);
+    expect(patch.handoffDelivery).toEqual({
+      state: 'acked',
+      dryRun: false,
+      attempts: 2,
+      lastAttemptAt: NOW,
+      nextRetryAt: null,
+      lastError: null,
+    });
+  });
+
+  it('leaves the receipt absent when the hazard never had one', () => {
+    const { patch } = applyHandoffStatus(stored(), 'Received', NOW);
+    expect(patch.handoffDelivery).toBeUndefined();
+  });
 });
 
 describe('lifecycleStage projection', () => {

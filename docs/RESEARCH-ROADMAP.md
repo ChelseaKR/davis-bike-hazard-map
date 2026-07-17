@@ -23,7 +23,7 @@
 
 ---
 
-## Delivery status — reconciled 2026-07-11
+## Delivery status — reconciled 2026-07-11 (R3 receipts/retry landed 2026-07-17)
 
 This file is an evidence-driven option set, not a promise that every idea is an
 active engineering ticket. The active implementation lane has been drained; the
@@ -33,7 +33,7 @@ below rather than being represented as silently open work.
 | State | Items | Evidence / gate |
 | --- | --- | --- |
 | **Delivered** | R1, R2, R4, R9, R11, E1, E7 | Duplicate nudge + confirmations; reporter trail; normalized coverage; manual + optional `FaceDetector` blur; durable Web Push delivery; near-miss taxonomy; recently resolved hazards remain visible. |
-| **Delivered foundation; external completion remains** | R3, R7 | 311 references and pull/webhook status reconciliation ship, but live delivery/retry requires a real provider contract; privacy copy and accessible/photo-optional capture ship, while the human screen-reader walkthrough remains review-gated. |
+| **Delivered foundation; external completion remains** | R3, R7 | R3's receipt/retry machinery now ships (2026-07-17): every forward attempt records a `HandoffDelivery` receipt, failures retry on an exponential schedule, exhausted hand-offs surface as moderator dead letters (`GET /api/moderation/handoff-failures` + panel re-send), and `dbhm_handoff_failures_total` counts failed attempts — all exercisable in dry-run. What still requires a real provider contract is *actual delivery to the city* (credentials/endpoint — ⛔ external). R7: privacy copy and accessible/photo-optional capture ship, while the human screen-reader walkthrough remains review-gated. |
 | **Operations/partner-gated** | R8, E5 | Self-hosted routing requires hosting and an OSM extract; the campus on-ramp requires a real UC Davis/Unitrans partner and distribution plan. |
 | **Future options, not activated commitments** | R5, R6, R10, R12, E2, E3, E4, E6, E8, E9 | These require additional product scope, threat-model decisions, real-user validation, operating capacity, or partner/legal review. Promote one to an implementation ticket only when its gate and owner are explicit. |
 
@@ -91,7 +91,7 @@ Effort: **S** ≈ an afternoon · **M** ≈ a day or two · **L** ≈ a week+.
 | --- | --- | --- | --- | --- | --- |
 | **R1** | **"Me too / still here" confirmation + lightweight comment** on an existing hazard instead of a duplicate filing | P1,P8,P9,P11 | P0 | M | EV-COLLECTIVE, EV-ABANDON · confirmations already feed lifecycle + routing weight. **[corroborates ROADMAP §3 "duplicate clustering" / "comments"]** · **✅ Implemented in this PR** — confirm/dedupe nudge at report time (`src/lib/dedupe.ts` + `ReportForm`); the *comment* sub-feature is deferred (it would add an un-moderated text channel). |
 | **R2** | **Reporter-facing feedback loop** — post-submit "in review" confirmation + a visible per-hazard trail (*reported → approved → handed to city → fixed*) | P1,P5,P11 | P0 | S–M | EV-ABANDON, EV-COLLECTIVE · `lifecycleStage` + resolved-lingers exist; the *reporter view* is thin. **[corroborates ADR-6, extends]** · **✅ Implemented in this PR** — `GET /api/reports/:clientId` (clientId capability) + `reportTrail` rendered in `MyReports`. |
-| **R3** | **311 hand-off delivery receipts + reconciliation/retry** — never let a forwarded report vanish silently | P9,P8,P15 | P0 | M | EV-ABANDON · hand-off + pull/push sync-back shipped; no receipt/retry. **[corroborates ADR-6, extends]** |
+| **R3** | **311 hand-off delivery receipts + reconciliation/retry** — never let a forwarded report vanish silently | P9,P8,P15 | P0 | M | EV-ABANDON · hand-off + pull/push sync-back shipped; no receipt/retry. **[corroborates ADR-6, extends]** · **✅ Receipts/retry implemented 2026-07-17** (`server/lib/handoffRetry.ts`, dead-letter route + panel, failure metric); live city delivery stays provider-gated. |
 | **R4** | **Equity-aware coverage** — normalize reports by ridership/population + explicit "data desert" call-outs in the coverage view | P10,P8,P13,P11 | P1 | M | EV-SKEW, EV-UNDERREPORT · `CoverageView`/`areas.ts` lists zero-report areas today (passive). **[corroborates coverage-equity.md, extends]** · **✅ Implemented in this PR** — `normalizeCoverage` (coarse exposure weights) + data-desert call-outs + limits note in `CoverageView`. |
 | **R5** | **Anti-Sybil confirmations** — weight/limit confirmations per actor-device, not per-IP only, so a target can't be inflated | P12,P14,P8 | P1 | M | EV-GAMING · moderation rate-limit is per-IP/hour; confirmations exist. **[corroborates moderation-policy.md, extends]** |
 | **R6** | **Burst / coordinated-spam moderator tooling** — cluster near-identical reports, bulk-reject, surface single-source spikes | P12,P9 | P1 | M | EV-GAMING · queue is single-item today; metrics expose depth/oldest. **[NET-NEW tooling]** |

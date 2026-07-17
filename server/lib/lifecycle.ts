@@ -63,6 +63,18 @@ export function applyHandoffStatus(
   };
 
   const patch: Partial<StoredHazard> = { handoff, updatedAt: now };
+  // Delivery receipt (R3): any synced-back status proves the city has the
+  // report, so the receipt becomes `acked` and pending retries are cancelled —
+  // even if an earlier transport attempt had been marked failed (the sync-back
+  // is the stronger evidence).
+  if (hazard.handoffDelivery) {
+    patch.handoffDelivery = {
+      ...hazard.handoffDelivery,
+      state: 'acked',
+      nextRetryAt: null,
+      lastError: null,
+    };
+  }
   // Only a legal edge may resolve the hazard (shared/statusMachine.ts): the
   // city fixing an APPROVED hazard resolves it, but a synced-back status can
   // never pull a rejected/expired/pending hazard into `resolved`.
