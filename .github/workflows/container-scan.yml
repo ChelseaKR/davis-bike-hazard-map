@@ -3,17 +3,13 @@ name: Container scan
 # Builds the production image (the same Dockerfile the Fly.io deploy ships) and
 # scans it for known CVEs with Trivy. Fails the build on *fixable*
 # HIGH/CRITICAL vulnerabilities (ignore-unfixed) so a green run means there is a
-# patch available that we are not yet applying. Runs on push/PR to main and
+# patch available that we are not yet applying. Runs on PRs into main and
 # weekly, so new advisories against the base image are caught even without code
-# changes (mirrors the CodeQL schedule). Backlog #11 / SECURITY-AND-SUPPLY-CHAIN.
+# changes (mirrors the CodeQL schedule). No push:main trigger — the PR run
+# already covers every commit that lands on main, and the weekly schedule
+# catches base-image drift (CI-CD-STANDARD §11e). Backlog #11 /
+# SECURITY-AND-SUPPLY-CHAIN.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "Dockerfile"
-      - ".dockerignore"
-      - "package.json"
-      - "package-lock.json"
   pull_request:
     branches: [main]
     paths:
