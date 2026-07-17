@@ -1,11 +1,10 @@
 name: CodeQL
 
 # Static analysis (SAST) for JS/TS *and* the GitHub Actions workflows
-# themselves (CICD-20): runs on push/PR to main and weekly so new advisories
-# are caught even without code changes.
+# themselves (CICD-20): runs on PRs into main and weekly so new advisories
+# are caught even without code changes. No push:main trigger — the PR run
+# already covers every commit that lands on main (CI-CD-STANDARD §11e).
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   schedule:

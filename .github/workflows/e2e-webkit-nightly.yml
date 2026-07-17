@@ -1,0 +1,47 @@
+name: e2e-webkit-nightly
+
+# Advisory WebKit end-to-end coverage, moved off per-push CI to a nightly
+# schedule (CI-CD-STANDARD §11d: a non-blocking job that cannot fail a merge
+# has no business spending minutes on every commit — it used to run on every
+# push to main from ci.yml). WebKit-on-Linux currently fails to render the
+# shell in headless CI (tracked). Kept visible but non-blocking; real
+# Safari/iOS coverage is the manual SR/device pass before public launch.
+on:
+  schedule:
+    - cron: '0 6 * * *' # nightly 06:00 UTC (before CodeQL's Monday 07:00 run)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-webkit-nightly
+  cancel-in-progress: false
+
+jobs:
+  e2e-webkit:
+    name: End-to-end (WebKit, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright WebKit
+        run: npx playwright install --with-deps webkit
+      - name: Run e2e (WebKit)
+        env:
+          E2E_BROWSERS: webkit
+        run: npm run e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: playwright-report-webkit
+          path: playwright-report/
+          if-no-files-found: ignore
