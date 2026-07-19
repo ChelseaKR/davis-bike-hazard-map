@@ -14,7 +14,7 @@ Fly.io deployment path, but the live service now runs on AWS.
 
 Run the container on App Runner in `us-west-2`, connect to private RDS PostgreSQL
 through a VPC connector with `sslmode=verify-full`, store photos in S3 through a
-gateway endpoint, and inject runtime secrets from Secrets Manager. Add the
+gateway endpoint, and inject runtime secrets from SSM Parameter Store. Add the
 Amazon RDS CA bundle to the runtime image while retaining Node's public roots.
 
 ## Consequences

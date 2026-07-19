@@ -25,9 +25,10 @@ It runs in `us-west-2`:
   `NODE_EXTRA_CA_CERTS`.
 - **Amazon S3** (`dbhm-photos-<acct>-us-west-2`) holds uploaded photos, reached
   through a free S3 gateway VPC endpoint (no NAT).
-- Secrets (`DATABASE_URL`, `SESSION_SECRET`, `MODERATOR_PASSWORD`) live in **AWS
-  Secrets Manager** under the `dbhm/` prefix, injected as runtime environment
-  secrets. `MODERATOR_USERNAME` is a plain env var.
+- Static credentials (`DATABASE_URL`, `SESSION_SECRET`, `MODERATOR_PASSWORD`)
+  live as encrypted **SSM Parameter Store SecureStrings** under the `/dbhm/`
+  prefix, injected as runtime environment secrets. `MODERATOR_USERNAME` is a
+  plain env var.
 
 Smoke test:
 
