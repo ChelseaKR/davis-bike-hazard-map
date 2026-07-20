@@ -80,11 +80,8 @@ docs/
 - **M6 — Open data + launch polish.** PII-free export/API; performance + a11y hardening. *Done when all §7 gates pass.*
 - **Claude Code approach.** Mobile + offline as first-class from M0; never ship a photo path without EXIF strip; keep list-view parity with every map feature.
 
-## 9. Go-to-market & community
-- **Positioning.** "See it, flag it, route around it." Local, free, open.
-- **Launch.** Seed with a first pass of known hazards; share via Davis cycling groups, campus, and bike-shop channels; offer the open data to the city.
-- **Marketing/comms.** A concrete, civic, local product — strong portfolio evidence of shipping a real public-facing PWA end-to-end.
-- **Community.** Contribution + moderation guidelines; open-data license; "report quality" norms.
+## 9. Community
+Contribution + moderation guidelines; open-data license; "report quality" norms.
 
 ## 10. Legal & compliance
 - **Photos of public spaces** can capture people/plates → EXIF strip + blurring + moderation, and a clear "don't photograph identifiable people" norm.
