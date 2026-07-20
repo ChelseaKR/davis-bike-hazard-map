@@ -21,7 +21,7 @@ export const openapiSpec = new OpenApiGeneratorV3(registry.definitions).generate
       'Crowdsourced cycling-hazard reporting. Public read + report endpoints, ' +
       'moderator-authenticated review, and an open-data export. Reachable at ' +
       '/api/* and the versioned alias /api/v1/*.',
-    license: { name: 'MIT' },
+    license: { name: 'Apache-2.0' },
   },
   servers: [
     { url: '/api', description: 'current' },

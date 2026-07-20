@@ -53,6 +53,9 @@ corresponding subset of these entries moves under that heading.
 - Renovate config with GitHub Actions digest pinning (branch `i18n-catalog-retrofit`)
 
 ### Changed
+- Relicensed MIT → Apache-2.0 (explicit patent grant; prior released snapshots remain MIT):
+  `LICENSE` replaced with the canonical Apache License 2.0 text; `NOTICE`, `package.json`,
+  `CITATION.cff`, README, CONTRIBUTING, and the OpenAPI license object updated to match
 - Runtime image now runs `apt-get upgrade` during the build so newly-published Debian
   package CVEs are patched immediately instead of waiting on the next `node:22-slim` base
   image refresh — `container-scan.yml`'s weekly Trivy run flapped on exactly this gap on
