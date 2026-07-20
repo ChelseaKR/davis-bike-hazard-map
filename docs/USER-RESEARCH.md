@@ -205,7 +205,7 @@ next**, and **Adopts / walks** (the one thing that wins or loses them).
 
 ### P11 — Sam, Davis bike-advocacy org lead
 - **Goal:** convert scattered private frustration into a **shared, public, durable** record that pressures the city and outlives any one grant.
-- **Values today:** **open data + MIT license + OSM** (no proprietary lock-in); the **public read-only dashboard mode** (`VITE_PUBLIC_DASHBOARD=true`) to embed/share; that the design **never equates absence with safety**; the self-cleaning **lifecycle** so the map stays current.
+- **Values today:** **open data + Apache-2.0 license + OSM** (no proprietary lock-in); the **public read-only dashboard mode** (`VITE_PUBLIC_DASHBOARD=true`) to embed/share; that the design **never equates absence with safety**; the self-cleaning **lifecycle** so the map stays current.
 - **Gets stuck:** adoption is the whole game — a thin, lopsidedly-covered map is worse than none, and BikeMaps-style volunteer data skews toward confident, younger, male riders. He needs to *seed* under-reported areas and recruit broadly.
 - **Wants next:** a **campaign/embed kit** + seeded known-hazard list; **low-tech intake** (SMS/QR) to reach riders who won't install a PWA; periodic "here's what got fixed" wins to sustain momentum.
 - **Adopts if:** it gives advocacy a credible, ownable evidence base. **Walks if:** coverage stays too thin and skewed to cite.
