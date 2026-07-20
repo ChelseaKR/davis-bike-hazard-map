@@ -12,10 +12,10 @@ If you have not yet, read [`README.md`](README.md) for what the project is and w
 
 ## Project independence
 
-Davis Bike Hazard Map is an independent, personal open-source project (MIT). It is not affiliated
+Davis Bike Hazard Map is an independent, personal open-source project (Apache-2.0). It is not affiliated
 with, sponsored by, or endorsed by the City of Davis, any employer, or any client, and it contains
 no proprietary or client material. Please keep it that way: contribute only what you have the right
-to release under the MIT license, and never bring closed material into this repository.
+to release under the Apache-2.0 license, and never bring closed material into this repository.
 
 ## Don't paste real personal data (read this first)
 
@@ -105,7 +105,7 @@ git commit -s -m "fix(server): coarsen location on the public hazard export"
 
 `-s` appends the `Signed-off-by:` trailer matching your `git config user.name`/`user.email`. If you
 forget, `git commit --amend -s` (or `git rebase --signoff main` for a series) fixes it. By signing
-off you certify you wrote the contribution or have the right to submit it under the MIT license. A
+off you certify you wrote the contribution or have the right to submit it under the Apache-2.0 license. A
 **pre-commit hook** (husky + lint-staged) runs ESLint on staged files locally.
 
 ## Pull requests
@@ -135,4 +135,4 @@ hardest at anything near a photo, a location, a read path, or the moderation que
 ## License
 
 By contributing, you agree that your contributions are licensed under the project's
-[MIT](LICENSE) license, and that you have the right to release what you contribute.
+[Apache-2.0](LICENSE) license, and that you have the right to release what you contribute.

@@ -32,6 +32,9 @@ corresponding subset of these entries moves under that heading.
 - Renovate config with GitHub Actions digest pinning (branch `i18n-catalog-retrofit`)
 
 ### Changed
+- Relicensed MIT → Apache-2.0 (explicit patent grant; prior released snapshots remain MIT):
+  `LICENSE` replaced with the canonical Apache License 2.0 text; `NOTICE`, `package.json`,
+  `CITATION.cff`, README, CONTRIBUTING, and the OpenAPI license object updated to match
 - Vitest coverage raised with meaningful tests; thresholds raised to measured levels
   (89/86/89/84 lines/functions/statements/branches) (#36)
 - Standards remediation: `persist-credentials: false` on checkouts, flyctl action pin comment,
