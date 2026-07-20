@@ -4,15 +4,12 @@ name: workflow-lint
 # zizmor against everything under .github/ whenever a workflow/action file
 # changes, plus on main so drift is caught even without a workflow PR.
 #
-# `advanced-security: false` + `annotations: true` deliberately skip the
-# built-in SARIF-to-code-scanning upload: that upload needs GitHub Advanced
-# Security, which isn't available on this private repo, and would 403 the
-# same way codeql.yml's did before the 2026-07-05 remediation (P0-3). zizmor
-# itself still fails the job on any finding at/above `min-severity` regardless
-# of the upload path, so this stays a real, blocking gate. Once the repo goes
-# public or GHAS is enabled (see P0-2), flip to `advanced-security: true` /
-# `annotations: false` and add `security-events: write` + this job to
-# required checks so findings also surface in the Security tab.
+# Public repo (2026-07-19): `advanced-security: true` uploads zizmor's SARIF
+# to GHAS code scanning so findings surface in the Security tab, and
+# `annotations: true` keeps inline PR annotations. zizmor itself still fails
+# the job on any finding at/above `min-severity` regardless of the upload
+# path, so this stays a real, blocking gate either way (this is the flip the
+# 2026-07-05 remediation note deferred until the repo went public — P0-3/P0-2).
 on:
   push:
     branches: [main]
@@ -33,6 +30,9 @@ jobs:
   zizmor:
     name: zizmor (workflow SAST)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # SARIF upload to code scanning (public repo)
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
@@ -42,5 +42,5 @@ jobs:
         with:
           inputs: .github/workflows
           min-severity: high
-          advanced-security: false
+          advanced-security: true
           annotations: true

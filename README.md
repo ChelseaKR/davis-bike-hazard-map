@@ -99,11 +99,22 @@ Per `/STANDARDS/OBSERVABILITY-STANDARD.md`, tier is declared explicitly rather t
 
 Dated: 2026-07-05. See the Standards Conformance table below (§Standards) for the OBSERVABILITY row.
 
-## For Claude Code
-- **Build entrypoint:** [`docs/ROADMAP.md`](./docs/ROADMAP.md) → *Implementation Plan*; what was built is in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
-- **Hard guardrails:** **strip EXIF and offer face/plate blurring on every photo before upload** (privacy is a gate); the map must be usable on mobile data and offline; moderation exists before launch (no unmoderated public photo feed); GIS stays free via OpenStreetMap; accessibility is a gate (the map has a non-map list view).
-- **Commands:** `make dev` · `make verify` · `make a11y` · `make e2e`.
-- **Definition of done:** a Davis cyclist can install the PWA, file a hazard offline, see it on the map after sync, and (optionally) push it to 311 — functionally met; see the gates table above and [`docs/audits/`](./docs/audits/). Standards conformance: see the table below — gaps are tracked, not hidden.
+## Guardrails
+
+Non-negotiables, each enforced as a tested gate rather than a promise:
+
+- **Photo privacy first.** Every photo is stripped of EXIF metadata before upload, with
+  face/license-plate blurring offered at capture time; precise report locations are never
+  exposed publicly.
+- **Nothing public without moderation.** A report appears on the map only after a
+  moderator approves it — there is no unmoderated public photo feed.
+- **Usable on a bike.** The app stays usable on mobile data and fully offline; reports
+  queue and sync when a connection returns.
+- **Accessible by default.** Accessibility is a merge-blocking gate, and the map always
+  has an equivalent non-map list view.
+- **Open mapping.** GIS stays free and open via OpenStreetMap.
+
+Agent-facing build instructions live in [`CLAUDE.md`](./CLAUDE.md).
 
 ## Standards
 Inherits [`/STANDARDS`](../STANDARDS/). Responsible-tech findings are committed in [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and [`docs/audits/`](./docs/audits/).
