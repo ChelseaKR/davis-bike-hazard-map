@@ -12,7 +12,7 @@
  * so concurrent confirms/moderations don't clobber each other.
  */
 import { Pool, type PoolClient } from 'pg';
-import type { StoredHazard, ModerationAction, PhotoRef } from './types.ts';
+import type { StoredHazard, ModerationAction, PhotoRef, HandoffDelivery } from './types.ts';
 import type { HandoffInfo } from '../../shared/types.ts';
 import {
   decodePendingCursor,
@@ -43,6 +43,7 @@ interface HazardRow {
   expires_at: string;
   resolved_at: string | null;
   handoff: HandoffInfo | null;
+  handoff_delivery: HandoffDelivery | null;
   moderation: ModerationAction[];
 }
 
@@ -64,6 +65,7 @@ function rowToHazard(r: HazardRow): StoredHazard {
     expiresAt: Number(r.expires_at),
     resolvedAt: r.resolved_at != null ? Number(r.resolved_at) : null,
     handoff: r.handoff ?? null,
+    handoffDelivery: r.handoff_delivery ?? null,
     moderation: r.moderation ?? [],
   };
 }
@@ -72,7 +74,7 @@ const COLUMNS = `
   id, client_id, category, severity, description,
   precise_lat, precise_lng, public_lat, public_lng, photo_mime,
   status, confirmations, created_at, updated_at, expires_at,
-  resolved_at, handoff, moderation`;
+  resolved_at, handoff, handoff_delivery, moderation`;
 
 /** Positional parameter values for INSERT/UPDATE, in COLUMNS order (minus id). */
 function writeValues(h: StoredHazard): unknown[] {
@@ -94,6 +96,7 @@ function writeValues(h: StoredHazard): unknown[] {
     h.expiresAt,
     h.resolvedAt ?? null,
     h.handoff ? JSON.stringify(h.handoff) : null,
+    h.handoffDelivery ? JSON.stringify(h.handoffDelivery) : null,
     JSON.stringify(h.moderation),
   ];
 }
@@ -113,7 +116,7 @@ export class PostgresRepository implements Repository {
   async insert(hazard: StoredHazard): Promise<StoredHazard> {
     await this.pool.query(
       `INSERT INTO hazards (${COLUMNS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       writeValues(hazard),
     );
     return hazard;
@@ -149,7 +152,7 @@ export class PostgresRepository implements Repository {
            precise_lat=$6, precise_lng=$7, public_lat=$8, public_lng=$9,
            photo_mime=$10, status=$11, confirmations=$12,
            created_at=$13, updated_at=$14, expires_at=$15,
-           resolved_at=$16, handoff=$17, moderation=$18
+           resolved_at=$16, handoff=$17, handoff_delivery=$18, moderation=$19
          WHERE id=$1`,
         writeValues(merged),
       );
@@ -235,6 +238,25 @@ export class PostgresRepository implements Repository {
          AND status IN ('expired', 'resolved')
          AND COALESCE(resolved_at, updated_at) <= $1`,
       [cutoff],
+    );
+    return res.rows.map(rowToHazard);
+  }
+
+  async listHandoffRetryDue(now: number): Promise<StoredHazard[]> {
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards
+       WHERE handoff_delivery->>'state' = 'retrying'
+         AND (handoff_delivery->>'nextRetryAt')::bigint <= $1`,
+      [now],
+    );
+    return res.rows.map(rowToHazard);
+  }
+
+  async listHandoffFailed(): Promise<StoredHazard[]> {
+    const res = await this.pool.query<HazardRow>(
+      `SELECT ${COLUMNS} FROM hazards
+       WHERE handoff_delivery->>'state' = 'failed'
+       ORDER BY (handoff_delivery->>'lastAttemptAt')::bigint`,
     );
     return res.rows.map(rowToHazard);
   }

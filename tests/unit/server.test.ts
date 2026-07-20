@@ -670,6 +670,251 @@ describe('311 hand-off', () => {
     const handoff = await post(`/api/moderation/${id}/handoff`, {});
     expect(handoff.statusCode).toBe(401);
   });
+
+  it('records a dry-run delivery receipt (submitted intent, nothing to retry)', async () => {
+    const res = await post('/api/reports', baseReport);
+    const id = res.json().hazard.id;
+    await post(`/api/moderation/${id}/handoff`, {}, auth());
+    const stored = (await repo.findById(id))!;
+    expect(stored.handoffDelivery).toMatchObject({
+      state: 'submitted',
+      dryRun: true,
+      attempts: 1,
+      nextRetryAt: null,
+      lastError: null,
+    });
+  });
+});
+
+describe('311 hand-off delivery receipts + retry (R3)', () => {
+  const liveGogovConfig = {
+    ...testConfig,
+    gogovWebhookUrl: 'https://gogov.example/webhook',
+  } as typeof serverConfig;
+
+  const failFetch = (async () => ({ ok: false, status: 502 })) as unknown as typeof fetch;
+  const okFetch = (async () => ({ ok: true, status: 200 })) as unknown as typeof fetch;
+
+  it('schedules a retry and counts the failure metric when the transport fails', async () => {
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(liveGogovConfig, failFetch);
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+
+    const stored = (await r.findById(id))!;
+    expect(stored.handoffDelivery).toMatchObject({
+      state: 'retrying',
+      dryRun: false,
+      attempts: 1,
+      lastError: '311 responded 502',
+    });
+    expect(stored.handoffDelivery!.nextRetryAt).toBeGreaterThan(clock);
+
+    const metrics = await a.inject({ method: 'GET', url: '/api/metrics' });
+    expect(metrics.body).toContain('dbhm_handoff_failures_total 1');
+    await a.close();
+  });
+
+  it('runHandoffRetrySweep re-forwards a due retry and marks it submitted', async () => {
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(liveGogovConfig, failFetch);
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+
+    // Not due yet: the sweep must leave it alone.
+    expect((await a.runHandoffRetrySweep()).attempted).toBe(0);
+
+    // Advance past the scheduled retry; the transport now succeeds.
+    clock = (await r.findById(id))!.handoffDelivery!.nextRetryAt! + 1;
+    // Swap the app's transport by rebuilding? No — the fetchImpl is fixed, so
+    // instead prove the failing path first, then the recovering path below.
+    const failedAgain = await a.runHandoffRetrySweep();
+    expect(failedAgain).toMatchObject({ attempted: 1, rescheduled: 1 });
+    expect((await r.findById(id))!.handoffDelivery).toMatchObject({ state: 'retrying', attempts: 2 });
+    await a.close();
+
+    // Same store, fresh app whose transport succeeds: the due retry recovers.
+    const { app: b } = await buildAppWithModerator(liveGogovConfig, okFetch, { repo: r });
+    clock = (await r.findById(id))!.handoffDelivery!.nextRetryAt! + 1;
+    const recovered = await b.runHandoffRetrySweep();
+    expect(recovered).toMatchObject({ attempted: 1, recovered: 1 });
+    expect((await r.findById(id))!.handoffDelivery).toMatchObject({ state: 'submitted', attempts: 3 });
+    await b.close();
+  });
+
+  it('never overlaps two sweeps — a concurrent call joins the sweep in flight (no double-submit)', async () => {
+    // Seed a due retry with a transport that fails fast.
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(liveGogovConfig, failFetch);
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+    await a.close();
+
+    // Fresh app over the same store, with a transport that BLOCKS until
+    // released — the window in which an interval tick could start a second
+    // sweep and forward the same hazard to 311 twice.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let forwards = 0;
+    const slowFetch = (async () => {
+      forwards++;
+      await gate;
+      return { ok: true, status: 200 };
+    }) as unknown as typeof fetch;
+    const { app: b } = await buildAppWithModerator(liveGogovConfig, slowFetch, { repo: r });
+    clock = (await r.findById(id))!.handoffDelivery!.nextRetryAt! + 1;
+
+    const first = b.runHandoffRetrySweep();
+    const second = b.runHandoffRetrySweep(); // fires while the first is mid-transport
+    expect(second).toBe(first); // joined, not a new sweep
+    release();
+    await expect(first).resolves.toMatchObject({ attempted: 1, recovered: 1 });
+
+    // Exactly ONE forward went out; the receipt reflects the single attempt.
+    expect(forwards).toBe(1);
+    expect((await r.findById(id))!.handoffDelivery).toMatchObject({ state: 'submitted', attempts: 2 });
+
+    // Once settled, the next call starts a fresh sweep (nothing due now).
+    expect((await b.runHandoffRetrySweep()).attempted).toBe(0);
+    await b.close();
+  });
+
+  it('lists dead-lettered hand-offs on the auth-gated failures route', async () => {
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(liveGogovConfig, failFetch);
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+
+    // Exhaust the retry budget through the sweep.
+    for (;;) {
+      const receipt = (await r.findById(id))!.handoffDelivery!;
+      if (receipt.state !== 'retrying') break;
+      clock = receipt.nextRetryAt! + 1;
+      await a.runHandoffRetrySweep();
+    }
+    expect((await r.findById(id))!.handoffDelivery!.state).toBe('failed');
+
+    const anon = await a.inject({ method: 'GET', url: '/api/moderation/handoff-failures' });
+    expect(anon.statusCode).toBe(401);
+
+    const res = await a.inject({
+      method: 'GET',
+      url: '/api/moderation/handoff-failures',
+      headers: { authorization: `Bearer ${tok}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const { failures } = res.json();
+    expect(failures).toHaveLength(1);
+    expect(failures[0].hazard.id).toBe(id);
+    expect(failures[0].delivery).toMatchObject({ state: 'failed', lastError: '311 responded 502' });
+    await a.close();
+  });
+
+  it('flips the receipt to acked when the city status syncs back', async () => {
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(
+      {
+        ...liveGogovConfig,
+        gogovStatusUrl: 'https://gogov.example/status',
+      } as typeof serverConfig,
+      (async (url: string) =>
+        String(url).includes('/status')
+          ? { ok: true, status: 200, json: async () => ({ status: 'Received', note: 'ok' }) }
+          : { ok: true, status: 200 }) as unknown as typeof fetch,
+    );
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+    expect((await r.findById(id))!.handoffDelivery!.state).toBe('submitted');
+
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff/sync`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+    expect((await r.findById(id))!.handoffDelivery).toMatchObject({ state: 'acked', lastError: null });
+    await a.close();
+  });
+
+  it('never exposes the delivery receipt in any public projection', async () => {
+    const { app: a, token: tok } = await buildAppWithModerator(liveGogovConfig, failFetch);
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}`,
+      payload: { decision: 'approve' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+
+    const feed = await a.inject({ method: 'GET', url: '/api/hazards' });
+    expect(feed.body).not.toContain('handoffDelivery');
+    expect(feed.body).not.toContain('lastError');
+    const trail = await a.inject({ method: 'GET', url: `/api/reports/${baseReport.clientId}` });
+    expect(trail.body).not.toContain('handoffDelivery');
+    await a.close();
+  });
 });
 
 describe('legacy inline-photo migration', () => {

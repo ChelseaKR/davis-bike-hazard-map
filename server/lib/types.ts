@@ -28,6 +28,32 @@ export interface PhotoRef {
   mime: string;
 }
 
+/**
+ * Delivery receipt for a 311 hand-off (R3): the server-side record of every
+ * forward attempt, so a hand-off can never vanish silently. SERVER-INTERNAL —
+ * `lastError` may carry provider internals, so this never appears in the
+ * public `Hazard` projection; the moderator dead-letter route is the only
+ * surface that returns it (auth-gated).
+ *
+ * States: `submitted` (forwarded; `dryRun` tells whether a real transport ran)
+ * → `acked` (the city's status sync-back proved receipt) · `retrying`
+ * (transport/provider failure, next attempt scheduled) → `failed` (retry
+ * budget exhausted — the dead-letter state a moderator must act on).
+ */
+export interface HandoffDelivery {
+  state: 'submitted' | 'acked' | 'retrying' | 'failed';
+  /** True when no real transport is configured (recorded intent only). */
+  dryRun: boolean;
+  /** Total forward attempts made (manual re-sends keep counting up). */
+  attempts: number;
+  /** Epoch ms of the most recent attempt. */
+  lastAttemptAt: number;
+  /** Epoch ms the next automatic retry is due, or null when none is scheduled. */
+  nextRetryAt: number | null;
+  /** Last transport/provider error, or null after a successful attempt. */
+  lastError: string | null;
+}
+
 export interface StoredHazard {
   id: string;
   clientId: string;
@@ -49,5 +75,7 @@ export interface StoredHazard {
   resolvedAt?: number | null;
   /** 311 hand-off record + synced-back status, or null/undefined. */
   handoff?: HandoffInfo | null;
+  /** Delivery receipt for the hand-off (R3), or null/undefined. Server-internal. */
+  handoffDelivery?: HandoffDelivery | null;
   moderation: ModerationAction[];
 }

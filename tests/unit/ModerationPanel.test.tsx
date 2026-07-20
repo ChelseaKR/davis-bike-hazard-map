@@ -45,6 +45,11 @@ beforeEach(() => {
         ? resp({ token: 'sess-token', username: 'mod', expiresAt: Date.now() + 1_000_000 })
         : resp({ error: 'invalid_credentials', message: 'Wrong username or password.' }, 401);
     }
+    if (url.includes('/moderation/handoff-failures')) {
+      // The dead-letter surface (R3) is exercised in HandoffFailures.test.tsx;
+      // an empty list here keeps it out of these queue-focused tests.
+      return resp({ failures: [] });
+    }
     if (url.includes('/moderation/queue')) {
       const headers = (init?.headers ?? {}) as Record<string, string>;
       if (headers.authorization !== 'Bearer sess-token') {

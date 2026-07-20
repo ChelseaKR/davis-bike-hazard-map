@@ -61,6 +61,11 @@ import {
   thumbKey,
 } from './lib/hazards.ts';
 import { forwardHandoff, syncHandoffStatus } from './lib/handoff.ts';
+import {
+  receiptFor,
+  sweepHandoffRetries,
+  type HandoffRetrySweepResult,
+} from './lib/handoffRetry.ts';
 import { fetchRoutes } from './lib/routing.ts';
 import { applyHandoffStatus, initialHandoff } from './lib/lifecycle.ts';
 import {
@@ -98,6 +103,16 @@ export interface AppDeps {
 /** A request that has passed the moderator session check. */
 interface AuthedRequest extends FastifyRequest {
   moderatorUsername?: string;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /**
+     * Re-forward every 311 hand-off whose scheduled retry is due (R3).
+     * Driven on an interval by server/index.ts; callable directly in tests.
+     */
+    runHandoffRetrySweep(): Promise<HandoffRetrySweepResult>;
+  }
 }
 
 /** A request whose raw (unparsed) JSON body was preserved for HMAC verification. */
@@ -670,9 +685,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }
     const result = await forwardHandoff(hazard, handoffProviderConfig, fetchImpl);
     // Record the hand-off on the hazard so its status can be synced back and
-    // surfaced on the map/list. Even a dry-run records the intent.
+    // surfaced on the map/list. Even a dry-run records the intent. The
+    // delivery receipt (R3) records the attempt outcome: a failed transport
+    // schedules an automatic retry (sweepHandoffRetries) instead of vanishing.
+    const receipt = receiptFor(result, hazard.handoffDelivery, now());
+    if (receipt.state === 'retrying' || receipt.state === 'failed') {
+      metrics.handoffFailures.inc();
+    }
     const updated = await repo.update(id, {
       handoff: initialHandoff(hazard, now(), result.provider, result.reference),
+      handoffDelivery: receipt,
       updatedAt: now(),
     });
     return { result, hazard: updated ? toPublic(updated) : toPublic(hazard) };
@@ -704,6 +726,39 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { patch } = applyHandoffStatus(hazard, status.status, now(), status.note);
     const updated = await repo.update(id, patch);
     return { result: status, hazard: toPublic(updated ?? hazard) };
+  });
+
+  // --- 311 hand-off dead letters (R3) ---
+  // Hand-offs whose delivery exhausted the automatic retry budget. The
+  // receipt (attempts, last error, timestamps) is auth-gated: it can carry
+  // provider internals, so it appears here and nowhere public. A moderator
+  // re-sends via POST /api/moderation/:id/handoff.
+  app.get('/api/moderation/handoff-failures', { preHandler: requireModerator }, async () => {
+    const failed = await repo.listHandoffFailed();
+    return {
+      failures: failed.map((h) => ({ hazard: toPublic(h), delivery: h.handoffDelivery ?? null })),
+    };
+  });
+
+  // Retry sweep runner (R3): re-forwards every hand-off whose scheduled retry
+  // is due. Decorated onto the instance so the ops entrypoint (server/index.ts)
+  // can drive it on an interval and tests can drive it with a fake clock,
+  // while failures still feed this instance's dbhm_handoff_failures_total.
+  //
+  // Never overlaps: sweeps forward reports serially with no overall deadline,
+  // so one stalled on a hung 311 endpoint could still be mid-flight when the
+  // next interval tick fires. A second sweep would re-read the same hazards
+  // (their receipts aren't updated until each attempt settles) and forward
+  // them AGAIN — a double-submit to the city. Concurrent callers therefore
+  // join the sweep already in flight instead of starting a new one.
+  let handoffSweepInFlight: Promise<HandoffRetrySweepResult> | null = null;
+  app.decorate('runHandoffRetrySweep', () => {
+    handoffSweepInFlight ??= sweepHandoffRetries(repo, handoffProviderConfig, fetchImpl, now(), () =>
+      metrics.handoffFailures.inc(),
+    ).finally(() => {
+      handoffSweepInFlight = null;
+    });
+    return handoffSweepInFlight;
   });
 
   // --- 311 status sync-back: inbound webhook (city/GOGov → us) ---

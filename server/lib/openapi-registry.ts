@@ -162,6 +162,30 @@ export const hazardExportSchema = z.object({
   ),
 });
 
+/**
+ * A hand-off delivery receipt (R3) as returned by the auth-gated dead-letter
+ * route. Server-internal data (lastError may carry provider internals) — this
+ * schema is deliberately used by no public route.
+ */
+export const handoffDeliverySchema = registry.register(
+  'HandoffDelivery',
+  z
+    .object({
+      state: z.enum(['submitted', 'acked', 'retrying', 'failed']),
+      dryRun: z.boolean(),
+      attempts: z.number().int(),
+      lastAttemptAt: z.number().int(),
+      nextRetryAt: z.number().int().nullable(),
+      lastError: z.string().nullable(),
+    })
+    .openapi({ description: '311 hand-off delivery receipt (auth-gated, R3)' }),
+);
+
+/** GET /moderation/handoff-failures — dead-lettered hand-offs. */
+export const handoffFailuresResponseSchema = z.object({
+  failures: z.array(z.object({ hazard: hazardSchema, delivery: handoffDeliverySchema.nullable() })),
+});
+
 const json = (schema: z.ZodTypeAny) => ({ 'application/json': { schema } });
 const errorContent = json(errorSchema);
 
@@ -414,9 +438,31 @@ registry.registerPath({
   path: '/moderation/{id}/handoff',
   tags: ['moderation'],
   security: bearerAuth,
-  summary: '311/GOGov hand-off (dry-run by default)',
+  summary: '311/GOGov hand-off (dry-run by default; records a delivery receipt)',
+  description:
+    'Forwards the hazard to the configured 311 provider and records a ' +
+    'delivery receipt (R3). A failed transport schedules automatic ' +
+    'exponential retries; once the retry budget is exhausted the hand-off ' +
+    'appears under GET /moderation/handoff-failures for a manual re-send ' +
+    '(POSTing here again).',
   request: { params: z.object({ id: z.string() }) },
   responses: { 200: { description: 'result + updated hazard' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/moderation/handoff-failures',
+  tags: ['moderation'],
+  security: bearerAuth,
+  summary: 'Dead-lettered 311 hand-offs (delivery retry budget exhausted)',
+  description:
+    'Hand-offs whose delivery failed through every automatic retry (R3). ' +
+    'The receipt (attempts, last error) is auth-gated because it can carry ' +
+    'provider internals; it never appears in any public response.',
+  responses: {
+    200: { description: 'dead-letter list', content: json(handoffFailuresResponseSchema) },
+    401: { description: 'unauthorized', content: errorContent },
+  },
 });
 
 registry.registerPath({
