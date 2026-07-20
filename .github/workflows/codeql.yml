@@ -33,15 +33,13 @@ jobs:
     # job-level escape hatch that silences a failure regardless of outcome
     # (spelled "continue" + "-on-error" + ": true" in YAML), which meant
     # CodeQL could never block a merge for ANY reason, including real
-    # findings. That's fixed below: the analyze step now writes SARIF locally
-    # with `upload: never` (skipping the upload-to-code-scanning call that 403s on
-    # a private repo without GitHub Advanced Security) and a dedicated step
-    # parses that SARIF and fails the job on any error-level (security)
-    # result. So SAST is blocking again even while private. Tracking issue:
-    # audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md P0-3 — once the
-    # repo goes public or GHAS is enabled (P0-2), switch `upload: never` back
-    # to `upload: always` and add this job to required checks so results also
-    # surface in the Security tab.
+    # findings. That's fixed below: the analyze step writes SARIF locally and
+    # a dedicated step parses it and fails the job on any error-level
+    # (security) result — the blocking gate lives in-run, not in the upload.
+    # Public repo (2026-07-19): `upload: always` also sends the SARIF to GHAS
+    # code scanning so findings surface in the Security tab (visibility only;
+    # the in-run gate is what blocks). Tracking issue:
+    # audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md P0-3.
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
@@ -54,10 +52,10 @@ jobs:
       - name: Autobuild
         if: matrix.language == 'javascript-typescript'
         uses: github/codeql-action/autobuild@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
-      - name: Perform CodeQL analysis (SARIF written locally; upload skipped, see note above)
+      - name: Perform CodeQL analysis (SARIF uploaded to code scanning and written locally, see note above)
         uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a  # v4.37.1
         with:
-          upload: never
+          upload: always
           output: sarif-results
       - name: Enforce SAST gate on the parsed SARIF (SEC-08) — this is what actually blocks CI now
         run: |
@@ -74,7 +72,7 @@ jobs:
             echo "::error::CodeQL found ${error_count} error-level security finding(s). Download the codeql-sarif artifact from this run to see them."
             exit 1
           fi
-      - name: Upload SARIF as a build artifact (manual inspection; code-scanning upload needs GHAS — see note above)
+      - name: Upload SARIF as a build artifact (manual inspection alongside the code-scanning upload — see note above)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
