@@ -5,11 +5,14 @@ name: workflow-lint
 # changes, plus on main so drift is caught even without a workflow PR.
 #
 # Public repo (2026-07-19): `advanced-security: true` uploads zizmor's SARIF
-# to GHAS code scanning so findings surface in the Security tab, and
-# `annotations: true` keeps inline PR annotations. zizmor itself still fails
-# the job on any finding at/above `min-severity` regardless of the upload
-# path, so this stays a real, blocking gate either way (this is the flip the
-# 2026-07-05 remediation note deferred until the repo went public — P0-3/P0-2).
+# to GHAS code scanning so findings surface in the Security tab (and as
+# code-scanning PR annotations). The action treats `advanced-security: true`
+# and `annotations: true` as mutually exclusive — annotations come from code
+# scanning in this mode — so `annotations` is explicitly false. zizmor itself
+# still fails the job on any finding at/above `min-severity` regardless of the
+# upload path, so this stays a real, blocking gate either way (this is the
+# flip the 2026-07-05 remediation note deferred until the repo went public —
+# P0-3/P0-2).
 on:
   push:
     branches: [main]
@@ -43,4 +46,4 @@ jobs:
           inputs: .github/workflows
           min-severity: high
           advanced-security: true
-          annotations: true
+          annotations: false
