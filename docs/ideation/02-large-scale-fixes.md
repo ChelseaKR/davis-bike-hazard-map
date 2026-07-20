@@ -96,6 +96,15 @@ valid deletion proofs until rotated — see R8 for operator guidance.
   hazard's blob is gone after the sweep.
 
 ## FIX-04 — Query pushdown + moderation queue pagination + photos by reference
+**Status:** ✅ core DONE (2026-07-17, branch `roadmap/fix-04-moderation-queue-pagination`).
+The moderation memory bomb is fixed: `Repository.listPending(limit, cursor)` keyset-pages the
+backlog (memory/JSON + SQL with a partial index, `migrations/0005_pending_queue_index.sql`),
+`GET /api/moderation/queue` returns `{hazards, nextCursor, total}` with photos referenced by URL
+(never inlined), and `GET /api/photos/:id` streams a PENDING photo to an authenticated moderator
+only (`private, no-store`; 404 to everyone else). NOT yet done from the shape below: pushing the
+public feed's category/severity/`withinDays` filters down into `listActive` (rides with FIX-05's
+`updatedSince` cursor, same surface), and the 100→10,000-hazard load-test evidence.
+
 **Pitch:** make the read paths scale past beta volume instead of loading everything into process memory.
 
 - **Why it matters:** category/severity/`withinDays` filters run in JS after

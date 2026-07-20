@@ -165,12 +165,46 @@ export async function login(username: string, password: string): Promise<Session
   });
 }
 
-/** Moderation: fetch the queue of pending hazards (requires a session token). */
-export async function fetchModerationQueue(token: string): Promise<Hazard[]> {
-  const { hazards } = await request<{ hazards: Hazard[] }>('/moderation/queue', {
+/** One keyset page of the moderation queue (FIX-04). */
+export interface ModerationQueuePage {
+  hazards: Hazard[];
+  /** Opaque cursor for the next page, or null on the last page. */
+  nextCursor: string | null;
+  /** Total reports awaiting moderation (not just this page). */
+  total: number;
+}
+
+/**
+ * Moderation: fetch one page of pending hazards (requires a session token).
+ * Pass the previous page's `nextCursor` to continue the traversal.
+ */
+export async function fetchModerationQueue(
+  token: string,
+  cursor?: string,
+): Promise<ModerationQueuePage> {
+  const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return request<ModerationQueuePage>(`/moderation/queue${qs}`, {
     headers: { authorization: `Bearer ${token}` },
   });
-  return hazards;
+}
+
+/**
+ * Moderation: fetch a PENDING hazard's photo as an object URL. Pending photo
+ * bytes are auth-gated (FIX-04), so a plain <img src> cannot carry the bearer
+ * token — the bytes are fetched here and handed to the <img> as a blob URL.
+ * Callers own the URL and must revoke it (URL.revokeObjectURL) when done.
+ */
+export async function fetchModerationPhoto(
+  photoUrl: string,
+  token: string,
+): Promise<string> {
+  const res = await fetch(photoUrl, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new ApiRequestError(`Photo request failed (${res.status})`, res.status);
+  }
+  return URL.createObjectURL(await res.blob());
 }
 
 /** Moderation: approve, reject, or resolve a hazard (requires a moderator token). */

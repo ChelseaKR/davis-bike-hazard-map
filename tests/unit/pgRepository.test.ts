@@ -160,6 +160,29 @@ suite('PostgresRepository', () => {
     expect(await repo.pendingStats()).toEqual({ count: 2, oldestCreatedAt: 100 });
   });
 
+  it('listPending pages the backlog oldest-first with a keyset cursor (FIX-04)', async () => {
+    // Two rows share createdAt so the (created_at, id) tiebreak is exercised.
+    await repo.insert(hazard({ id: 'pa', clientId: 'pa', status: 'pending', createdAt: 100 }));
+    await repo.insert(hazard({ id: 'pb', clientId: 'pb', status: 'pending', createdAt: 100 }));
+    await repo.insert(hazard({ id: 'pc', clientId: 'pc', status: 'pending', createdAt: 300 }));
+    await repo.insert(hazard({ id: 'x1', clientId: 'x1', status: 'approved', createdAt: 50 }));
+
+    const page1 = await repo.listPending({ limit: 2 });
+    expect(page1.hazards.map((h) => h.id)).toEqual(['pa', 'pb']);
+    expect(page1.nextCursor).not.toBeNull();
+
+    const page2 = await repo.listPending({ limit: 2, cursor: page1.nextCursor! });
+    expect(page2.hazards.map((h) => h.id)).toEqual(['pc']);
+    expect(page2.nextCursor).toBeNull();
+  });
+
+  it('listPending returns no cursor when the page is exactly the backlog', async () => {
+    await repo.insert(hazard({ id: 'p1', clientId: 'p1', status: 'pending', createdAt: 100 }));
+    const page = await repo.listPending({ limit: 1 });
+    expect(page.hazards.map((h) => h.id)).toEqual(['p1']);
+    expect(page.nextCursor).toBeNull();
+  });
+
   it('expire transitions rows past TTL and coarsens their precise location', async () => {
     const now = 5000;
     await repo.insert(hazard({ id: 'live', clientId: 'l', status: 'approved', expiresAt: now + 1 }));

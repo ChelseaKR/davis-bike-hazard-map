@@ -165,14 +165,26 @@ describe('alerts api', () => {
 
 describe('moderation api', () => {
   it('sends the bearer token on the queue request', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ hazards: [] }));
+    const page = { hazards: [], nextCursor: null, total: 0 };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(page));
     vi.stubGlobal('fetch', fetchMock);
-    await fetchModerationQueue('secret');
+    await expect(fetchModerationQueue('secret')).resolves.toEqual(page);
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/moderation/queue',
       expect.objectContaining({
         headers: expect.objectContaining({ authorization: 'Bearer secret' }),
       }),
+    );
+  });
+
+  it('URL-encodes the page cursor on follow-up queue requests (FIX-04)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ hazards: [], nextCursor: null, total: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchModerationQueue('secret', '1700000000000:abc');
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/moderation/queue?cursor=1700000000000%3Aabc',
     );
   });
 

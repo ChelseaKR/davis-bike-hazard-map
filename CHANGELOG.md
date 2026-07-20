@@ -14,6 +14,13 @@ PR history so the log isn't empty when the first release ships. Once `v0.1.0` is
 corresponding subset of these entries moves under that heading.
 
 ### Added
+- Moderation queue pagination + photo streaming (FIX-04): `GET /api/moderation/queue` is
+  keyset-paged (`limit`/`cursor`, response size independent of queue depth) and references photos
+  by URL instead of inlining base64; `GET /api/photos/:id` streams a PENDING photo to an
+  authenticated moderator only (`private, no-store`), answering 404 to everyone else. New
+  `Repository.listPending` on all three stores + partial Postgres index
+  (`migrations/0005_pending_queue_index.sql`); the moderation UI pages with "Load more" and
+  fetches pending photos with the session bearer token
 - Tag-triggered release workflow (`.github/workflows/release.yml`, REL-14): re-runs `make verify`
   at the tagged commit, builds + Trivy-scans the production image, publishes it to GHCR by digest
   (never `:latest`), generates a CycloneDX SBOM, cosign-signs + attests SLSA build provenance

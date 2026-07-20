@@ -10,7 +10,7 @@ import type { Hazard, Severity } from '../../shared/types.ts';
 import { canTransition, transition, type TransitionCause } from '../../shared/statusMachine.ts';
 import type { ValidatedReport } from '../../shared/validation.ts';
 import { fuzzCoordinate } from '../../shared/geo.ts';
-import { dataUrlToBytes, bytesToDataUrl } from '../../shared/exif.ts';
+import { dataUrlToBytes } from '../../shared/exif.ts';
 import { processPhoto } from './image.ts';
 import { newId } from './id.ts';
 import type { BBox, Repository } from './repository.ts';
@@ -184,9 +184,10 @@ export async function sweepPhotoRetention(
   const cutoff = now - graceMs;
   let removed = 0;
   for (const candidate of await repo.listPhotoGcCandidates(cutoff)) {
-    // Re-check right before deleting: the moderation queue inlines PENDING
-    // photos (toModeration), so never race a record that changed under us —
-    // only expired/resolved hazards past the grace window lose their bytes.
+    // Re-check right before deleting: the photo route streams PENDING photos
+    // to moderators on demand (FIX-04), so never race a record that changed
+    // under us — only expired/resolved hazards past the grace window lose
+    // their bytes.
     const h = await repo.findById(candidate.id);
     if (
       !h?.photo ||
@@ -230,17 +231,16 @@ export function toPublic(h: StoredHazard): Hazard {
 }
 
 /**
- * Project for the MODERATION queue. The moderator must SEE the photo to judge
- * it, so it is inlined here as a data URL (this response is auth-gated); it is
- * never exposed through the public photo route while the hazard is pending.
+ * One page of the moderation queue, as served to the moderation UI (FIX-04).
+ * Photos are NOT inlined: `photoUrl`/`thumbnailUrl` are references into the
+ * photo route, which streams pending bytes only to an authenticated moderator.
  */
-export async function toModeration(h: StoredHazard, photos: PhotoStore): Promise<Hazard> {
-  let photoUrl: string | null = null;
-  if (h.photo) {
-    const bytes = await photos.get(h.id);
-    if (bytes) photoUrl = bytesToDataUrl(bytes, h.photo.mime);
-  }
-  return { ...toPublic(h), photoUrl };
+export interface ModerationPage {
+  hazards: Hazard[];
+  /** Opaque cursor for the next page, or null on the last page. */
+  nextCursor: string | null;
+  /** Total reports awaiting moderation (headline count, independent of paging). */
+  total: number;
 }
 
 /** The public feed: approved and not expired, optionally culled to a bbox. */
@@ -272,16 +272,22 @@ export async function listPublicFeed(
   return [...active, ...resolved].map(toPublic);
 }
 
-/** The moderation queue: everything still pending review, oldest first. */
+/**
+ * The moderation queue: one keyset page of pending review, oldest first
+ * (FIX-04). Response size is bounded by `limit` — photo bytes stream on demand
+ * through the auth-gated photo route, never inline — so a spam burst can no
+ * longer produce a response that grows with queue depth.
+ */
 export async function listModerationQueue(
   repo: Repository,
-  photos: PhotoStore,
-): Promise<Hazard[]> {
-  const rows = await repo.all();
-  const pending = rows
-    .filter((h) => h.status === 'pending')
-    .sort((a, b) => a.createdAt - b.createdAt);
-  return Promise.all(pending.map((h) => toModeration(h, photos)));
+  opts: { limit: number; cursor?: string },
+): Promise<ModerationPage> {
+  const [page, stats] = await Promise.all([repo.listPending(opts), repo.pendingStats()]);
+  return {
+    hazards: page.hazards.map(toPublic),
+    nextCursor: page.nextCursor,
+    total: stats.count,
+  };
 }
 
 /**

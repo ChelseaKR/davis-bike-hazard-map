@@ -14,7 +14,7 @@ import {
   sweepExpired,
   sweepPhotoRetention,
   thumbKey,
-  toModeration,
+  listModerationQueue,
   listPublicFeed,
 } from '../../server/lib/hazards.ts';
 import type { ValidatedReport } from '../../shared/validation.ts';
@@ -130,16 +130,50 @@ describe('photo retention', () => {
   });
 });
 
-describe('toModeration', () => {
-  it('inlines the photo as a data URL for the moderator', async () => {
+describe('listModerationQueue', () => {
+  /** File `n` pending reports one minute apart (distinct clientIds). */
+  async function seedPending(repo: MemoryRepository, photos: MemoryPhotoStore, n: number) {
+    for (let i = 0; i < n; i++) {
+      await createHazard(
+        repo,
+        photos,
+        report({ clientId: `11111111-1111-4111-8111-11111111111${i}` }),
+        NOW + i * 60_000,
+        ttl,
+      );
+    }
+  }
+
+  it('pages the pending backlog oldest-first with a keyset cursor (FIX-04)', async () => {
     const repo = new MemoryRepository();
     const photos = new MemoryPhotoStore();
-    await photos.put('id1', new Uint8Array([1, 2, 3]));
-    const stored = await createHazard(repo, photos, report(), NOW, ttl);
-    // Force a photo ref onto the stored record.
-    const withPhoto = { ...stored, id: 'id1', photo: { mime: 'image/jpeg' } };
-    const view = await toModeration(withPhoto, photos);
-    expect(view.photoUrl?.startsWith('data:image/jpeg;base64,')).toBe(true);
+    await seedPending(repo, photos, 5);
+
+    const page1 = await listModerationQueue(repo, { limit: 2 });
+    expect(page1.hazards).toHaveLength(2);
+    expect(page1.total).toBe(5);
+    expect(page1.nextCursor).not.toBeNull();
+    // Oldest first (FIFO review order).
+    expect(page1.hazards[0].createdAt).toBeLessThan(page1.hazards[1].createdAt);
+
+    const page2 = await listModerationQueue(repo, { limit: 2, cursor: page1.nextCursor! });
+    const page3 = await listModerationQueue(repo, { limit: 2, cursor: page2.nextCursor! });
+    expect(page2.hazards).toHaveLength(2);
+    expect(page3.hazards).toHaveLength(1);
+    expect(page3.nextCursor).toBeNull();
+
+    // The three pages tile the queue exactly: no overlaps, nothing skipped.
+    const ids = [...page1.hazards, ...page2.hazards, ...page3.hazards].map((h) => h.id);
+    expect(new Set(ids).size).toBe(5);
+  });
+
+  it('references photos by URL instead of inlining bytes (FIX-04)', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await hazardWithPhoto(repo, photos);
+    const page = await listModerationQueue(repo, { limit: 10 });
+    expect(page.hazards[0].photoUrl).toBe(`/api/photos/${h.id}`);
+    expect(JSON.stringify(page)).not.toContain('base64');
   });
 });
 

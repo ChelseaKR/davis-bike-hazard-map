@@ -92,6 +92,7 @@
   "moderation.error.loadQueue": "Could not load the queue. Try again.",
   "moderation.error.sessionExpired": "Your session expired. Please sign in again.",
   "moderation.filed": "filed {when}",
+  "moderation.loadMore": "Load more ({shown} of {total} shown)",
   "moderation.password": "Password",
   "moderation.pending": "Pending review ({count})",
   "moderation.photoAlt": "Submitted hazard awaiting review",

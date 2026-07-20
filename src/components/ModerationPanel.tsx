@@ -12,6 +12,7 @@ import { FormattedMessage, useIntl } from 'react-intl';
 import type { Hazard } from '../../shared/types.ts';
 import {
   decideModeration,
+  fetchModerationPhoto,
   fetchModerationQueue,
   login,
   ApiRequestError,
@@ -20,6 +21,55 @@ import {
 import { timeAgo } from '../lib/format.ts';
 import { useLabels } from '../i18n/labels.ts';
 import { HazardPhoto } from './HazardPhoto.tsx';
+
+/**
+ * A pending hazard's photo. Pending photo bytes are auth-gated on the server
+ * (FIX-04), so the bytes are fetched with the moderator's bearer token and
+ * rendered from a local blob URL (revoked on unmount).
+ */
+function ModerationPhoto({ photoUrl, token, alt }: { photoUrl: string; token: string; alt: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const intl = useIntl();
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    setSrc(null);
+    setFailed(false);
+    fetchModerationPhoto(photoUrl, token)
+      .then((url) => {
+        objectUrl = url;
+        if (cancelled) URL.revokeObjectURL(url);
+        else setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [photoUrl, token]);
+
+  if (failed) {
+    // Same accessible fallback HazardPhoto renders when an <img> fails to load.
+    return (
+      <p
+        className="photo-unavailable moderation-photo"
+        role="img"
+        aria-label={intl.formatMessage(
+          { id: 'photo.unavailableAria', defaultMessage: '{alt} — photo unavailable' },
+          { alt },
+        )}
+      >
+        <FormattedMessage id="photo.unavailable" defaultMessage="Photo unavailable" />
+      </p>
+    );
+  }
+  if (!src) return null;
+  return <HazardPhoto className="moderation-photo" src={src} alt={alt} />;
+}
 
 const SESSION_KEY = 'dbhm.session';
 
@@ -42,6 +92,8 @@ export function ModerationPanel() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [queue, setQueue] = useState<Hazard[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -49,16 +101,23 @@ export function ModerationPanel() {
     localStorage.removeItem(SESSION_KEY);
     setSession(null);
     setQueue([]);
+    setNextCursor(null);
+    setTotal(0);
     setPassword('');
     if (message) setError(message);
   }, []);
 
+  // Fetch one queue page (FIX-04). Without a cursor the queue is reloaded from
+  // the top; with one, the next page is appended to what's already shown.
   const load = useCallback(
-    async (tok: string) => {
+    async (tok: string, cursor?: string) => {
       setBusy(true);
       setError(null);
       try {
-        setQueue(await fetchModerationQueue(tok));
+        const page = await fetchModerationQueue(tok, cursor);
+        setQueue((q) => (cursor ? [...q, ...page.hazards] : page.hazards));
+        setNextCursor(page.nextCursor);
+        setTotal(page.total);
       } catch (err) {
         if (err instanceof ApiRequestError && err.status === 401) {
           signOut(
@@ -123,6 +182,7 @@ export function ModerationPanel() {
     try {
       await decideModeration(id, decision, session.token);
       setQueue((q) => q.filter((h) => h.id !== id));
+      setTotal((t) => Math.max(0, t - 1));
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {
         signOut(
@@ -216,7 +276,7 @@ export function ModerationPanel() {
           <FormattedMessage
             id="moderation.pending"
             defaultMessage="Pending review ({count})"
-            values={{ count: queue.length }}
+            values={{ count: total }}
           />
         </h2>
         <span className="hint">
@@ -264,9 +324,9 @@ export function ModerationPanel() {
               </div>
               {h.description && <p>{h.description}</p>}
               {h.photoUrl && (
-                <HazardPhoto
-                  className="moderation-photo"
-                  src={h.photoUrl}
+                <ModerationPhoto
+                  photoUrl={h.photoUrl}
+                  token={session.token}
                   alt={intl.formatMessage({
                     id: 'moderation.photoAlt',
                     defaultMessage: 'Submitted hazard awaiting review',
@@ -294,6 +354,20 @@ export function ModerationPanel() {
             </li>
           ))}
         </ul>
+      )}
+      {nextCursor && (
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={busy}
+          onClick={() => load(session.token, nextCursor)}
+        >
+          <FormattedMessage
+            id="moderation.loadMore"
+            defaultMessage="Load more ({shown} of {total} shown)"
+            values={{ shown: queue.length, total }}
+          />
+        </button>
       )}
     </section>
   );

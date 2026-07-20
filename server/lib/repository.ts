@@ -45,12 +45,55 @@ export interface BBox {
   maxLng: number;
 }
 
+/** One page of the moderation backlog (FIX-04). */
+export interface PendingPage {
+  /** Pending hazards, oldest first (FIFO — moderators clear the backlog in order). */
+  hazards: StoredHazard[];
+  /** Opaque cursor for the next page, or null when this page is the last. */
+  nextCursor: string | null;
+}
+
+export interface PendingPageOptions {
+  /** Maximum rows to return. */
+  limit: number;
+  /** Cursor from a previous page (absent = start at the oldest). */
+  cursor?: string;
+}
+
+/**
+ * Keyset cursor for pending pages: `<createdAt>:<id>`. Encoded/decoded here so
+ * every store pages identically and callers treat it as opaque.
+ */
+export function encodePendingCursor(h: StoredHazard): string {
+  return `${h.createdAt}:${h.id}`;
+}
+
+/** Decode a pending-page cursor, or null if it is not one we issued. */
+export function decodePendingCursor(
+  cursor: string,
+): { createdAt: number; id: string } | null {
+  const sep = cursor.indexOf(':');
+  if (sep <= 0 || sep === cursor.length - 1) return null;
+  const createdAt = Number(cursor.slice(0, sep));
+  const id = cursor.slice(sep + 1);
+  if (!Number.isSafeInteger(createdAt) || createdAt < 0) return null;
+  return { createdAt, id };
+}
+
 export interface Repository {
   insert(hazard: StoredHazard): Promise<StoredHazard>;
   findById(id: string): Promise<StoredHazard | undefined>;
   findByClientId(clientId: string): Promise<StoredHazard | undefined>;
   update(id: string, patch: Partial<StoredHazard>): Promise<StoredHazard | undefined>;
   all(): Promise<StoredHazard[]>;
+  /**
+   * One page of `pending` hazards, oldest first (keyset-paged on
+   * (createdAt, id) so the response size is independent of queue depth —
+   * FIX-04). Cursor format is validated at the API boundary
+   * (moderationQueueQuerySchema); an undecodable cursor here falls back to
+   * the first page rather than corrupting the traversal.
+   */
+  listPending(opts: PendingPageOptions): Promise<PendingPage>;
   /** Approved, not-yet-expired rows (optional bbox pushdown), newest first. */
   listActive(now: number, bbox?: BBox): Promise<StoredHazard[]>;
   /** Resolved rows fixed at/after `resolvedAfter` (optional bbox), newest first. */
@@ -135,6 +178,26 @@ export class MemoryRepository implements Repository {
       .filter((h) => h.status === 'resolved' && (h.resolvedAt ?? 0) >= resolvedAfter)
       .filter((h) => !bbox || inBounds(h.publicLocation, bbox))
       .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0));
+  }
+
+  async listPending(opts: PendingPageOptions): Promise<PendingPage> {
+    const after = opts.cursor ? decodePendingCursor(opts.cursor) : null;
+    // Tiebreak ids by plain code-unit order (ids are ASCII UUIDs), matching
+    // the Postgres store's COLLATE "C" — the two stores must page identically.
+    const idAfter = (a: string, b: string) => (a > b ? 1 : a < b ? -1 : 0);
+    const pending = [...this.store.values()]
+      .filter((h) => h.status === 'pending')
+      .sort((a, b) => a.createdAt - b.createdAt || idAfter(a.id, b.id))
+      .filter(
+        (h) =>
+          !after ||
+          h.createdAt > after.createdAt ||
+          (h.createdAt === after.createdAt && idAfter(h.id, after.id) > 0),
+      );
+    const page = pending.slice(0, opts.limit);
+    const last = page.at(-1);
+    const nextCursor = pending.length > page.length && last ? encodePendingCursor(last) : null;
+    return { hazards: page, nextCursor };
   }
 
   async expire(now: number): Promise<number> {
