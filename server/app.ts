@@ -744,11 +744,22 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // is due. Decorated onto the instance so the ops entrypoint (server/index.ts)
   // can drive it on an interval and tests can drive it with a fake clock,
   // while failures still feed this instance's dbhm_handoff_failures_total.
-  app.decorate('runHandoffRetrySweep', async () =>
-    sweepHandoffRetries(repo, handoffProviderConfig, fetchImpl, now(), () =>
+  //
+  // Never overlaps: sweeps forward reports serially with no overall deadline,
+  // so one stalled on a hung 311 endpoint could still be mid-flight when the
+  // next interval tick fires. A second sweep would re-read the same hazards
+  // (their receipts aren't updated until each attempt settles) and forward
+  // them AGAIN — a double-submit to the city. Concurrent callers therefore
+  // join the sweep already in flight instead of starting a new one.
+  let handoffSweepInFlight: Promise<HandoffRetrySweepResult> | null = null;
+  app.decorate('runHandoffRetrySweep', () => {
+    handoffSweepInFlight ??= sweepHandoffRetries(repo, handoffProviderConfig, fetchImpl, now(), () =>
       metrics.handoffFailures.inc(),
-    ),
-  );
+    ).finally(() => {
+      handoffSweepInFlight = null;
+    });
+    return handoffSweepInFlight;
+  });
 
   // --- 311 status sync-back: inbound webhook (city/GOGov → us) ---
   // Cryptographically hardened ingress (FIX-02) for the product's highest-trust

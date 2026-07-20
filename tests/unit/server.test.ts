@@ -762,6 +762,53 @@ describe('311 hand-off delivery receipts + retry (R3)', () => {
     await b.close();
   });
 
+  it('never overlaps two sweeps — a concurrent call joins the sweep in flight (no double-submit)', async () => {
+    // Seed a due retry with a transport that fails fast.
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(liveGogovConfig, failFetch);
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}/handoff`,
+      payload: {},
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` },
+    });
+    await a.close();
+
+    // Fresh app over the same store, with a transport that BLOCKS until
+    // released — the window in which an interval tick could start a second
+    // sweep and forward the same hazard to 311 twice.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let forwards = 0;
+    const slowFetch = (async () => {
+      forwards++;
+      await gate;
+      return { ok: true, status: 200 };
+    }) as unknown as typeof fetch;
+    const { app: b } = await buildAppWithModerator(liveGogovConfig, slowFetch, { repo: r });
+    clock = (await r.findById(id))!.handoffDelivery!.nextRetryAt! + 1;
+
+    const first = b.runHandoffRetrySweep();
+    const second = b.runHandoffRetrySweep(); // fires while the first is mid-transport
+    expect(second).toBe(first); // joined, not a new sweep
+    release();
+    await expect(first).resolves.toMatchObject({ attempted: 1, recovered: 1 });
+
+    // Exactly ONE forward went out; the receipt reflects the single attempt.
+    expect(forwards).toBe(1);
+    expect((await r.findById(id))!.handoffDelivery).toMatchObject({ state: 'submitted', attempts: 2 });
+
+    // Once settled, the next call starts a fresh sweep (nothing due now).
+    expect((await b.runHandoffRetrySweep()).attempted).toBe(0);
+    await b.close();
+  });
+
   it('lists dead-lettered hand-offs on the auth-gated failures route', async () => {
     const { app: a, token: tok, repo: r } = await buildAppWithModerator(liveGogovConfig, failFetch);
     const created = await a.inject({
