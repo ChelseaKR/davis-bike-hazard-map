@@ -28,7 +28,7 @@ jobs:
     name: tag matches package.json version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: Tag <-> package.json version consistency
@@ -51,7 +51,7 @@ jobs:
     # cache entry is a real supply-chain risk in a way it isn't on ci.yml's
     # mutable branches/PRs (CI-CD-STANDARD "caching is disabled" rule).
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       # This action has no input to disable its own Node-distribution tool-cache
@@ -85,7 +85,7 @@ jobs:
       image: ${{ steps.image.outputs.image }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
