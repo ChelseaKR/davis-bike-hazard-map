@@ -9,6 +9,11 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- Release authorization now runs from reviewed `main` through the immutable
+  portfolio authorizer. Verification, GHCR publication, signing, and
+  attestations use the exact selected commit; a separate checkout-free job
+  rechecks the tag object before creating the GitHub Release.
+
 Pre-release Beta on `main`. No tags have been cut yet; entries below are seeded from the June 2026
 PR history so the log isn't empty when the first release ships. Once `v0.1.0` is tagged, the
 corresponding subset of these entries moves under that heading.
