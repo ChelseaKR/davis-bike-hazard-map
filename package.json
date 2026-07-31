@@ -61,7 +61,7 @@
     "react-dom": "^19.2.7",
     "react-intl": "^7.1.14",
     "react-leaflet": "^5.0.0",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.3",
     "tsx": "^4.19.2",
     "web-push": "^3.6.7",
     "web-vitals": "^4.2.4",
