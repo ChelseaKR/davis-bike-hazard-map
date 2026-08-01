@@ -1,6 +1,6 @@
 name: release
 
-# Tag-triggered release (REL-14, RELEASE-AND-VERSIONING-STANDARD §4). Nothing
+# Trusted-main release (REL-14, RELEASE-AND-VERSIONING-STANDARD §4). Nothing
 # in ci.yml's PR green check is trusted here — this re-runs the full
 # `make verify` gate set at the exact tagged commit, then builds the same
 # production image Fly.io deploys, scans it, publishes it to GHCR by digest
@@ -13,38 +13,31 @@ name: release
 # trans-docs-navigator/.github/workflows/release.yml).
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing signed stable SemVer tag (vX.Y.Z)"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
-  version-check:
-    name: tag matches package.json version
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-        with:
-          persist-credentials: false
-      - name: Tag <-> package.json version consistency
-        run: |
-          set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#v}"
-          pkg_version="$(node -p "require('./package.json').version")"
-          echo "tag=$GITHUB_REF_NAME -> $tag_version   package.json=$pkg_version"
-          if [ "$tag_version" != "$pkg_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME (version $tag_version) does not match package.json version $pkg_version — bump package.json or retag"
-            exit 1
-          fi
+  authorize:
+    uses: ChelseaKR/portfolio-standards/.github/workflows/release-authorize.yml@3692aa5270d673f91f8571b4fc0ce1c622bf67e5
+    permissions:
+      contents: read
+    with:
+      tag: ${{ inputs.tag }}
 
   verify:
     name: re-verify at the tagged commit (REL-14)
-    needs: [version-check]
+    needs: authorize
     runs-on: ubuntu-latest
     # No package-manager cache here (unlike ci.yml): a tag push builds an
     # artifact that gets published later in this same workflow, so a poisoned
@@ -53,7 +46,16 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
+          ref: ${{ needs.authorize.outputs.release-commit }}
           persist-credentials: false
+      - name: Tag matches package.json and CHANGELOG
+        env:
+          TAG: ${{ needs.authorize.outputs.release-tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          test "${VERSION}" = "$(node -p "require('./package.json').version")"
+          grep -Fq "## [${VERSION}]" CHANGELOG.md
       # This action has no input to disable its own Node-distribution tool-cache
       # (unlike the `cache:` package-manager cache, which is opt-in and left
       # unset below); zizmor itself notes Low confidence for this instance.
@@ -71,13 +73,13 @@ jobs:
 
   package:
     name: build · scan · publish (GHCR, by digest) · SBOM · sign · attest
-    needs: [verify]
+    needs: [authorize, verify]
     runs-on: ubuntu-latest
     # No caching in this job (CI-CD-STANDARD §"Caching is disabled"/SLSA build
     # isolation): a release job builds, signs, and publishes, so a poisoned
     # cache entry is a real supply-chain risk here in a way it isn't in ci.yml.
     permissions:
-      contents: write      # create the GitHub Release
+      contents: read
       packages: write      # push image to GHCR
       id-token: write      # keyless cosign + SLSA provenance OIDC
       attestations: write  # actions/attest-build-provenance
@@ -87,6 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
+          ref: ${{ needs.authorize.outputs.release-commit }}
           persist-credentials: false
 
       - name: Compute image reference (GHCR requires lowercase; github.repository is not)
@@ -94,9 +97,10 @@ jobs:
         run: echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Build production image (same Dockerfile Fly.io deploys)
-        run: docker build -t "${STEPS_IMAGE_OUTPUTS_IMAGE}:${GITHUB_REF_NAME}" .
+        run: docker build -t "${STEPS_IMAGE_OUTPUTS_IMAGE}:${TAG}" .
         env:
           STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
+          TAG: ${{ needs.authorize.outputs.release-tag }}
 
       # SEC-28 again, at release time: container-scan.yml already gates pushes
       # to main, but a release must not ship a fixable HIGH/CRITICAL CVE either,
@@ -104,7 +108,7 @@ jobs:
       - name: Container CVE scan (Trivy, fails on fixable HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
-          image-ref: ${{ steps.image.outputs.image }}:${{ github.ref_name }}
+          image-ref: ${{ steps.image.outputs.image }}:${{ needs.authorize.outputs.release-tag }}
           scan-type: image
           vuln-type: os,library
           format: table
@@ -119,7 +123,7 @@ jobs:
         id: push
         run: |
           set -euo pipefail
-          out="$(docker push "${STEPS_IMAGE_OUTPUTS_IMAGE}:${GITHUB_REF_NAME}")"
+          out="$(docker push "${STEPS_IMAGE_OUTPUTS_IMAGE}:${TAG}")"
           echo "$out"
           digest="$(echo "$out" | grep -oE 'sha256:[a-f0-9]{64}' | head -1)"
           if [ -z "$digest" ]; then
@@ -130,6 +134,7 @@ jobs:
           echo "published: ${STEPS_IMAGE_OUTPUTS_IMAGE}@$digest"
         env:
           STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
+          TAG: ${{ needs.authorize.outputs.release-tag }}
 
       - name: Generate CycloneDX SBOM (from the published digest)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0
@@ -137,7 +142,7 @@ jobs:
           image: ${{ steps.image.outputs.image }}@${{ steps.push.outputs.digest }}
           format: cyclonedx-json
           output-file: sbom.cdx.json
-          artifact-name: sbom-${{ github.ref_name }}.cdx.json
+          artifact-name: sbom-${{ needs.authorize.outputs.release-tag }}.cdx.json
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
@@ -161,17 +166,44 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
-      - name: Create GitHub Release
+      - name: Write release metadata
         env:
-          GH_TOKEN: ${{ github.token }}
           STEPS_IMAGE_OUTPUTS_IMAGE: ${{ steps.image.outputs.image }}
           STEPS_PUSH_OUTPUTS_DIGEST: ${{ steps.push.outputs.digest }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            --notes "Image: \`${STEPS_IMAGE_OUTPUTS_IMAGE}@${STEPS_PUSH_OUTPUTS_DIGEST}\`. SBOM and signatures are attached to the image itself (cosign/attest-build-provenance) — verify with \`cosign verify\` / \`gh attestation verify\`." \
+          printf 'Image: %s@%s.\n\nSBOM and signatures are attached to the image itself; verify with cosign and gh attestation.\n' \
+            "${STEPS_IMAGE_OUTPUTS_IMAGE}" "${STEPS_PUSH_OUTPUTS_DIGEST}" > release-notes.md
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: |
             sbom.cdx.json
+            release-notes.md
+          if-no-files-found: error
+
+  publish-release:
+    needs: [authorize, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Recheck immutable tag object and create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.authorize.outputs.release-tag }}
+          TAG_OBJECT_SHA: ${{ needs.authorize.outputs.tag-object-sha }}
+        run: |
+          set -euo pipefail
+          LIVE_TAG_OBJECT="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha)"
+          test "${LIVE_TAG_OBJECT}" = "${TAG_OBJECT_SHA}"
+          gh release create "${TAG}" release-assets/sbom.cdx.json \
+            --title "${TAG}" \
+            --notes-file release-assets/release-notes.md \
+            --verify-tag
 
   verify-published:
     name: verify-published — pull by digest, cosign verify, boot, /livez (REL-16)
