@@ -1,0 +1,215 @@
+# dependabot-auto-update — makes the `standards` required check runnable on
+# Dependabot pull requests.
+#
+# WHY THIS EXISTS
+# ---------------
+# `standards.yml` fetches the PRIVATE ChelseaKR/portfolio-standards repo with
+# `ssh-key: ${{ secrets.STANDARDS_DEPLOY_KEY }}`. GitHub runs any workflow whose
+# *actor* is `dependabot[bot]` in a restricted mode: it reads the separate
+# **Dependabot** secret store, not the Actions secret store. That store is empty
+# here, so `STANDARDS_DEPLOY_KEY` resolves to "" on every Dependabot PR, the
+# checkout of the standards repo fails, and `standards` — a required status
+# check in the `protect-main` ruleset — is red. Dependabot PRs are therefore
+# unmergeable without a human doing `PUT /pulls/{n}/update-branch` by hand,
+# which re-points the head as the repo owner so the resulting run is no longer
+# Dependabot-actored and *can* read the Actions secret store.
+#
+# This workflow performs that same re-point automatically. It runs from `main`
+# (push / schedule / manual), never from the PR event, precisely because a
+# `pull_request`-triggered run on a Dependabot PR is itself secret-starved.
+#
+# WHAT IT DOES, PER OPEN DEPENDABOT PR
+#   1. Skip unless the PR is authored by `dependabot[bot]`, is same-repo (not a
+#      fork), and its head branch is under `dependabot/`.
+#   2. Skip if `standards` is already green on the current head SHA, or is
+#      queued/running. This is the anti-churn guard: without it every push to
+#      main would re-touch every Dependabot PR forever.
+#   3. If the branch is behind main -> `PUT /pulls/{n}/update-branch`. Fixes
+#      staleness and re-points the head in one move.
+#   4. If the branch is already up to date (the common case for the first PR of
+#      a weekly batch) -> create an empty commit on the head branch via the Git
+#      Data API. Content is byte-identical; only the actor changes.
+#
+# CANNOT LOOP: it only ever writes to `dependabot/*` head branches, never to
+# `main`, so its own writes cannot re-trigger it. The step-2 guard additionally
+# makes every run a no-op once the PR is green.
+#
+# WHY A PAT AND NOT `GITHUB_TOKEN`
+# --------------------------------
+# Pushes authored by `GITHUB_TOKEN` deliberately do not create new workflow
+# runs. A `GITHUB_TOKEN`-driven update-branch would move the head and re-trigger
+# nothing — the stale red `standards` result would simply stay. So the re-point
+# must be authored by a real identity: `DEPENDABOT_AUTOUPDATE_TOKEN`, a
+# fine-grained PAT scoped to this repository with only
+# `contents: read/write` + `pull_requests: read/write`.
+#
+# If that secret is absent this workflow FAILS LOUDLY — but only when it has
+# actually found a Dependabot PR it would have fixed. On a repo with no stuck
+# Dependabot PRs it exits clean and silent. It never reports success for a PR
+# it did not fix.
+#
+# THE TWO SIMPLER FIXES THIS WORKFLOW IS STANDING IN FOR
+#   (a) Mirror the deploy key into the Dependabot secret store:
+#         gh secret set STANDARDS_DEPLOY_KEY --app dependabot --repo <repo> < key
+#       Lower privilege than a PAT (read-only deploy key), no workflow at all —
+#       but it must be repeated, and rotated, in every consuming repo.
+#   (b) Make ChelseaKR/portfolio-standards public. Then `standards.yml` needs no
+#       secret whatsoever and this workflow can be deleted outright.
+# See PORTFOLIO-STANDARDS-VISIBILITY-2026-08-01.md. This workflow is the
+# unblock-now measure, not the endorsed end state.
+
+name: dependabot-auto-update
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Catches Dependabot PRs opened while main was quiet, which a push trigger
+    # alone would never reach.
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+# Least privilege: every *mutation* is made with the PAT below. The ambient
+# GITHUB_TOKEN is read-only and used solely for the "is there anything to fix?"
+# survey, so that question can still be answered when no PAT is configured.
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  # Serialise; do NOT cancel in progress — this job mutates refs and must be
+  # allowed to finish the PR it is on.
+  group: dependabot-auto-update
+  cancel-in-progress: false
+
+jobs:
+  repoint:
+    name: Re-point stuck Dependabot branches
+    runs-on: ubuntu-latest
+    # A fork has neither the secret nor the problem.
+    if: ${{ !github.event.repository.fork }}
+    steps:
+      - name: Re-point Dependabot PRs so `standards` can read Actions secrets
+        env:
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          AUTOUPDATE_TOKEN: ${{ secrets.DEPENDABOT_AUTOUPDATE_TOKEN }}
+          # Only used for the read-only survey below, so that the "is there
+          # anything to do?" question can be answered even with no PAT present.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          BASE="${DEFAULT_BRANCH:-main}"
+          CHECK_NAME='standards'
+
+          # --- Survey (read-only, ambient token) ---------------------------
+          prs="$(gh api --paginate "repos/${REPO}/pulls?state=open&per_page=100" \
+            --jq '.[] | select(.user.login == "dependabot[bot]")
+                      | select(.head.repo.full_name == .base.repo.full_name)
+                      | select(.head.ref | startswith("dependabot/"))
+                      | {number, head_ref: .head.ref, head_sha: .head.sha}
+                      | @base64')"
+
+          if [ -z "${prs}" ]; then
+            echo "No open Dependabot PRs. Nothing to do."
+            echo 'No open Dependabot PRs.' >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          stuck=()
+          while IFS= read -r row; do
+            [ -n "${row}" ] || continue
+            json="$(printf '%s' "${row}" | base64 --decode)"
+            num="$(printf '%s' "${json}" | jq -r '.number')"
+            ref="$(printf '%s' "${json}" | jq -r '.head_ref')"
+            sha="$(printf '%s' "${json}" | jq -r '.head_sha')"
+
+            # Anti-churn guard: leave alone anything already green, or with a
+            # run in flight that may yet go green.
+            state="$(gh api "repos/${REPO}/commits/${sha}/check-runs?per_page=100" \
+              --jq "[.check_runs[] | select(.name == \"${CHECK_NAME}\")]
+                    | sort_by(.started_at) | last
+                    | if . == null then \"missing\"
+                      elif .status != \"completed\" then \"pending\"
+                      else (.conclusion // \"unknown\") end" 2>/dev/null || echo 'missing')"
+
+            case "${state}" in
+              success)
+                echo "PR #${num}: ${CHECK_NAME} already green — skipping." ;;
+              pending)
+                echo "PR #${num}: ${CHECK_NAME} still running — skipping." ;;
+              *)
+                echo "PR #${num}: ${CHECK_NAME} is '${state}' — needs re-point."
+                stuck+=("${num}:${ref}:${sha}") ;;
+            esac
+          done <<< "${prs}"
+
+          if [ "${#stuck[@]}" -eq 0 ]; then
+            echo "Every open Dependabot PR is already healthy."
+            echo 'Every open Dependabot PR is already healthy.' >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          # --- Loud failure, and only now ----------------------------------
+          if [ -z "${AUTOUPDATE_TOKEN}" ]; then
+            # shellcheck disable=SC2016  # backticks below are Markdown, not substitution
+            {
+              echo '### dependabot-auto-update could not run'
+              echo
+              echo "${#stuck[@]} Dependabot PR(s) have a failing \`${CHECK_NAME}\` check and"
+              echo 'cannot be fixed: the `DEPENDABOT_AUTOUPDATE_TOKEN` secret is not set.'
+              echo
+              echo 'Set a fine-grained PAT scoped to this repository with'
+              echo '`contents: read/write` + `pull_requests: read/write`, or apply one of'
+              echo 'the simpler fixes described at the top of this workflow file.'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "::error::DEPENDABOT_AUTOUPDATE_TOKEN is not set; ${#stuck[@]} Dependabot PR(s) remain blocked."
+            exit 1
+          fi
+
+          # --- Act (PAT) ----------------------------------------------------
+          export GH_TOKEN="${AUTOUPDATE_TOKEN}"
+          failed=0
+          echo '### dependabot-auto-update' >> "${GITHUB_STEP_SUMMARY}"
+
+          for entry in "${stuck[@]}"; do
+            num="${entry%%:*}"; rest="${entry#*:}"
+            ref="${rest%%:*}"; sha="${rest##*:}"
+
+            behind="$(gh api "repos/${REPO}/compare/${BASE}...${ref}" --jq '.behind_by' 2>/dev/null || echo 0)"
+
+            if [ "${behind}" -gt 0 ]; then
+              action="update-branch (was ${behind} commit(s) behind ${BASE})"
+              if gh api -X PUT "repos/${REPO}/pulls/${num}/update-branch" \
+                   -f "expected_head_sha=${sha}" >/dev/null; then
+                echo "- PR #${num}: ${action}" >> "${GITHUB_STEP_SUMMARY}"
+              else
+                echo "::warning::PR #${num}: update-branch failed."
+                echo "- PR #${num}: FAILED ${action}" >> "${GITHUB_STEP_SUMMARY}"
+                failed=1
+              fi
+            else
+              # Already current: re-point with a content-identical empty commit
+              # so the head is authored by the PAT identity rather than
+              # dependabot[bot]. Built via the Git Data API — no checkout, no
+              # credentials on disk.
+              tree="$(gh api "repos/${REPO}/git/commits/${sha}" --jq '.tree.sha')"
+              msg=$'ci: re-run checks as repo actor\n\nEmpty commit, no content change. `standards` fetches the private\nportfolio-standards repo with an Actions secret, which Dependabot-actored runs\ncannot read; re-pointing the head under a non-Dependabot actor lets the\nrequired check actually run.'
+              if new_sha="$(gh api "repos/${REPO}/git/commits" \
+                    -f "message=${msg}" \
+                    -f "tree=${tree}" \
+                    -f "parents[]=${sha}" \
+                    --jq '.sha')" \
+                 && gh api -X PATCH "repos/${REPO}/git/refs/heads/${ref}" \
+                    -f "sha=${new_sha}" -F 'force=false' >/dev/null; then
+                echo "- PR #${num}: empty re-point commit ${new_sha:0:7}" >> "${GITHUB_STEP_SUMMARY}"
+              else
+                echo "::warning::PR #${num}: empty re-point failed."
+                echo "- PR #${num}: FAILED empty re-point" >> "${GITHUB_STEP_SUMMARY}"
+                failed=1
+              fi
+            fi
+          done
+
+          exit "${failed}"
