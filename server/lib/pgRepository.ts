@@ -187,7 +187,10 @@ export class PostgresRepository implements Repository {
       where += ` AND public_lat BETWEEN $2 AND $3 AND public_lng BETWEEN $4 AND $5`;
     }
     const res = await this.pool.query<HazardRow>(
-      `SELECT ${COLUMNS} FROM hazards WHERE ${where} ORDER BY resolved_at DESC`,
+      // Secondary sort on insert_seq keeps rows with an identical resolved_at
+      // (same-millisecond writes) in a deterministic, insertion order — the
+      // same tiebreak the in-memory store gets for free from a stable sort.
+      `SELECT ${COLUMNS} FROM hazards WHERE ${where} ORDER BY resolved_at DESC, insert_seq ASC`,
       params,
     );
     return res.rows.map(rowToHazard);
