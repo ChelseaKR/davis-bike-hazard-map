@@ -139,6 +139,21 @@ suite('PostgresRepository', () => {
     expect(inBox.map((h) => h.id)).toEqual(['r-new', 'r-old']); // r-far culled; resolved_at desc
   });
 
+  it('listRecentlyResolved breaks same-millisecond resolved_at ties by insertion order', async () => {
+    // All three ties share one resolved_at, so only the insert_seq tiebreak
+    // can order them — bare ORDER BY resolved_at DESC leaves Postgres free to
+    // return ties in any order, unlike the in-memory store's stable sort.
+    await repo.insert(hazard({ id: 'tie-a', clientId: 'ta', status: 'resolved', resolvedAt: 7000 }));
+    await repo.insert(hazard({ id: 'tie-b', clientId: 'tb', status: 'resolved', resolvedAt: 7000 }));
+    await repo.insert(hazard({ id: 'tie-c', clientId: 'tc', status: 'resolved', resolvedAt: 7000 }));
+    await repo.insert(hazard({ id: 'newer', clientId: 'n', status: 'resolved', resolvedAt: 8000 }));
+
+    const got = await repo.listRecentlyResolved(0);
+    // Newest resolved_at first; ties come back earliest-insert-first, matching
+    // the in-memory store's insertion-order tiebreak.
+    expect(got.map((h) => h.id)).toEqual(['newer', 'tie-a', 'tie-b', 'tie-c']);
+  });
+
   it('pings the database for readiness', async () => {
     expect(await repo.ping()).toBe(true);
   });
