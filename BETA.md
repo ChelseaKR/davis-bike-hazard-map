@@ -12,9 +12,22 @@ any Docker host + managed Postgres.
 
 ## Live deployment (AWS App Runner + RDS)
 
-**The private beta is live at <https://ffvp3ctt7m.us-west-2.awsapprunner.com>.**
+> **The hosted beta is paused.** The App Runner service `davis-bike-hazard-map`
+> was paused after the 2026-08-01 cost review (it billed ~$5.21/month while
+> idle), so <https://ffvp3ctt7m.us-west-2.awsapprunner.com> returns 404 and the
+> smoke tests below will fail until it is resumed. Nothing was deleted — the
+> service, its RDS instance, and the photo bucket all still exist. Resume with:
+>
+> ```bash
+> aws apprunner resume-service --region us-west-2 \
+>   --service-arn "$(aws apprunner list-services --region us-west-2 \
+>     --query "ServiceSummaryList[?ServiceName=='davis-bike-hazard-map'].ServiceArn" \
+>     --output text)"
+> ```
+>
+> Run the local stack instead if you just want to see it work — see below.
 
-It runs in `us-west-2`:
+When running, it serves from `us-west-2`:
 
 - **AWS App Runner** serves the container (image built from this repo's
   `Dockerfile`) on a managed HTTPS URL, egressing through a **VPC connector** so
@@ -30,7 +43,7 @@ It runs in `us-west-2`:
   prefix, injected as runtime environment secrets. `MODERATOR_USERNAME` is a
   plain env var.
 
-Smoke test:
+Smoke test (only meaningful once the service is resumed — see the note above):
 
 ```bash
 curl https://ffvp3ctt7m.us-west-2.awsapprunner.com/api/health   # {"status":"ok"}
