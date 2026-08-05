@@ -15,6 +15,17 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8787
 
+# Pick up any Debian security patches published after this base image's last
+# build. container-scan.yml's Trivy scan fails the build on fixable
+# HIGH/CRITICAL OS-package CVEs and runs on a weekly schedule as well as every
+# Dockerfile-touching PR, so a freshly-patched `node:22-slim` pull is the only
+# thing standing between a green run and a flap — that happened for real on
+# 2026-07-27 (schedule run failed, next one passed with no Dockerfile change).
+# This keeps the shipped OS packages current on every build instead of only
+# when the base image tag happens to be refreshed.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 # npm is only needed to install: drop the bundled npm CLI (and its vendored
