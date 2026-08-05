@@ -186,6 +186,7 @@
   "report.submit": "",
   "route.aria": "",
   "route.candidates": "",
+  "route.comparison.tradeoff": "",
   "route.destination": "",
   "route.error.location": "",
   "route.error.locationUnavailable": "",

@@ -1090,6 +1090,8 @@ describe('hazard-aware route planner', () => {
     expect(plan.route.steps.length).toBeGreaterThan(0);
     expect(plan.alternativesConsidered).toBe(1);
     expect(plan.nearby.map((n: { hazard: { id: string } }) => n.hazard.id)).toContain(id);
+    // Only one candidate existed — nothing was traded off, so no comparison.
+    expect(plan.fastestAlternative).toBeNull();
   });
 
   it('rejects a route outside Davis (400)', async () => {
@@ -1124,6 +1126,86 @@ describe('hazard-aware route planner', () => {
     const res = await a.inject({ method: 'GET', url: '/api/route?from=38.5449,-121.745&to=38.5449,-121.736' });
     expect(res.statusCode).toBe(200);
     expect(res.json().plan.source).toBe('osrm');
+    expect(res.json().plan.fastestAlternative).toBeNull(); // OSRM returned a single candidate here too
+    await a.close();
+  });
+
+  it('reports the fastest-alternative trade-off when avoiding a hazard costs distance and time (EXP-03)', async () => {
+    // The mock OSRM response references the hazard's PUBLISHED (fuzzed) location,
+    // which isn't known until after the report is posted and approved — so the
+    // two candidate routes read it from closed-over variables set later.
+    let hazardLat = 0;
+    let hazardLng = 0;
+    const fetchMock: typeof fetch = (async () =>
+      ({
+        ok: true,
+        json: async () => ({
+          routes: [
+            {
+              // Direct: passes right through the hazard — fastest by raw duration.
+              distance: 1200,
+              duration: 300,
+              geometry: {
+                coordinates: [
+                  [hazardLng - 0.002, hazardLat],
+                  [hazardLng, hazardLat],
+                  [hazardLng + 0.002, hazardLat],
+                ],
+              },
+              legs: [{ steps: [] }],
+            },
+            {
+              // Detour: longer and slower, but well outside the hazard's corridor.
+              distance: 1400,
+              duration: 340,
+              geometry: {
+                coordinates: [
+                  [hazardLng - 0.002, hazardLat + 0.0015],
+                  [hazardLng + 0.002, hazardLat + 0.0015],
+                ],
+              },
+              legs: [{ steps: [] }],
+            },
+          ],
+        }),
+      }) as Response) as unknown as typeof fetch;
+
+    const { app: a, token: aToken } = await buildAppWithModerator(
+      { ...testConfig, routingUrl: 'https://osrm.test/route/v1/cycling' },
+      fetchMock,
+    );
+    const rep = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = rep.json().hazard.id;
+    await a.inject({
+      method: 'POST',
+      url: `/api/moderation/${id}`,
+      payload: { decision: 'approve' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${aToken}` },
+    });
+    const pub = (await a.inject({ method: 'GET', url: '/api/hazards' })).json().hazards[0];
+    hazardLat = pub.location.lat;
+    hazardLng = pub.location.lng;
+
+    const res = await a.inject({
+      method: 'GET',
+      url: `/api/route?from=${hazardLat},${hazardLng - 0.002}&to=${hazardLat},${hazardLng + 0.002}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const plan = res.json().plan;
+    // The hazard-aware pick is the detour: the direct route's fresh, high-severity
+    // hazard penalty (~800 equivalent metres) dwarfs the detour's extra 200 m.
+    expect(plan.route.distanceMeters).toBe(1400);
+    expect(plan.nearby).toHaveLength(0);
+    // The fastest candidate by raw duration was the direct route, through the hazard.
+    expect(plan.fastestAlternative).not.toBeNull();
+    expect(plan.fastestAlternative.distanceMeters).toBe(1200);
+    expect(plan.fastestAlternative.durationSeconds).toBe(300);
+    expect(plan.fastestAlternative.nearby.map((n: { hazard: { id: string } }) => n.hazard.id)).toContain(id);
     await a.close();
   });
 });

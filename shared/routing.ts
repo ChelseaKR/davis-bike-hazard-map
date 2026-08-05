@@ -201,6 +201,43 @@ export function rankRoutes(
     .sort((a, b) => a.cost - b.cost);
 }
 
+/**
+ * The fastest candidate route considered, by raw travel time — the "honest
+ * cost" comparison (EXP-03, Route honesty panel): what the hazard-aware pick
+ * costs versus simply taking the quickest option, and what riding that
+ * quicker option would still expose you to.
+ */
+export interface FastestAlternative {
+  distanceMeters: number;
+  durationSeconds: number;
+  /** Corridor hazards the fastest candidate passes near, closest first. */
+  nearby: NearbyHazard[];
+}
+
+/**
+ * Find the fastest (lowest raw duration) candidate among already-ranked
+ * routes and package it as the comparison against the chosen (`ranked[0]`)
+ * route — or `null` when the chosen route already is the fastest one, i.e.
+ * nothing was traded away to avoid hazards.
+ *
+ * Pure and independent of `rankRoutes`'s cost ordering: it only reads the raw
+ * `route.durationSeconds` each candidate already carries.
+ */
+export function findFastestAlternative(ranked: ScoredRoute[]): FastestAlternative | null {
+  if (ranked.length === 0) return null;
+  const chosen = ranked[0];
+  let fastest = chosen;
+  for (const candidate of ranked) {
+    if (candidate.route.durationSeconds < fastest.route.durationSeconds) fastest = candidate;
+  }
+  if (fastest.route === chosen.route) return null;
+  return {
+    distanceMeters: fastest.route.distanceMeters,
+    durationSeconds: fastest.route.durationSeconds,
+    nearby: fastest.nearby,
+  };
+}
+
 /** The hazard-aware route plan the API returns and the client renders. */
 export interface RoutePlan {
   /** 'osrm' when a real road graph was used; 'fallback' for a straight-line stub. */
@@ -213,4 +250,11 @@ export interface RoutePlan {
   nearby: NearbyHazard[];
   /** How many candidate routes were considered before picking this one. */
   alternativesConsidered: number;
+  /**
+   * The fastest candidate route, when it differs from the chosen one — see
+   * {@link findFastestAlternative}. `null` when the hazard-aware pick already
+   * is the fastest option (or there was only one candidate): no trade-off
+   * was made, so there is nothing honest to compare.
+   */
+  fastestAlternative: FastestAlternative | null;
 }

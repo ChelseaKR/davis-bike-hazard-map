@@ -8,6 +8,7 @@ import {
   hazardPenalty,
   scoreRoute,
   rankRoutes,
+  findFastestAlternative,
   DEFAULT_SCORING,
   type Route,
   type RouteScoringOptions,
@@ -184,5 +185,44 @@ describe('rankRoutes', () => {
     const longer: Route = { ...route, distanceMeters: route.distanceMeters + 500 };
     const ranked = rankRoutes([longer, route], [], opts());
     expect(ranked[0].route).toBe(route);
+  });
+});
+
+describe('findFastestAlternative', () => {
+  it('is null when there is only one candidate', () => {
+    const ranked = rankRoutes([route], [], opts());
+    expect(findFastestAlternative(ranked)).toBeNull();
+  });
+
+  it('is null when the chosen route already is the fastest one', () => {
+    // No hazards ⇒ the shortest/fastest route wins outright — nothing traded off.
+    const slower: Route = { ...route, distanceMeters: route.distanceMeters + 500, durationSeconds: 500 };
+    const ranked = rankRoutes([slower, route], [], opts());
+    expect(ranked[0].route).toBe(route);
+    expect(findFastestAlternative(ranked)).toBeNull();
+  });
+
+  it('surfaces the faster-but-hazardous candidate when hazard avoidance changes the pick', () => {
+    const direct = route; // passes right through the hazard, and is the fastest by raw duration
+    const detour: Route = {
+      geometry: [
+        { lat: 38.547, lng: -121.75 },
+        { lat: 38.547, lng: -121.73 },
+      ],
+      distanceMeters: route.distanceMeters + 250,
+      durationSeconds: route.durationSeconds + 60, // slower, but avoids the hazard
+      steps: [],
+    };
+    const hazards = [
+      hazard({ severity: 'high', confirmations: 3, location: { lat: 38.545, lng: -121.74 } }),
+    ];
+    const ranked = rankRoutes([direct, detour], hazards, opts({ corridorMeters: 45 }));
+    expect(ranked[0].route).toBe(detour); // the safer, slower route wins
+
+    const fastest = findFastestAlternative(ranked);
+    expect(fastest).not.toBeNull();
+    expect(fastest!.distanceMeters).toBe(direct.distanceMeters);
+    expect(fastest!.durationSeconds).toBe(direct.durationSeconds);
+    expect(fastest!.nearby.map((n) => n.hazard.id)).toEqual(['h1']);
   });
 });
