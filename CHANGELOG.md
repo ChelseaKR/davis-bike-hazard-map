@@ -47,6 +47,11 @@ corresponding subset of these entries moves under that heading.
 - Renovate config with GitHub Actions digest pinning (branch `i18n-catalog-retrofit`)
 
 ### Changed
+- Runtime image now runs `apt-get upgrade` during the build so newly-published Debian
+  package CVEs are patched immediately instead of waiting on the next `node:22-slim` base
+  image refresh — `container-scan.yml`'s weekly Trivy run flapped on exactly this gap on
+  2026-07-27 (schedule run failed with no Dockerfile change, next one passed once the base
+  image was repulled)
 - Vitest coverage raised with meaningful tests; thresholds raised to measured levels
   (89/86/89/84 lines/functions/statements/branches) (#36)
 - Standards remediation: `persist-credentials: false` on checkouts, flyctl action pin comment,
