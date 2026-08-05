@@ -2,7 +2,7 @@
 
 **A crowdsourced cycling-hazard map for Davis** — report a pothole, broken glass, blocked lane, or dangerous intersection from your phone in seconds (photo + location + category + severity), see a live map of what others have flagged, route around the bad spots, and optionally hand the report off to the city's 311/GOGov system. Built as an offline-capable PWA for use on a bike, in a town that calls itself the bike capital of the US.
 
-**Status:** `Beta` · **Track:** Civic (shippable product) · **License:** MIT · **Data:** open
+**Status:** `Beta` · **Track:** Civic (shippable product) · **License:** Apache-2.0 · **Data:** open
 
 > **Running the private beta?** See [`BETA.md`](./BETA.md) for one-time provisioning, the preview link, and what to watch.
 
