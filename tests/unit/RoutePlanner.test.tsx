@@ -47,6 +47,7 @@ function plan(over: Partial<RoutePlan> = {}): RoutePlan {
     },
     nearby: [],
     alternativesConsidered: 2,
+    fastestAlternative: null,
     ...over,
   };
 }
@@ -108,7 +109,62 @@ describe('RoutePlanner', () => {
     await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
     await waitFor(() => expect(screen.getByText(/hazards still on this route/i)).toBeInTheDocument());
     expect(screen.getByText(/Pothole · High · 12 m from your route/)).toBeInTheDocument();
+    // The per-hazard penalty breakdown (EXP-03): the scorer's contribution, surfaced.
+    expect(screen.getByText(/adds 700 m to this route's score/)).toBeInTheDocument();
     expect(screen.getByText(/no hazard-free route was found/i)).toBeInTheDocument();
+  });
+
+  it('shows the fastest-alternative trade-off when the chosen route gave something up (EXP-03)', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(
+      plan({
+        route: {
+          geometry: [DAVIS_LANDMARKS[0].point, DAVIS_LANDMARKS[1].point],
+          distanceMeters: 1700,
+          durationSeconds: 400,
+          steps: [],
+        },
+        fastestAlternative: {
+          distanceMeters: 1500,
+          durationSeconds: 340,
+          nearby: [
+            {
+              hazard: {
+                id: 'h1',
+                category: 'pothole',
+                severity: 'high',
+                description: null,
+                location: DAVIS_LANDMARKS[0].point,
+                photoUrl: null,
+                status: 'approved',
+                confirmations: 0,
+                createdAt: 1,
+                updatedAt: 1,
+                expiresAt: 9e15,
+              },
+              distanceMeters: 5,
+              penalty: 700,
+            },
+          ],
+        },
+      }),
+    );
+    render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/versus the fastest option/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/adds 200 m and 1 min/i)).toBeInTheDocument();
+    expect(screen.getByText(/pass near 1 reported hazard\b/i)).toBeInTheDocument();
+  });
+
+  it('omits the trade-off comparison when the chosen route already is the fastest', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(plan({ fastestAlternative: null }));
+    render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() => expect(screen.getByText(/your route/i)).toBeInTheDocument());
+    expect(screen.queryByText(/versus the fastest option/i)).not.toBeInTheDocument();
   });
 
   it('explains the straight-line fallback when routing is unavailable', async () => {

@@ -23,8 +23,31 @@ const plan: RoutePlan = {
     durationSeconds: 360,
     steps: [{ instruction: 'Head out on A St', distanceMeters: 1500, location: DAVIS_LANDMARKS[0].point }],
   },
-  nearby: [],
-  alternativesConsidered: 1,
+  nearby: [
+    {
+      hazard: {
+        id: 'h1',
+        category: 'pothole',
+        severity: 'high',
+        description: null,
+        location: DAVIS_LANDMARKS[0].point,
+        photoUrl: null,
+        status: 'approved',
+        confirmations: 0,
+        createdAt: 1,
+        updatedAt: 1,
+        expiresAt: 9e15,
+      },
+      distanceMeters: 8,
+      penalty: 650,
+    },
+  ],
+  alternativesConsidered: 2,
+  fastestAlternative: {
+    distanceMeters: 1300,
+    durationSeconds: 320,
+    nearby: [],
+  },
 };
 
 describe('RoutePlanner accessibility', () => {

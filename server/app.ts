@@ -30,7 +30,7 @@ import {
   alertSubscriptionSchema,
 } from '../shared/validation.ts';
 import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
-import { rankRoutes, type RoutePlan } from '../shared/routing.ts';
+import { rankRoutes, findFastestAlternative, type RoutePlan } from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
 import type { Repository } from './lib/repository.ts';
 import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
@@ -535,6 +535,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       route: best.route,
       nearby: best.nearby,
       alternativesConsidered: routes.length,
+      fastestAlternative: findFastestAlternative(ranked),
     };
     return { plan };
   });

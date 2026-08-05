@@ -205,6 +205,24 @@ export function RoutePlanner() {
             </p>
           )}
 
+          {plan.fastestAlternative && (
+            <p className="hint route-comparison">
+              <FormattedMessage
+                id="route.comparison.tradeoff"
+                defaultMessage="This route adds {extraDistance} and {extraTime} versus the fastest option, which would pass near {count, plural, one {# reported hazard} other {# reported hazards}}."
+                values={{
+                  extraDistance: formatDistance(
+                    Math.max(0, plan.route.distanceMeters - plan.fastestAlternative.distanceMeters),
+                  ),
+                  extraTime: formatDuration(
+                    Math.max(0, plan.route.durationSeconds - plan.fastestAlternative.durationSeconds),
+                  ),
+                  count: plan.fastestAlternative.nearby.length,
+                }}
+              />
+            </p>
+          )}
+
           {hazardsOnRoute > 0 && (
             <>
               <h4>
@@ -218,11 +236,12 @@ export function RoutePlanner() {
                   <li key={n.hazard.id} className={`route-hazard severity-text-${n.hazard.severity}`}>
                     <FormattedMessage
                       id="route.hazards.item"
-                      defaultMessage="{category} · {severity} · {distance} m from your route"
+                      defaultMessage="{category} · {severity} · {distance} m from your route · adds {penalty} m to this route's score"
                       values={{
                         category: labels.category(n.hazard.category),
                         severity: labels.severity(n.hazard.severity),
                         distance: Math.round(n.distanceMeters),
+                        penalty: Math.round(n.penalty),
                       }}
                     />
                   </li>

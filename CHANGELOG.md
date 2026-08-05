@@ -14,6 +14,12 @@ PR history so the log isn't empty when the first release ships. Once `v0.1.0` is
 corresponding subset of these entries moves under that heading.
 
 ### Added
+- Route honesty panel (EXP-03): the route planner now surfaces the trade-off it already computes
+  but didn't show — `RoutePlan.fastestAlternative` carries the fastest candidate's distance/duration
+  and the hazards it would pass near whenever the hazard-aware pick differs from it (`null` when the
+  chosen route already is the fastest, i.e. nothing was traded away); the UI states the extra
+  distance/time and hazard count, and each nearby hazard's list item now shows its own contribution
+  to the route's score (previously computed but never rendered)
 - 311 hand-off delivery receipts + reconciliation/retry (R3): every forward attempt records a
   server-internal `HandoffDelivery` receipt (submitted/acked/retrying/failed) on the hazard;
   failed transports retry on an exponential schedule (5 min doubling, capped 6 h, 6-attempt

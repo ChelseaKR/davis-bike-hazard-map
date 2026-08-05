@@ -54,6 +54,25 @@ and say so. Effort tiers as in `02-large-scale-fixes.md`.
   PWA offline, pan the whole city, file a report — all functional.
 
 ### EXP-03 — Route honesty panel: what the safer route costs you
+**Status: DONE (2026-08-04).** `RoutePlan.fastestAlternative` (`shared/routing.ts`,
+via the new pure `findFastestAlternative()`) carries the fastest candidate's
+distance/duration + the hazards it would pass near, whenever it differs from
+the chosen route; `null` when the hazard-aware pick already is fastest (no
+trade-off to report). `server/app.ts`'s `/api/route` handler wires it in;
+`RoutePlanner.tsx` renders the comparison as a plain-language sentence
+("adds X and Y versus the fastest option, which would pass near N reported
+hazards") and each `route.hazards.item` list entry now also states its own
+`penalty` contribution to the route's score — both values were already
+computed by the scorer and simply weren't surfaced before. Covered by unit
+tests in `tests/unit/routing.test.ts` (`findFastestAlternative`), an
+end-to-end `tests/unit/server.test.ts` case proving the trade-off appears
+only when avoidance actually cost distance/time, and
+`tests/unit/RoutePlanner.test.tsx`/`RoutePlanner.a11y.test.tsx` for the
+rendered strip (shown/hidden) and its accessibility. i18n via the catalog
+(`route.comparison.tradeoff`, extended `route.hazards.item`); no native-ES
+translation required to ship (`es` stays structure-only per the existing
+parity gate).
+
 **Pitch:** show the chosen-vs-fastest delta and the per-hazard penalty breakdown the scorer already computes.
 
 - **Impact:** `rankRoutes` (`shared/routing.ts:194-202`) considers
