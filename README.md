@@ -144,3 +144,8 @@ remain in `/STANDARDS`. This declaration was verified on 2026-07-11.
 The live `protect-main` ruleset blocks force-pushes and deletion and requires the
 documented status checks. [`docs/ops/branch-ruleset.json`](./docs/ops/branch-ruleset.json)
 is the recovery/import mirror; verify live enforcement before changing it.
+
+## Support
+
+This is independent, unpaid work. If it has been useful to you, you can
+<a href='https://ko-fi.com/T6T6GMYTU' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
