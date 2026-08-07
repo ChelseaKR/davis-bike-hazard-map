@@ -7,6 +7,7 @@ import type {
   GeoPoint,
   HandoffInfo,
   HazardCategory,
+  HazardSource,
   HazardStatus,
   Severity,
 } from '../../shared/types.ts';
@@ -78,4 +79,13 @@ export interface StoredHazard {
   /** Delivery receipt for the hand-off (R3), or null/undefined. Server-internal. */
   handoffDelivery?: HandoffDelivery | null;
   moderation: ModerationAction[];
+  /**
+   * Provenance (issue #111): `'report'` for a real submission, `'seed'` for
+   * `scripts/seed.ts` demo data. REQUIRED on every hazard this codebase
+   * writes — `createHazard` always sets it. Records persisted before this
+   * field existed lack it on disk; every reader (JsonFileRepository.load,
+   * PostgresRepository.rowToHazard, toPublic) defaults a missing value to
+   * `'report'` rather than crashing or misreading it as seed data.
+   */
+  source: HazardSource;
 }

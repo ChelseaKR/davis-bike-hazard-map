@@ -64,6 +64,15 @@ corresponding subset of these entries moves under that heading.
   `CITATION.cff` added (#34)
 
 ### Fixed
+- Seeded demo hazards (`scripts/seed.ts`) were indistinguishable from real reports on the public
+  dashboard and in the `/api/hazards/export` open-data feed (issue #111): the README's "seeds are
+  clearly fictional" claim was true only for someone reading the source, not for a site visitor.
+  `StoredHazard`/`Hazard` now carry `source: 'report' | 'seed'`, set explicitly by `scripts/seed.ts`
+  and defaulted to `'report'` everywhere a pre-existing record (on disk or in Postgres) predates the
+  field. Seeded hazards now render a "Demo data" marker on every card/popup, the public dashboard
+  shows a standing banner whenever a seeded row is in the feed, and the GeoJSON export's
+  `properties.source` makes the ODbL-licensed data self-describing so it can't silently redistribute
+  unlabelled fiction. `migrations/0008_hazard_source.sql` backfills existing Postgres rows.
 - Offline synchronization no longer retries permanently failed reports every 30 seconds;
   user-triggered retries remain available, and reports orphaned in `syncing` after an interrupted
   submission return to the idempotent retry queue after ten minutes.

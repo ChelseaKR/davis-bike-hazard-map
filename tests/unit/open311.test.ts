@@ -18,6 +18,7 @@ function stored(): StoredHazard {
     updatedAt: 1_700_000_000_000,
     expiresAt: 1_800_000_000_000,
     moderation: [],
+    source: 'report',
   };
 }
 

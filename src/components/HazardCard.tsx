@@ -61,6 +61,11 @@ export function HazardCard({
         <span className={`severity-text severity-text-${hazard.severity}`}>
           {labels.severity(hazard.severity)}
         </span>
+        {hazard.source === 'seed' && (
+          <span className="demo-badge">
+            <FormattedMessage id="hazard.card.demoBadge" defaultMessage="Demo data" />
+          </span>
+        )}
       </div>
 
       {stage === 'resolved' && (
@@ -118,10 +123,17 @@ export function HazardCard({
       </dl>
 
       <p className="hazard-note">
-        <FormattedMessage
-          id="hazard.card.note"
-          defaultMessage="Community-reported — not verified by the city."
-        />
+        {hazard.source === 'seed' ? (
+          <FormattedMessage
+            id="hazard.card.demoNote"
+            defaultMessage="Demo data — a fictional example, not a real report."
+          />
+        ) : (
+          <FormattedMessage
+            id="hazard.card.note"
+            defaultMessage="Community-reported — not verified by the city."
+          />
+        )}
       </p>
 
       <div className="hazard-actions">

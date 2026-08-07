@@ -36,6 +36,19 @@ describe('ListView (accessibility & parity)', () => {
     await checkA11y(container);
   });
 
+  it('has no accessibility violations with a seeded (demo data) hazard in the mix (issue #111)', async () => {
+    const { container } = render(
+      <ListView
+        hazards={[hazard('a', { source: 'seed' }), hazard('b', { source: 'report' })]}
+        loading={false}
+        error={null}
+        onConfirm={vi.fn()}
+      />,
+    );
+    const { checkA11y } = await import('../axe.ts');
+    await checkA11y(container);
+  });
+
   it('frames an empty result as "no reports", not "safe"', () => {
     render(<ListView hazards={[]} loading={false} error={null} />);
     expect(screen.getByText(/no hazards match/i)).toBeInTheDocument();

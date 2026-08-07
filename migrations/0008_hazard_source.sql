@@ -1,0 +1,11 @@
+-- Provenance of a hazard record (issue #111): distinguishes a real report
+-- from illustrative demo data inserted by scripts/seed.ts. Without this, a
+-- seeded hazard on the public dashboard (VITE_PUBLIC_DASHBOARD=true) rendered
+-- identically to a real report, and the /api/hazards/export GeoJSON
+-- republished it as open data with no field a consumer could filter on.
+--
+-- DEFAULT 'report' backfills every existing row: every hazard written before
+-- this column existed came from a real submission (scripts/seed.ts is
+-- updated in the same change to pass 'seed' explicitly going forward), so
+-- defaulting to 'report' is correct, not just safe.
+ALTER TABLE hazards ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'report';

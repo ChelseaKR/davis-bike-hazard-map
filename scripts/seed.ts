@@ -3,7 +3,9 @@
  * already approved, so the map shows something on first run and e2e/dev have
  * data. Run with: `DATABASE_PATH=./data/hazards.json npm run seed`.
  *
- * These are illustrative seeds, not real reported hazards.
+ * These are illustrative seeds, not real reported hazards — and every row
+ * created here is stamped `source: 'seed'` (issue #111), so that fact is
+ * visible to anyone looking at the map/list/export, not just at this file.
  */
 import { serverConfig } from '../server/config.ts';
 import { createRepository } from '../server/lib/repository.ts';
@@ -86,7 +88,7 @@ async function main() {
       // Stagger captures over the past few days for realistic recency.
       capturedAt: now - (i + 1) * 12 * 60 * 60 * 1000,
     };
-    const stored = await createHazard(repo, photos, report, report.capturedAt, ttlOpts);
+    const stored = await createHazard(repo, photos, report, report.capturedAt, ttlOpts, 'seed');
     await moderateHazard(repo, photos, stored.id, 'approve', report.capturedAt, undefined, 'seed');
     created++;
   }

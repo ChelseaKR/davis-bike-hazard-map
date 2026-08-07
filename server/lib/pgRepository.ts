@@ -45,6 +45,7 @@ interface HazardRow {
   handoff: HandoffInfo | null;
   handoff_delivery: HandoffDelivery | null;
   moderation: ModerationAction[];
+  source: string;
 }
 
 function rowToHazard(r: HazardRow): StoredHazard {
@@ -67,6 +68,10 @@ function rowToHazard(r: HazardRow): StoredHazard {
     handoff: r.handoff ?? null,
     handoffDelivery: r.handoff_delivery ?? null,
     moderation: r.moderation ?? [],
+    // Defensive default (belt-and-suspenders with the NOT NULL DEFAULT
+    // 'report' column, migrations/0008_hazard_source.sql, issue #111): never
+    // let a missing/unexpected value read as seed data.
+    source: (r.source as StoredHazard['source']) ?? 'report',
   };
 }
 
@@ -74,7 +79,7 @@ const COLUMNS = `
   id, client_id, category, severity, description,
   precise_lat, precise_lng, public_lat, public_lng, photo_mime,
   status, confirmations, created_at, updated_at, expires_at,
-  resolved_at, handoff, handoff_delivery, moderation`;
+  resolved_at, handoff, handoff_delivery, moderation, source`;
 
 /** Positional parameter values for INSERT/UPDATE, in COLUMNS order (minus id). */
 function writeValues(h: StoredHazard): unknown[] {
@@ -98,6 +103,7 @@ function writeValues(h: StoredHazard): unknown[] {
     h.handoff ? JSON.stringify(h.handoff) : null,
     h.handoffDelivery ? JSON.stringify(h.handoffDelivery) : null,
     JSON.stringify(h.moderation),
+    h.source,
   ];
 }
 
@@ -116,7 +122,7 @@ export class PostgresRepository implements Repository {
   async insert(hazard: StoredHazard): Promise<StoredHazard> {
     await this.pool.query(
       `INSERT INTO hazards (${COLUMNS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       writeValues(hazard),
     );
     return hazard;
@@ -152,7 +158,8 @@ export class PostgresRepository implements Repository {
            precise_lat=$6, precise_lng=$7, public_lat=$8, public_lng=$9,
            photo_mime=$10, status=$11, confirmations=$12,
            created_at=$13, updated_at=$14, expires_at=$15,
-           resolved_at=$16, handoff=$17, handoff_delivery=$18, moderation=$19
+           resolved_at=$16, handoff=$17, handoff_delivery=$18, moderation=$19,
+           source=$20
          WHERE id=$1`,
         writeValues(merged),
       );

@@ -8,6 +8,7 @@ import { hashPassword } from '../../server/lib/password.ts';
 import { serverConfig } from '../../server/config.ts';
 import { signWebhookBody } from '../../server/lib/webhookAuth.ts';
 import { bytesToDataUrl, hasExif } from '../../shared/exif.ts';
+import type { ValidatedReport } from '../../shared/validation.ts';
 import sharp from 'sharp';
 
 const MOD_USER = 'mod';
@@ -941,6 +942,7 @@ describe('legacy inline-photo migration', () => {
       updatedAt: 1,
       expiresAt: 9_999_999_999_999,
       moderation: [],
+      source: 'report',
     });
 
     const migrated = await migrateInlinePhotos(r, photos);
@@ -977,6 +979,47 @@ describe('data lifecycle & privacy', () => {
     expect(gj.license).toBe('ODbL-1.0');
     expect(gj.features).toHaveLength(1);
     expect(gj.features[0].geometry.type).toBe('Point');
+  });
+
+  it('self-describes seeded vs. real hazards in the export via `source` (issue #111)', async () => {
+    // A real report, submitted and approved the normal way.
+    const res = await post('/api/reports', baseReport);
+    const realId = res.json().hazard.id;
+    await post(`/api/moderation/${realId}`, { decision: 'approve' }, auth());
+
+    // A scripts/seed.ts-style hazard, created the same way seed.ts does:
+    // createHazard(..., 'seed') + moderateHazard(..., 'seed'), inserted
+    // straight into the same repo the running app reads from.
+    const { createHazard, moderateHazard } = await import('../../server/lib/hazards.ts');
+    const { MemoryPhotoStore } = await import('../../server/lib/photoStore.ts');
+    const seedPhotos = new MemoryPhotoStore();
+    const seedReport: ValidatedReport = {
+      category: 'pothole',
+      severity: 'high',
+      description: 'Fictional example pothole for demo purposes',
+      location: baseReport.location,
+      photo: null,
+      clientId: '99999999-9999-4999-8999-999999999999',
+      capturedAt: baseReport.capturedAt,
+    };
+    const seeded = await createHazard(
+      repo,
+      seedPhotos,
+      seedReport,
+      clock,
+      { ttlDays: testConfig.ttlDays },
+      'seed',
+    );
+    await moderateHazard(repo, seedPhotos, seeded.id, 'approve', clock, undefined, 'seed');
+
+    const exp = await app.inject({ method: 'GET', url: '/api/hazards/export' });
+    const gj = exp.json();
+    expect(gj.features).toHaveLength(2);
+
+    const realFeature = gj.features.find((f: { properties: { id: string } }) => f.properties.id === realId);
+    const seedFeature = gj.features.find((f: { properties: { id: string } }) => f.properties.id === seeded.id);
+    expect(realFeature.properties.source).toBe('report');
+    expect(seedFeature.properties.source).toBe('seed');
   });
 
   it('never leaks the reporter clientId in any unauthenticated response (FIX-01)', async () => {
