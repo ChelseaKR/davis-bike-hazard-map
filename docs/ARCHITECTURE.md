@@ -37,6 +37,10 @@ server/    Fastify API (intake, moderation, lifecycle, 311 hand-off) that also
   for an opt-in 311 hand-off) and the EXIF-stripped `photo` bytes. Never exposed.
 - **`Hazard`** (public projection): carries the grid-snapped `publicLocation` and
   a `photoUrl` that resolves only for **approved** hazards.
+- **`source: 'report' | 'seed'`** on both shapes (issue #111) distinguishes a real
+  submission from `scripts/seed.ts` demo data, so illustrative seeds can't render
+  identically to a real report on the public dashboard or in the
+  `/api/hazards/export` GeoJSON.
 - Lifecycle: `pending → approved → (confirmed*) → resolved | expired`, or
   `pending → rejected`. Expiry is lazy-swept before every public read.
 

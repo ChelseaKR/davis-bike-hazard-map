@@ -876,6 +876,30 @@ textarea {
   color: var(--danger);
 }
 
+/* --- Demo-data marker (issue #111): scripts/seed.ts hazards, distinguished
+   from real reports on every surface that renders a hazard. Dashed border
+   deliberately reads as "not a normal status badge". --- */
+.demo-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  border: 1px dashed var(--sev-low-ink);
+  background: #fdf6e3;
+  color: var(--sev-low-ink);
+  white-space: nowrap;
+}
+.map-popup-demo {
+  margin: 0.2rem 0;
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--sev-low-ink);
+}
+
 /* Recently-resolved cards read as "done", not "active". */
 .hazard-stage-resolved {
   opacity: 0.78;
@@ -908,6 +932,18 @@ textarea {
   border-bottom: 1px solid var(--line);
   color: var(--ink-soft);
   font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Shown whenever any scripts/seed.ts hazard is in the public feed (issue #111). */
+.demo-data-banner {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: #fdf6e3;
+  border-bottom: 1px solid var(--line);
+  color: var(--sev-low-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
   text-align: center;
 }
 

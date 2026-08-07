@@ -502,6 +502,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         confirmations: h.confirmations,
         createdAt: h.createdAt,
         updatedAt: h.updatedAt,
+        // Self-describing open data (issue #111): a consumer of this ODbL
+        // export can filter out illustrative demo rows without cross-
+        // referencing scripts/seed.ts.
+        source: h.source ?? 'report',
       },
     }));
     return reply

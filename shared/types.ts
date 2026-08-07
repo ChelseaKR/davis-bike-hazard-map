@@ -24,6 +24,18 @@ export const SEVERITIES = ['low', 'moderate', 'high'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
 /**
+ * Provenance of a hazard record (issue #111): `'report'` is a real submission
+ * from a cyclist; `'seed'` is illustrative demo data inserted by
+ * `scripts/seed.ts` so a fresh/public deployment isn't an empty map. Every
+ * surface that renders a hazard (card, list, map popup) and the open-data
+ * export must be able to tell the two apart — a hazard map's whole claim is
+ * that it reflects real conditions, so seeded fiction must never be
+ * indistinguishable from a real report.
+ */
+export const HAZARD_SOURCES = ['report', 'seed'] as const;
+export type HazardSource = (typeof HAZARD_SOURCES)[number];
+
+/**
  * Moderation/lifecycle state.
  *
  * Nothing is shown publicly until it is `approved` (moderation gate). A hazard
@@ -178,6 +190,13 @@ export interface Hazard {
   resolvedAt?: number | null;
   /** 311 hand-off + its synced-back status, or null if never forwarded. */
   handoff?: HandoffInfo | null;
+  /**
+   * `'seed'` marks illustrative demo data from `scripts/seed.ts`; absent (or
+   * `'report'`) means a real submitted report. Optional here only so existing
+   * test fixtures/callers that predate this field keep compiling — the server
+   * always populates it on every live response.
+   */
+  source?: HazardSource;
 }
 
 /**

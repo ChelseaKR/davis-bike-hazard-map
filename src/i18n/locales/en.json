@@ -1,4 +1,5 @@
 {
+  "app.demoDataBanner": "This map currently includes illustrative demo hazards (marked “Demo data”) alongside any real reports. Demo hazards are fictional examples, not conditions on the ground.",
   "app.publicBanner": "Public read-only view — reporting and moderation are disabled. See the <link>city's 311</link> to file an official request.",
   "app.tagline": "See it, flag it, route around it.",
   "app.title": "Davis Bike Hazard Map",
@@ -49,6 +50,8 @@
   "handoffFailures.resend": "Re-send to 311",
   "hazard.card.confirm": "I saw this too",
   "hazard.card.confirmationsLabel": "Confirmations",
+  "hazard.card.demoBadge": "Demo data",
+  "hazard.card.demoNote": "Demo data — a fictional example, not a real report.",
   "hazard.card.handoff": "City 311: {status}",
   "hazard.card.locationLabel": "Approx. location",
   "hazard.card.note": "Community-reported — not verified by the city.",

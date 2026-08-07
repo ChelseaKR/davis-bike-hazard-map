@@ -87,6 +87,27 @@ describe('HazardCard', () => {
     expect(screen.queryByRole('button', { name: /i saw this too/i })).toBeNull();
   });
 
+  it('marks a seeded (demo) hazard with a "Demo data" badge and note (issue #111)', () => {
+    renderCard({ hazard: hazard({ source: 'seed' }), now: NOW });
+    expect(screen.getByText('Demo data')).toBeInTheDocument();
+    expect(
+      screen.getByText(/demo data.*fictional example, not a real report/i),
+    ).toBeInTheDocument();
+    // The seeded framing must replace, not sit alongside, the real-report claim.
+    expect(screen.queryByText(/community-reported/i)).toBeNull();
+  });
+
+  it('does NOT mark a real report as demo data', () => {
+    renderCard({ hazard: hazard({ source: 'report' }), now: NOW });
+    expect(screen.queryByText('Demo data')).toBeNull();
+    expect(screen.getByText(/not verified by the city/i)).toBeInTheDocument();
+  });
+
+  it('does NOT mark a hazard with an unset source (legacy data) as demo data', () => {
+    renderCard({ hazard: hazard(), now: NOW });
+    expect(screen.queryByText('Demo data')).toBeNull();
+  });
+
   it('surfaces the synced-back 311 hand-off status', () => {
     renderCard({
       hazard: hazard({

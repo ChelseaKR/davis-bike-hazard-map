@@ -1,4 +1,5 @@
 {
+  "app.demoDataBanner": "",
   "app.publicBanner": "",
   "app.tagline": "",
   "app.title": "",
@@ -49,6 +50,8 @@
   "handoffFailures.resend": "",
   "hazard.card.confirm": "",
   "hazard.card.confirmationsLabel": "",
+  "hazard.card.demoBadge": "",
+  "hazard.card.demoNote": "",
   "hazard.card.handoff": "",
   "hazard.card.locationLabel": "",
   "hazard.card.note": "",

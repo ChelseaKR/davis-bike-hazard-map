@@ -188,6 +188,85 @@ describe('listPublicFeed', () => {
   });
 });
 
+describe('hazard source / demo-data labelling (issue #111)', () => {
+  it('defaults a real submission to source "report"', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await createHazard(repo, photos, report(), NOW, ttl);
+    expect(h.source).toBe('report');
+  });
+
+  it('marks a scripts/seed.ts-style hazard as source "seed" when asked', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const h = await createHazard(repo, photos, report(), NOW, ttl, 'seed');
+    expect(h.source).toBe('seed');
+  });
+
+  it('carries source through moderation and into the public feed, distinguishing seed from real', async () => {
+    const repo = new MemoryRepository();
+    const photos = new MemoryPhotoStore();
+    const real = await createHazard(
+      repo,
+      photos,
+      report({ clientId: '22222222-2222-4222-8222-222222222222' }),
+      NOW,
+      ttl,
+    );
+    const seeded = await createHazard(
+      repo,
+      photos,
+      report({ clientId: '33333333-3333-4333-8333-333333333333' }),
+      NOW,
+      ttl,
+      'seed',
+    );
+    await moderateHazard(repo, photos, real.id, 'approve', NOW);
+    await moderateHazard(repo, photos, seeded.id, 'approve', NOW, undefined, 'seed');
+
+    const feed = await listPublicFeed(repo, NOW, 0);
+    const realPublic = feed.find((h) => h.id === real.id)!;
+    const seededPublic = feed.find((h) => h.id === seeded.id)!;
+    expect(realPublic.source).toBe('report');
+    expect(seededPublic.source).toBe('seed');
+  });
+
+  it('defaults legacy on-disk records (written before "source" existed) to "report" on load', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    // Hand-write a record in the OLD shape: no `source` key at all, exactly
+    // what every hazard persisted before this migration looks like on disk.
+    const legacy = {
+      id: 'legacy-1',
+      clientId: 'legacy-client-1',
+      category: 'pothole',
+      severity: 'high',
+      description: null,
+      preciseLocation: { lat: 38.5449, lng: -121.7405 },
+      publicLocation: { lat: 38.5449, lng: -121.7405 },
+      photo: null,
+      status: 'approved',
+      confirmations: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+      expiresAt: NOW + DAY,
+      moderation: [],
+      // no `source` field — simulates pre-issue-#111 data.
+    };
+    writeFileSync(path, JSON.stringify([legacy]), 'utf8');
+
+    const repo = new JsonFileRepository(path);
+    try {
+      const loaded = await repo.findById('legacy-1');
+      // Must default to 'report', never crash, and never silently read as 'seed'.
+      expect(loaded?.source).toBe('report');
+    } finally {
+      await repo.close();
+    }
+  });
+});
+
 describe('createRepository', () => {
   it('returns an in-memory store with no options', async () => {
     const repo = await createRepository({});

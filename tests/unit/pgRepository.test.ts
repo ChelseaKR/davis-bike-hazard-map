@@ -37,6 +37,7 @@ function hazard(over: Partial<StoredHazard> = {}): StoredHazard {
     handoff: null,
     handoffDelivery: null,
     moderation: [],
+    source: 'report',
     ...over,
   };
 }
@@ -85,6 +86,26 @@ suite('PostgresRepository', () => {
     // Untouched fields survive the merge.
     expect(updated?.description).toBe('Deep pothole');
     expect(await repo.update('missing', { confirmations: 1 })).toBeUndefined();
+  });
+
+  it('round-trips `source` (issue #111) and defaults it via the column DEFAULT for pre-migration rows', async () => {
+    await repo.insert(hazard({ id: 'seed-h', clientId: 'seed-c', source: 'seed' }));
+    await repo.insert(hazard({ id: 'report-h', clientId: 'report-c', source: 'report' }));
+    expect((await repo.findById('seed-h'))?.source).toBe('seed');
+    expect((await repo.findById('report-h'))?.source).toBe('report');
+
+    // Simulate a row written before migrations/0008_hazard_source.sql existed:
+    // insert bypassing the app's `source` column entirely and rely on the
+    // column's own `DEFAULT 'report'` (exactly what the migration gives every
+    // pre-existing hazard on a live deploy).
+    await repo['pool'].query(
+      `INSERT INTO hazards (id, client_id, category, severity, description,
+         precise_lat, precise_lng, public_lat, public_lng, status,
+         confirmations, created_at, updated_at, expires_at, moderation)
+       VALUES ('legacy-h','legacy-c','pothole','high',NULL,38.54,-121.74,38.54,-121.74,
+         'approved',0,1000,1000,9999999999999,'[]'::jsonb)`,
+    );
+    expect((await repo.findById('legacy-h'))?.source).toBe('report');
   });
 
   it('listActive filters by status, expiry, and bounding box, newest first', async () => {

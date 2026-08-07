@@ -6,7 +6,7 @@
  *   - server-side EXIF strip as a backstop to the client strip;
  *   - location fuzzing so the public feed never carries a precise coordinate.
  */
-import type { Hazard, Severity } from '../../shared/types.ts';
+import type { Hazard, HazardSource, Severity } from '../../shared/types.ts';
 import { canTransition, transition, type TransitionCause } from '../../shared/statusMachine.ts';
 import type { ValidatedReport } from '../../shared/validation.ts';
 import { fuzzCoordinate } from '../../shared/geo.ts';
@@ -35,6 +35,10 @@ function expiryFor(severity: Severity, createdAt: number, ttlDays: Record<Severi
 /**
  * Create a hazard from a validated submission. Idempotent on `clientId`, so a
  * retried offline sync never produces duplicates.
+ *
+ * `source` defaults to `'report'` (every real submission through the API) —
+ * only `scripts/seed.ts` passes `'seed'` explicitly, so illustrative demo
+ * hazards are marked at the one place they're created (issue #111).
  */
 export async function createHazard(
   repo: Repository,
@@ -42,6 +46,7 @@ export async function createHazard(
   report: ValidatedReport,
   now: number,
   opts: CreateOptions,
+  source: HazardSource = 'report',
 ): Promise<StoredHazard> {
   const existing = await repo.findByClientId(report.clientId);
   if (existing) return existing;
@@ -71,6 +76,7 @@ export async function createHazard(
     updatedAt: now,
     expiresAt: expiryFor(report.severity, now, opts.ttlDays),
     moderation: [],
+    source,
   };
   return repo.insert(stored);
 }
@@ -210,6 +216,11 @@ export async function sweepPhotoRetention(
  * Deliberately omits `clientId`: it is the reporter's deletion capability, so
  * it must never appear in any unauthenticated response (see FIX-01). It stays
  * on `StoredHazard` and on the reporter's own device.
+ *
+ * `source` always defaults to `'report'` here too (belt-and-suspenders with
+ * the repository loaders, issue #111): a record that somehow reaches this
+ * function without a `source` on it must read as a real report, never as
+ * seed data, and never crash.
  */
 export function toPublic(h: StoredHazard): Hazard {
   return {
@@ -227,6 +238,7 @@ export function toPublic(h: StoredHazard): Hazard {
     expiresAt: h.expiresAt,
     resolvedAt: h.resolvedAt ?? null,
     handoff: h.handoff ?? null,
+    source: h.source ?? 'report',
   };
 }
 

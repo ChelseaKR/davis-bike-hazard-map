@@ -59,6 +59,13 @@ export default function App() {
 
   const { hazards, all, loading, error, lastUpdatedAt, refresh } = useHazards(filters);
 
+  // Public-dashboard-only (issue #111): scripts/seed.ts data is now marked
+  // `source: 'seed'`, but a visitor to the read-only public map has no other
+  // way to learn that some of what they're looking at is illustrative demo
+  // data rather than real reports — so surface it as a standing banner
+  // whenever any seeded hazard is present in the feed.
+  const hasSeedData = config.publicDashboard && all.some((h) => h.source === 'seed');
+
   // Resolve a /#/hazard/:id deep link once the feed arrives: focus the hazard
   // on the map, or drop the pending id if the hazard is gone (expired/removed).
   useEffect(() => {
@@ -145,6 +152,15 @@ export default function App() {
                 </a>
               ),
             }}
+          />
+        </p>
+      )}
+
+      {hasSeedData && (
+        <p className="demo-data-banner" role="note">
+          <FormattedMessage
+            id="app.demoDataBanner"
+            defaultMessage="This map currently includes illustrative demo hazards (marked “Demo data”) alongside any real reports. Demo hazards are fictional examples, not conditions on the ground."
           />
         </p>
       )}

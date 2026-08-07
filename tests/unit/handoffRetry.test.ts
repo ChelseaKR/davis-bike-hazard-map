@@ -29,6 +29,7 @@ function hazard(over: Partial<StoredHazard> = {}): StoredHazard {
     updatedAt: NOW,
     expiresAt: NOW + 30 * 24 * 60 * 60 * 1000,
     moderation: [],
+    source: 'report',
     ...over,
   };
 }

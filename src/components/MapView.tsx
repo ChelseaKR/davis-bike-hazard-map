@@ -26,7 +26,13 @@ interface MapViewProps {
   focusHazard?: Hazard | null;
 }
 
-function buildPopup(hazard: Hazard, intl: IntlShape, onConfirm?: (id: string) => void): HTMLElement {
+/**
+ * Build the popup DOM for a hazard marker. Exported (not just used
+ * internally) so a unit test can assert the 'Demo data' marker appears for
+ * seeded hazards and NOT for real ones (issue #111) without a full Leaflet/
+ * jsdom map render.
+ */
+export function buildPopup(hazard: Hazard, intl: IntlShape, onConfirm?: (id: string) => void): HTMLElement {
   const el = document.createElement('div');
   el.className = 'map-popup';
 
@@ -39,6 +45,16 @@ function buildPopup(hazard: Hazard, intl: IntlShape, onConfirm?: (id: string) =>
   badge.className = `map-popup-stage lifecycle-${stage}`;
   badge.textContent = lifecycleLabel(intl, stage);
   el.appendChild(badge);
+
+  if (hazard.source === 'seed') {
+    const demo = document.createElement('p');
+    demo.className = 'map-popup-demo';
+    demo.textContent = intl.formatMessage({
+      id: 'hazard.card.demoBadge',
+      defaultMessage: 'Demo data',
+    });
+    el.appendChild(demo);
+  }
 
   if (hazard.handoff) {
     const handoff = document.createElement('p');
@@ -92,10 +108,16 @@ function buildPopup(hazard: Hazard, intl: IntlShape, onConfirm?: (id: string) =>
 
   const note = document.createElement('p');
   note.className = 'map-popup-note';
-  note.textContent = intl.formatMessage({
-    id: 'hazard.card.note',
-    defaultMessage: 'Community-reported — not verified by the city.',
-  });
+  note.textContent =
+    hazard.source === 'seed'
+      ? intl.formatMessage({
+          id: 'hazard.card.demoNote',
+          defaultMessage: 'Demo data — a fictional example, not a real report.',
+        })
+      : intl.formatMessage({
+          id: 'hazard.card.note',
+          defaultMessage: 'Community-reported — not verified by the city.',
+        });
   el.appendChild(note);
 
   if (onConfirm && stage !== 'resolved' && stage !== 'expired') {

@@ -357,8 +357,15 @@ export class JsonFileRepository extends MemoryRepository {
     if (!existsSync(this.path)) return;
     try {
       const raw = readFileSync(this.path, 'utf8');
-      const list = JSON.parse(raw) as StoredHazard[];
-      for (const h of list) this.store.set(h.id, h);
+      // Rows written before `source` existed (issue #111) have no such key on
+      // disk, so it's read as optional here even though `StoredHazard` itself
+      // requires it — defaulted to 'report' (a real submission) below rather
+      // than left undefined, which would fail the "never accidentally read as
+      // seed" invariant. An explicit stored value (including 'seed') always wins.
+      const list = JSON.parse(raw) as (Omit<StoredHazard, 'source'> & {
+        source?: StoredHazard['source'];
+      })[];
+      for (const h of list) this.store.set(h.id, { ...h, source: h.source ?? 'report' });
     } catch {
       // A malformed file should not crash startup; start empty and overwrite
       // on the next successful write.

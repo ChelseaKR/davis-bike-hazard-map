@@ -17,6 +17,7 @@ import {
   HAZARD_CATEGORIES,
   SEVERITIES,
   HAZARD_STATUSES,
+  HAZARD_SOURCES,
   HANDOFF_STAGES,
   type Hazard,
 } from '../../shared/types.ts';
@@ -92,6 +93,9 @@ export const hazardSchema = registry.register(
     expiresAt: z.number().int(),
     resolvedAt: z.number().int().nullable().optional(),
     handoff: handoffInfo.nullable().optional(),
+    // 'seed' marks illustrative demo data (scripts/seed.ts, issue #111); the
+    // server always sends this, but it's optional here to match `Hazard`.
+    source: z.enum(HAZARD_SOURCES).optional(),
   }) satisfies z.ZodType<Hazard>,
 );
 
@@ -157,6 +161,10 @@ export const hazardExportSchema = z.object({
         confirmations: z.number().int(),
         createdAt: z.number().int(),
         updatedAt: z.number().int(),
+        // Always present on this export (issue #111) — 'seed' rows must be
+        // self-describing so this ODbL-licensed data can never redistribute
+        // unlabelled fiction.
+        source: z.enum(HAZARD_SOURCES),
       }),
     }),
   ),
