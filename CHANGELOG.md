@@ -13,6 +13,18 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   portfolio authorizer. Verification, GHCR publication, signing, and
   attestations use the exact selected commit; a separate checkout-free job
   rechecks the tag object before creating the GitHub Release.
+- Standards pin moved from portfolio-standards `v1.0.1` to `v2.0.0` in both
+  `.standards-version` and `standards.yml`, and the README conformance
+  declaration was re-assessed against the tightened v2.0.0 gate set rather than
+  re-dated. The table now carries all fifteen standards (AI Development
+  Measurement was missing), sits at heading level two so DOC-11's checker can
+  find it, and names the gaps the tighter gates exposed instead of claiming
+  them: CQ-48's per-module critical-coverage floor, DOC-21's capability ledger,
+  the untrue `make verify` parity claim, the empty Spanish catalog values, and
+  the ODbL/MIT export contradiction. `scripts/check-portfolio-conformance.py`
+  now delegates to the shared single-repository entry point, which restores the
+  applicability-manifest scoping and publication-state lookup the hand-rolled
+  v1.0.1 wrapper bypassed.
 
 Pre-release Beta on `main`. No tags have been cut yet; entries below are seeded from the June 2026
 PR history so the log isn't empty when the first release ships. Once `v0.1.0` is tagged, the

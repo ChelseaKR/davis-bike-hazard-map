@@ -33,3 +33,6 @@ npm-debug.log*
 
 # runtime-fetched portfolio-standards (never commit)
 .standards/
+
+# byte-cache left behind by scripts/check-portfolio-conformance.py
+__pycache__/
