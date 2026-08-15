@@ -18,6 +18,7 @@ import type { StoredHazard } from '../../server/lib/types.ts';
 const URL = process.env.TEST_DATABASE_URL;
 const suite = URL ? describe : describe.skip;
 
+
 function hazard(over: Partial<StoredHazard> = {}): StoredHazard {
   return {
     id: 'h1',

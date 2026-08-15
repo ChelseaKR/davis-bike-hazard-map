@@ -142,6 +142,9 @@ const config: UserConfig = {
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
+    // Prints a notice when TEST_DATABASE_URL is unset, so "green locally"
+    // cannot be mistaken for "green" while the Postgres adapter is skipped.
+    globalSetup: ['./tests/postgres-notice.ts'],
     include: ['tests/unit/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
       provider: 'v8',

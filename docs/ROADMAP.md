@@ -48,7 +48,7 @@ An offline-capable PWA for crowdsourced cycling-hazard reporting and mapping in 
 | axe violations (incl. list view) | 0 | axe (Vitest component + Playwright full-page, WCAG 2.2 AA) + Lighthouse a11y ≥ 0.9 | merge-blocking |
 | Map first interactive (mobile) | within budget | Lighthouse mobile (warn-level; not yet merge-blocking — tracked) | advisory |
 | Moderation SLA (flagged content) | documented + enforced in flow | moderation test | review-gated |
-| Coverage | lines ≥ 89, functions ≥ 86, statements ≥ 89, branches ≥ 84 (enforced; vite.config.ts:162) | Vitest coverage-v8 | merge-blocking |
+| Coverage | lines ≥ 89, functions ≥ 86, statements ≥ 89, branches ≥ 84 (enforced in CI by `npm run test:coverage`; thresholds in `vite.config.ts`. `make verify` runs `test:unit` and does not apply them — see the README's split gate tables) | Vitest coverage-v8 | merge-blocking |
 | PII in open-data export | none | export schema test | merge-blocking |
 
 **Testing.** Unit (taxonomy, lifecycle, routing weights), integration (report→store→map, 311 adapter), e2e (offline capture + sync via Playwright), a11y (axe + keyboard + SR + list parity), and privacy (EXIF strip, export schema).

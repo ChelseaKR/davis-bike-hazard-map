@@ -53,16 +53,32 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 
 ## Testing & gates
 
-| Gate | Command | Enforces |
-|------|---------|----------|
-| Lint + typecheck | `make verify` | TS strict, ESLint clean |
-| Unit + integration | `make verify` | 200+ tests (incl. Postgres adapter when `TEST_DATABASE_URL` is set); coverage ≥ 80% lines/fns, ≥ 75% branches on core logic |
-| EXIF / privacy | (in unit + server tests) | photos are EXIF-clean; precise location never public |
-| Accessibility | `make a11y` + `make e2e` | zero axe violations (component + full-page incl. contrast) |
-| Offline → sync | `make e2e` | file offline → syncs → moderated → on the map |
-| Security | CI | `npm audit` (high/critical), gitleaks secret scan |
+`make verify` is the merge gate you can run on a laptop. It is **not** everything CI runs, and the two tables below are split so that difference is visible rather than implied.
 
-CI ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) runs the same gates on every push/PR. A **pre-commit hook** (husky + lint-staged) runs ESLint on staged files locally. The HTTP API is described by an **OpenAPI spec** at `GET /api/openapi.json`, and every endpoint is also reachable under the versioned alias `/api/v1/*`.
+**What `make verify` enforces**
+
+| Gate | Enforces |
+|------|----------|
+| Lint + typecheck | TS strict, ESLint clean, stylelint logical-property rules |
+| i18n gates | G1 utf-8, G2 extract + no hardcoded strings, G3 BCP-47, G5/G6 catalog parity, G12 CLDR pin |
+| Unit + integration | the unit and component suite (`vitest run`) |
+| EXIF / privacy | photos are EXIF-clean; precise location never public |
+| Build | the production PWA bundle builds |
+
+**What only CI enforces** ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml))
+
+| Gate | Enforces |
+|------|----------|
+| Coverage floor | lines ≥ 89%, functions ≥ 86%, statements ≥ 89%, branches ≥ 84% ([`vite.config.ts`](./vite.config.ts)). `make verify` runs `test:unit`, not `test:coverage`, so the floor is a CI gate only |
+| Postgres adapter | `tests/unit/pgRepository.test.ts` runs against a `postgres:16-alpine` service. Locally it **skips** unless you export `TEST_DATABASE_URL` — the suite prints a notice when it does, so a green local run cannot be mistaken for one that exercised the production store |
+| Accessibility | zero axe violations, component (`make a11y`) and full-page incl. contrast (`make e2e`) |
+| Offline → sync | file offline → syncs → moderated → on the map (`make e2e`) |
+| Lighthouse | accessibility assertions blocking; performance and byte-weight advisory |
+| Security | `npm audit` on production dependencies (high/critical), gitleaks secret scan |
+
+To close the gap locally: `docker compose up -d db`, then `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dbhm npm run test:coverage`.
+
+A **pre-commit hook** (husky + lint-staged) runs ESLint on staged files locally. The HTTP API is described by an **OpenAPI spec** at `GET /api/openapi.json`, and every endpoint is also reachable under the versioned alias `/api/v1/*`.
 
 ## Operations (2 a.m. runbook)
 
