@@ -71,7 +71,9 @@ GitHub workflow files checked:
 
 ## Docs And Evidence Checked
 
-This pass checked the current hand-authored documentation and metadata surfaces, 68 test files, and 8 workflow files on `main`. The inventory excludes vendored provider licenses, dependency folders, generated cache files, and large generated artifact history.
+This pass checked the current hand-authored documentation and metadata surfaces, the test files, and the workflow files on `main`. The inventory excludes vendored provider licenses, dependency folders, generated cache files, and large generated artifact history.
+
+Counts are deliberately not repeated here. They live in one place, [`DOCUMENTATION-AUDIT.md`](./DOCUMENTATION-AUDIT.md), where `scripts/doc_audit.py` regenerates them from the tree and `make verify` fails on drift. The figures this section used to carry ("68 test files, 8 workflow files") were typed on 2026-07-11 and were wrong by 9 and 2 respectively by 2026-08-15.
 
 Large content groups were counted rather than listed file by file:
 

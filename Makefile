@@ -2,7 +2,7 @@
 # These four targets are the contract referenced by the README and CI.
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev build preview start seed verify lint typecheck test a11y e2e e2e-install audit clean
+.PHONY: help install dev build preview start seed verify lint typecheck test a11y e2e e2e-install audit docs-audit docs-audit-check clean
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -50,6 +50,12 @@ e2e: ## End-to-end tests (Playwright).
 audit: ## Run the responsible-tech gates (privacy + accessibility tests).
 	npm run a11y
 	npx vitest run exif server validation
+
+docs-audit: ## Regenerate the generated block of docs/DOCUMENTATION-AUDIT.md from the tree.
+	npm run docs:audit
+
+docs-audit-check: ## Fail if the committed documentation audit has drifted. Part of verify.
+	npm run docs:audit:check
 
 clean: ## Remove build + test artifacts.
 	rm -rf dist dist-server coverage playwright-report test-results dev-dist

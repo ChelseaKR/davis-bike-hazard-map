@@ -37,6 +37,20 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   `TEST_DATABASE_URL` named a database (`dbhm_test`) that exists only in CI, and
   `docs/RESPONSIBLE-TECH-AUDITS.md` no longer claims `make verify` regenerates the
   audit artifacts — `make audit` writes nothing and is in no workflow.
+- `docs/DOCUMENTATION-AUDIT.md` is generated from the tree instead of typed. Its
+  counts had rotted into false `pass` verdicts — "68 test files; 8 workflow files"
+  against 77 and 10, and a "full hand-authored doc inventory" missing `CLAUDE.md`,
+  the ten ADRs, `docs/RESEARCH-ROADMAP.md`, `docs/USER-RESEARCH.md`, and more.
+  `scripts/doc_audit.py` (ported from nearmiss, which closed the same defect)
+  regenerates the block between the file's markers; `make docs-audit-check` runs in
+  `make verify` and in CI, so drift now fails the build. Counts are reported as
+  `info`, never `pass`: a count is not a verdict. Fixes the same class of stale
+  figure in `docs/PROJECT-SCOPE.md` and `docs/I18N.md`, and corrects the changelog
+  entry that still described the i18n catalog and Renovate config as unlanded.
+- README no longer contradicts itself on the Web Vitals beacon: OBS-26 was listed as
+  an open gap forty lines above the conformance row that credited it as delivered.
+  It shipped — `src/lib/vitals.ts` and `POST /api/metrics/web-vitals` — so the gap
+  sentence is gone and the Observability paragraph is re-dated.
 
 Pre-release Beta on `main`. No tags have been cut yet; entries below are seeded from the June 2026
 PR history so the log isn't empty when the first release ships. Once `v0.1.0` is tagged, the
@@ -77,9 +91,11 @@ corresponding subset of these entries moves under that heading.
   dashboard (#31)
 - GitHub Actions pinned to full commit SHAs across all workflows (#30)
 - Pinned portfolio-standards fetched at CI build time (#27)
-- react-intl i18n catalog retrofit (188 messages) + 8 merge-gated i18n checks, pseudolocale e2e
-  (branch `i18n-catalog-retrofit`, not yet on `main` — see README Standards Conformance table)
-- Renovate config with GitHub Actions digest pinning (branch `i18n-catalog-retrofit`)
+- react-intl i18n catalog retrofit + merge-gated i18n checks and pseudolocale e2e. `src/i18n/locales/`
+  and the `i18n:gates` chain are on `main`; the current catalog size is generated into
+  [`docs/DOCUMENTATION-AUDIT.md`](docs/DOCUMENTATION-AUDIT.md) rather than typed here. Every Spanish
+  value is still an empty string (#112)
+- Renovate config with GitHub Actions digest pinning (`renovate.json`, on `main`)
 
 ### Changed
 - Runtime image now runs `apt-get upgrade` during the build so newly-published Debian
