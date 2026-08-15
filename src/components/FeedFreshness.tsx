@@ -3,9 +3,9 @@
  * cyclist can tell whether the data is fresh and pull it again on demand. The
  * status text is a polite live region so screen-reader users hear updates.
  */
-import { useState } from 'react';
 import { FormattedMessage } from 'react-intl';
 import { timeAgo } from '../lib/format.ts';
+import { useNow } from '../lib/useNow.ts';
 
 interface FeedFreshnessProps {
   /** Epoch ms of the last successful load, or null before the first. */
@@ -16,8 +16,7 @@ interface FeedFreshnessProps {
 }
 
 export function FeedFreshness({ updatedAt, loading, onRefresh, now }: FeedFreshnessProps) {
-  const [renderedAt] = useState(Date.now);
-  const effectiveNow = now ?? renderedAt;
+  const effectiveNow = useNow(now);
   return (
     <div className="feed-freshness">
       <span className="hint" role="status" aria-live="polite">

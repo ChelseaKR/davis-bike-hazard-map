@@ -18,11 +18,13 @@ import {
   type HandoffFailure,
 } from '../lib/api.ts';
 import { timeAgo } from '../lib/format.ts';
+import { useNow } from '../lib/useNow.ts';
 import { useLabels } from '../i18n/labels.ts';
 
 export function HandoffFailures({ token }: { token: string }) {
   const intl = useIntl();
   const labels = useLabels();
+  const now = useNow();
   const [failures, setFailures] = useState<HandoffFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -105,7 +107,7 @@ export function HandoffFailures({ token }: { token: string }) {
                     defaultMessage="{attempts, plural, one {# attempt} other {# attempts}}, last tried {when}"
                     values={{
                       attempts: delivery.attempts,
-                      when: timeAgo(delivery.lastAttemptAt),
+                      when: timeAgo(delivery.lastAttemptAt, now),
                     }}
                   />
                 </span>

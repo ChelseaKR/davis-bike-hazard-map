@@ -32,7 +32,18 @@ interface MapViewProps {
  * seeded hazards and NOT for real ones (issue #111) without a full Leaflet/
  * jsdom map render.
  */
-export function buildPopup(hazard: Hazard, intl: IntlShape, onConfirm?: (id: string) => void): HTMLElement {
+export function buildPopup(
+  hazard: Hazard,
+  intl: IntlShape,
+  onConfirm?: (id: string) => void,
+  // Leaflet calls the `bindPopup` content function every time the popup opens
+  // (see makeMarker), so the default reads the clock at open time and the line
+  // is correct each time a rider taps a marker. It does not tick while the
+  // popup is open, and deliberately so: the alternative is rebuilding the
+  // clustered marker layer once a minute. Named rather than implicit so the
+  // clock is visible and pinnable, per src/lib/useNow.ts.
+  now: number = Date.now(),
+): HTMLElement {
   const el = document.createElement('div');
   el.className = 'map-popup';
 
@@ -102,7 +113,7 @@ export function buildPopup(hazard: Hazard, intl: IntlShape, onConfirm?: (id: str
       defaultMessage:
         'Reported {when} · {count, plural, one {# confirmation} other {# confirmations}}',
     },
-    { when: timeAgo(hazard.updatedAt), count: hazard.confirmations },
+    { when: timeAgo(hazard.updatedAt, now), count: hazard.confirmations },
   );
   el.appendChild(meta);
 

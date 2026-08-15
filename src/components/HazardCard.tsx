@@ -5,10 +5,10 @@
  * alone — accessibility), and every card carries the "reported, not verified"
  * framing the transparency audit requires.
  */
-import { useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { lifecycleStage, type Hazard } from '../../shared/types.ts';
 import { timeAgo, formatLatLng } from '../lib/format.ts';
+import { useNow } from '../lib/useNow.ts';
 import { useLabels } from '../i18n/labels.ts';
 import { HazardPhoto } from './HazardPhoto.tsx';
 
@@ -31,8 +31,7 @@ export function HazardCard({
   onFocusOnMap,
   now,
 }: HazardCardProps) {
-  const [renderedAt] = useState(Date.now);
-  const effectiveNow = now ?? renderedAt;
+  const effectiveNow = useNow(now);
   const intl = useIntl();
   const labels = useLabels();
   const stage = lifecycleStage(hazard);

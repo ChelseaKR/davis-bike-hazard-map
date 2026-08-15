@@ -9,6 +9,22 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- Relative times now tick. `timeAgo` reads `Date.now()` when it is called and React
+  does not re-render on the passage of time, so every "Updated N min ago" in the app
+  was frozen: `FeedFreshness` and `HazardCard` sampled `useState(Date.now)` once at
+  mount (movable only by a test-only `now` prop, issue #114), while `MapView`,
+  `ModerationPanel`, `MyReports`, and `HandoffFailures` passed no clock at all — two
+  conventions for the same thing and no rule saying which to use. On a map left open
+  on a handlebar mount, which is the expected way to use this, "2 min ago" stayed
+  "2 min ago" for the session. `src/lib/useNow.ts` is now the single rule: it seeds
+  from the real clock, ticks once a minute (`timeAgo`'s own finest granularity, so no
+  re-render happens for a string that cannot have changed), and cleans up on unmount.
+  All seven call sites thread a clock, the existing `now` props are retained as test
+  overrides that install no timer, and a unit test fails the build on any bare
+  `timeAgo(x)` in `src/` so the next component cannot reintroduce it. `MapView`'s
+  popup keeps reading the clock at open time — Leaflet rebuilds popup content on
+  every open — but now says so with a named parameter instead of an implicit default.
+
 Pre-release Beta on `main`. No tags have been cut yet; entries below are seeded from the June 2026
 PR history so the log isn't empty when the first release ships. Once `v0.1.0` is tagged, the
 corresponding subset of these entries moves under that heading.

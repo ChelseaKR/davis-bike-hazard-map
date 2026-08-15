@@ -19,6 +19,7 @@ import {
   type Session,
 } from '../lib/api.ts';
 import { timeAgo } from '../lib/format.ts';
+import { useNow } from '../lib/useNow.ts';
 import { useLabels } from '../i18n/labels.ts';
 import { HazardPhoto } from './HazardPhoto.tsx';
 import { HandoffFailures } from './HandoffFailures.tsx';
@@ -89,6 +90,7 @@ function loadStoredSession(): Session | null {
 export function ModerationPanel() {
   const intl = useIntl();
   const labels = useLabels();
+  const now = useNow();
   const [session, setSession] = useState<Session | null>(loadStoredSession);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -319,7 +321,7 @@ export function ModerationPanel() {
                   <FormattedMessage
                     id="moderation.filed"
                     defaultMessage="filed {when}"
-                    values={{ when: timeAgo(h.createdAt) }}
+                    values={{ when: timeAgo(h.createdAt, now) }}
                   />
                 </span>
               </div>
