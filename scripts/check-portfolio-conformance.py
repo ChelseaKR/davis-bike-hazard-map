@@ -1,9 +1,25 @@
 #!/usr/bin/env python3
 """Run the pinned portfolio conformance audit against this repository.
 
-portfolio-standards v1.0.1 exposes ``audit_repo`` but predates its later
-single-repository CLI. This compatibility entry point keeps the consumer pinned
-to a released standards tag while making every failed control blocking.
+The pinned standards release is recorded in ``.standards-version`` and fetched
+by ``.github/workflows/standards.yml`` at the same ref. From v2.0.0 the shared
+checker ships its own single-repository entry point, so this wrapper no longer
+reimplements one: it loads the pinned ``conformance_check.py`` and delegates to
+``run_single_repo``.
+
+Delegating matters for more than tidiness. The previous wrapper called
+``audit_repo(repo)`` directly, which skipped the applicability-manifest lookup
+that scopes declared-N/A standards out of the score and resolves this repo's
+``publication:`` state — so the RTF-16 publication gate defaulted to
+``restricted`` on a repo the manifest has cleared for public. It also predated
+v2.0.0's correct Node/Python language detection and had to delete two Python-
+only controls by hand; v2.0.0 never adds them to a Node repo in the first
+place.
+
+``--strict`` is always on: every failing control blocks. Hosted checks
+(branch-protection policy, repository visibility) are off by default because
+this job runs with no authenticated ``gh``, where they would only ever skip;
+pass ``--network`` once a token is available to actually exercise them.
 """
 
 from __future__ import annotations
@@ -15,9 +31,14 @@ from pathlib import Path
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--standards-dir", type=Path, default=Path(".standards"))
     parser.add_argument("--repo", type=Path, default=Path("."))
+    parser.add_argument(
+        "--network",
+        action="store_true",
+        help="also run the hosted branch-policy and publication-state checks",
+    )
     args = parser.parse_args()
 
     checker = args.standards_dir / "automation" / "conformance_check.py"
@@ -28,28 +49,15 @@ def main() -> int:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    result = module.audit_repo(args.repo.resolve())
-    repo = args.repo.resolve()
-    # v1.0.1 treats every repository with tests/ as Python, even when it is a
-    # Node-only project. Remove only those inapplicable Python controls; later
-    # standards releases perform this language detection correctly themselves.
-    if (repo / "package.json").exists() and not (
-        (repo / "pyproject.toml").exists() or (repo / "requirements.txt").exists()
-    ):
-        for control in ("coverage_threshold_set", "single_pyproject"):
-            result["checks"].pop(control, None)
-        result["total"] = len(result["checks"])
-        result["passed"] = sum(
-            1 for outcome in result["checks"].values() if outcome["pass"]
+    return int(
+        module.run_single_repo(
+            args.repo.resolve(),
+            0.0,
+            True,
+            False,
+            check_network=args.network,
         )
-        result["score"] = f"{result['passed']}/{result['total']}"
-
-    print(f"Portfolio standards conformance: {result['score']}")
-    for name, outcome in result["checks"].items():
-        state = "PASS" if outcome["pass"] else "FAIL"
-        print(f"{state:4} {name}: {outcome['detail']}")
-
-    return 0 if result["passed"] == result["total"] else 1
+    )
 
 
 if __name__ == "__main__":
