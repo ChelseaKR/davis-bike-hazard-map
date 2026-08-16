@@ -64,6 +64,7 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 | Unit + integration | the unit and component suite (`vitest run`) |
 | EXIF / privacy | photos are EXIF-clean; precise location never public |
 | Build | the production PWA bundle builds |
+| Documentation drift | [`docs/DOCUMENTATION-AUDIT.md`](./docs/DOCUMENTATION-AUDIT.md) still matches the tree it describes (`scripts/doc_audit.py --check`) |
 
 **What only CI enforces** ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml))
 
@@ -110,10 +111,10 @@ Per `/STANDARDS/OBSERVABILITY-STANDARD.md`, tier is declared explicitly rather t
   [`docs/ops/prometheus-alerts.yml`](./docs/ops/prometheus-alerts.yml) but isn't a declared SLO
   document).
 - **PWA (client): Tier B.** In place: Lighthouse CI lab budgets (accessibility blocking; perf/byte-
-  weight advisory), client error reporting (`src/lib/telemetry.ts`). **Gap tracked:** no RUM/
-  web-vitals field beacon (OBS-26).
+  weight advisory), client error reporting (`src/lib/telemetry.ts`), and a cookieless RUM
+  web-vitals field beacon (`src/lib/vitals.ts` → `POST /api/metrics/web-vitals`) — OBS-26 closed.
 
-Dated: 2026-07-05. See the Standards Conformance table below (§Standards) for the OBSERVABILITY row.
+Dated: 2026-08-15. See the Standards Conformance table below (§Standards) for the OBSERVABILITY row.
 
 ## Guardrails
 

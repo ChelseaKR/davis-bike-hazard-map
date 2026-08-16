@@ -59,6 +59,8 @@ jobs:
         run: npm run i18n:gates
       - name: Typecheck
         run: npm run typecheck
+      - name: Documentation audit drift (docs/DOCUMENTATION-AUDIT.md is generated, not typed)
+        run: npm run docs:audit:check
       - name: Unit + integration tests (coverage-gated)
         # TEST_DATABASE_URL turns on the Postgres adapter integration tests.
         env:
