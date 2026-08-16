@@ -24,6 +24,19 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   `timeAgo(x)` in `src/` so the next component cannot reintroduce it. `MapView`'s
   popup keeps reading the clock at open time — Leaflet rebuilds popup content on
   every open — but now says so with a named parameter instead of an implicit default.
+- The `make verify` parity claims are now true or gone. The README's gate table said
+  `make verify` enforces "200+ tests (incl. Postgres adapter when `TEST_DATABASE_URL`
+  is set); coverage >= 80% lines/fns, >= 75% branches". It ran neither: `verify` calls
+  `test:unit` (bare `vitest run`), not `test:coverage`, and sets no
+  `TEST_DATABASE_URL`, so the coverage floor and the only store adapter that talks to
+  a real database were both CI-only. The enforced floor is also 89/86/89/84, not
+  80/75. The table is split into what `make verify` enforces and what only CI does,
+  and a Vitest `globalSetup` now prints a notice whenever the Postgres suite skips, so
+  a green local run cannot be mistaken for a complete one. `docs/ROADMAP.md`'s stale
+  `vite.config.ts:162` line reference is corrected, `docker-compose.yml`'s example
+  `TEST_DATABASE_URL` named a database (`dbhm_test`) that exists only in CI, and
+  `docs/RESPONSIBLE-TECH-AUDITS.md` no longer claims `make verify` regenerates the
+  audit artifacts — `make audit` writes nothing and is in no workflow.
 
 Pre-release Beta on `main`. No tags have been cut yet; entries below are seeded from the June 2026
 PR history so the log isn't empty when the first release ships. Once `v0.1.0` is tagged, the

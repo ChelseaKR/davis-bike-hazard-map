@@ -2,7 +2,12 @@
 #
 #   docker compose up -d db            # just the database for `npm run dev`, or
 #   docker compose up --build          # full prod-like stack on :8787
-#   TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dbhm_test npm test
+#   TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dbhm npm test
+#
+# The database name is `dbhm` (POSTGRES_DB below). This line used to say
+# `dbhm_test`, which is the name CI's own service container uses — copied from
+# ci.yml, it does not exist in this stack, and the Postgres suite silently
+# skipped for anyone who pasted it.
 services:
   db:
     image: postgres:16-alpine
