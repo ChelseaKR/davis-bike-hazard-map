@@ -20,6 +20,7 @@ import {
 } from '../lib/api.ts';
 import { syncOnce, isOnline } from '../lib/sync.ts';
 import { timeAgo } from '../lib/format.ts';
+import { useNow } from '../lib/useNow.ts';
 import { useLabels } from '../i18n/labels.ts';
 import { reportTrail, type TrailStepState } from '../lib/reportTrail.ts';
 
@@ -34,6 +35,7 @@ const TRAIL_STATE_SR: Record<TrailStepState, string> = {
 export function MyReports({ onChange }: { onChange?: () => void }) {
   const intl = useIntl();
   const labels = useLabels();
+  const now = useNow();
   const [reports, setReports] = useState<QueuedReport[]>([]);
   const [statuses, setStatuses] = useState<Record<string, Hazard | null>>({});
   const [busy, setBusy] = useState(false);
@@ -134,7 +136,7 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
                   defaultMessage="{severity} severity · filed {when}"
                   values={{
                     severity: labels.severity(r.submission.severity),
-                    when: timeAgo(r.createdAt),
+                    when: timeAgo(r.createdAt, now),
                   }}
                 />
               </p>
