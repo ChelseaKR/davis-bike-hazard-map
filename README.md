@@ -136,7 +136,7 @@ Agent-facing build instructions live in [`CLAUDE.md`](./CLAUDE.md).
 ## Standards
 Inherits [`/STANDARDS`](../STANDARDS/). Responsible-tech findings are committed in [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and [`docs/audits/`](./docs/audits/).
 
-### Standards Conformance
+## Standards Conformance
 Per `/STANDARDS/README.md` §"How a repo declares conformance," every standard is
 explicitly scoped. Project-specific evidence lives here; shared requirements
 remain in `/STANDARDS`. This declaration was verified on 2026-07-11.
@@ -155,6 +155,7 @@ remain in `/STANDARDS`. This declaration was verified on 2026-07-11.
 | AI Evaluation | N/A — no prompt, model, retrieval, or agent surface exists in this application | Applicability registry sets `llm: false` |
 | Documentation | Applies | Root operator/contributor/security/release docs, docs index/scope/audit, and sequential ADR log |
 | Quality & Metrics | Applies | Coverage thresholds, accessibility/e2e/security gates, project metrics ledger in [`docs/ROADMAP.md`](./docs/ROADMAP.md), and the attached PR Definition of Done |
+| AI Development Measurement | Applies | No tool-usage counter is collected and none gates a merge; the merge-blocking gates and the metrics ledger in [`docs/ROADMAP.md`](./docs/ROADMAP.md) are what a change clears regardless of how it was authored |
 | Incident Response | Applies | Severity/label conventions and secret-response procedure inherit from `/STANDARDS`; project security reporting and operational recovery are documented in [`SECURITY.md`](./SECURITY.md) and [`BETA.md`](./BETA.md) |
 | Data Governance | Applies | L2 precise-location/photo handling, minimization, EXIF stripping, retention/GC, coarsened public exports, PostgreSQL backup expectations, and privacy artifacts |
 
