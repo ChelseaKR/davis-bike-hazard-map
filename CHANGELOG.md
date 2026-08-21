@@ -51,6 +51,10 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   an open gap forty lines above the conformance row that credited it as delivered.
   It shipped — `src/lib/vitals.ts` and `POST /api/metrics/web-vitals` — so the gap
   sentence is gone and the Observability paragraph is re-dated.
+- Release authorization now runs from reviewed `main` through the immutable
+  portfolio authorizer. Verification, GHCR publication, signing, and
+  attestations use the exact selected commit; a separate checkout-free job
+  rechecks the tag object before creating the GitHub Release.
 
 Pre-release Beta on `main`. No tags have been cut yet; entries below are seeded from the June 2026
 PR history so the log isn't empty when the first release ships. Once `v0.1.0` is tagged, the
