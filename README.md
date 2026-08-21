@@ -2,7 +2,7 @@
 
 **A crowdsourced cycling-hazard map for Davis** — report a pothole, broken glass, blocked lane, or dangerous intersection from your phone in seconds (photo + location + category + severity), see a live map of what others have flagged, route around the bad spots, and optionally hand the report off to the city's 311/GOGov system. Built as an offline-capable PWA for use on a bike, in a town that calls itself the bike capital of the US.
 
-**Status:** `Beta` · **Track:** Civic (shippable product) · **License:** MIT · **Data:** open
+**Status:** `Beta` · **Track:** Civic (shippable product) · **License:** MIT · **Data:** open (MIT — see [Open data](#open-data))
 
 > **Running the private beta?** See [`BETA.md`](./BETA.md) for one-time provisioning, the preview link, and what to watch.
 
@@ -132,6 +132,25 @@ Non-negotiables, each enforced as a tested gate rather than a promise:
 - **Open mapping.** GIS stays free and open via OpenStreetMap.
 
 Agent-facing build instructions live in [`CLAUDE.md`](./CLAUDE.md).
+
+## Open data
+
+`GET /api/hazards/export` publishes approved, fuzzed hazard reports as a GeoJSON
+`FeatureCollection` with a `license` field. That field says `MIT` — the same
+license this repo's code carries ([`LICENSE`](./LICENSE), [`CITATION.cff`](./CITATION.cff))
+— because that is the only license this repo actually grants for anything, data
+included. Earlier the export claimed `ODbL-1.0` in four places (the payload, the
+OpenAPI schema, the privacy page, and the privacy audit notes) while no document
+anywhere in the repo granted ODbL terms or named the attribution string ODbL
+requires — a real mismatch between what was claimed and what was true, fixed in
+issue #121.
+
+This is the *current, honest* answer, not a considered decision that MIT is the
+right license for a crowdsourced geographic database specifically. `ODbL`, `CC BY
+4.0`, and `CC0` are all defensible alternatives — see "Open-data licensing for the
+export" under [`docs/ROADMAP.md`](./docs/ROADMAP.md) §10 (Legal & compliance),
+still an open item. If that decision is made later, it changes one string in the
+export's `license` field and the schema/docs that mirror it, not this baseline.
 
 ## Standards
 Inherits [`/STANDARDS`](../STANDARDS/). Responsible-tech findings are committed in [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and [`docs/audits/`](./docs/audits/).

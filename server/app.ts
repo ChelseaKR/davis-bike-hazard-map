@@ -502,16 +502,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         confirmations: h.confirmations,
         createdAt: h.createdAt,
         updatedAt: h.updatedAt,
-        // Self-describing open data (issue #111): a consumer of this ODbL
-        // export can filter out illustrative demo rows without cross-
-        // referencing scripts/seed.ts.
+        // Self-describing open data (issue #111): a consumer of this export
+        // can filter out illustrative demo rows without cross-referencing
+        // scripts/seed.ts.
         source: h.source ?? 'report',
       },
     }));
+    // The license here must match what the repo actually grants (LICENSE,
+    // CITATION.cff, README) — not a database-specific license (e.g. ODbL)
+    // that nothing in this repo actually documents or grants (issue #121).
+    // MIT is a code license applied here to the data as well; whether a more
+    // considered data-specific license (ODbL/CC-BY/CC0) fits better is an
+    // open question tracked in docs/ROADMAP.md §10 "Open-data licensing",
+    // not one this fix resolves.
     return reply
       .header('content-type', 'application/geo+json')
       .header('access-control-allow-origin', '*') // open data — readable anywhere
-      .send(JSON.stringify({ type: 'FeatureCollection', license: 'ODbL-1.0', features }));
+      .send(JSON.stringify({ type: 'FeatureCollection', license: 'MIT', features }));
   });
 
   // --- Hazard-aware bike route planner ---

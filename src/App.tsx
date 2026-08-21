@@ -257,7 +257,7 @@ export default function App() {
           </a>{' '}
           ·{' '}
           <a href="/api/hazards/export">
-            <FormattedMessage id="footer.openData" defaultMessage="Open data (GeoJSON)" />
+            <FormattedMessage id="footer.openData" defaultMessage="Open data (GeoJSON, MIT)" />
           </a>
         </p>
       </footer>

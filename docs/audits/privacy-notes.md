@@ -85,7 +85,9 @@ street scene; a reporter whose home-adjacent report could reveal where they live
 
 The public API is the open-data surface. `GET /api/hazards` returns the public
 projection only (no precise location, no raw photo bytes, no contact info), and
-`GET /api/hazards/export` serves the same data as **GeoJSON (ODbL)** for reuse.
+`GET /api/hazards/export` serves the same data as **GeoJSON (MIT)** for reuse —
+matching the license the repo actually grants (issue #121; no document here
+grants ODbL, which four sites falsely claimed until this fix).
 Enforced by `toPublic()` and asserted by the server tests ("fuzzes the public
 location", "gates the photo behind approval", "exports GeoJSON", "coarsens …").
 A user-facing **privacy page** (`/privacy.html`) and **accessibility statement**
