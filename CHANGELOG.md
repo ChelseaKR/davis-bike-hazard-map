@@ -9,6 +9,16 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- Cleared all 6 open Dependabot alerts (2 high, 4 moderate — js-yaml quadratic
+  CPU consumption, nanoid infinite-loop generator, and five undici advisories
+  including response desync and cross-user cache disclosure). `npm audit fix`
+  resolved all three affected packages within their existing dev-only semver
+  ranges (js-yaml 4.3.0→4.3.1, nanoid 3.3.16→3.3.18, undici 7.28.0→7.29.0, the
+  last pulled in transitively by `jsdom`) — a `package-lock.json`-only change,
+  no `package.json` bump. Production dependency audit was already clean
+  (these were all dev/test-scope); `npm audit` now reports 0 vulnerabilities
+  in either scope.
+
 - The 311 hand-off has a real entry point now. `forwardHandoff` had exactly
   three callers, all reachable only from a hand-off that already existed — so
   nothing in the app could start a *first* hand-off, and the receipt/retry/
