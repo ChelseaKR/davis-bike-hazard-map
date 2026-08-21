@@ -39,7 +39,7 @@
   "filters.type": "Type",
   "footer.accessibility": "Accessibility",
   "footer.attribution": "Map data © <link>OpenStreetMap</link> contributors. Community-reported hazards are not verified by the city.",
-  "footer.openData": "Open data (GeoJSON)",
+  "footer.openData": "Open data (GeoJSON, MIT)",
   "footer.privacy": "Privacy",
   "handoffFailures.aria": "Failed 311 hand-offs",
   "handoffFailures.error.load": "Could not load failed 311 hand-offs.",

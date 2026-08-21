@@ -9,6 +9,17 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- The open-data export now claims the license this repo actually grants. Four places
+  told a consumer of `GET /api/hazards/export` that the data was `ODbL-1.0` — the
+  response payload, the OpenAPI schema, `public/privacy.html`, and
+  `docs/audits/privacy-notes.md` — while no document in the repo granted ODbL terms
+  or named the attribution string ODbL requires, and the repo's own `LICENSE`,
+  `CITATION.cff`, and README all say MIT (issue #121). All four now say MIT, matching
+  what is actually granted; a new "Open data" section in the README says so plainly
+  and is explicit that this is the current, honest answer rather than a considered
+  decision that MIT is the right license for a geographic database specifically —
+  `docs/ROADMAP.md`'s "Open-data licensing for the export" item is unchanged and
+  still open.
 - Relative times now tick. `timeAgo` reads `Date.now()` when it is called and React
   does not re-render on the passage of time, so every "Updated N min ago" in the app
   was frozen: `FeedFreshness` and `HazardCard` sampled `useState(Date.now)` once at

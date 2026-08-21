@@ -976,7 +976,9 @@ describe('data lifecycle & privacy', () => {
     expect(exp.headers['content-type']).toContain('geo+json');
     const gj = exp.json();
     expect(gj.type).toBe('FeatureCollection');
-    expect(gj.license).toBe('ODbL-1.0');
+    // MIT, not ODbL-1.0: the license claimed here must match what the repo
+    // actually grants (LICENSE, CITATION.cff, README) — see issue #121.
+    expect(gj.license).toBe('MIT');
     expect(gj.features).toHaveLength(1);
     expect(gj.features[0].geometry.type).toBe('Point');
   });

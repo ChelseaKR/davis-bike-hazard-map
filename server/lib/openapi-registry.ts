@@ -142,10 +142,15 @@ export const sessionResponseSchema = z.object({
   expiresAt: z.number().int(),
 });
 
-/** GET /hazards/export — open-data GeoJSON FeatureCollection (ODbL). */
+/**
+ * GET /hazards/export — open-data GeoJSON FeatureCollection.
+ * license is MIT, matching what the repo actually grants (LICENSE,
+ * CITATION.cff, README) — not a database-specific license (e.g. ODbL) that
+ * no document here grants (issue #121).
+ */
 export const hazardExportSchema = z.object({
   type: z.literal('FeatureCollection'),
-  license: z.literal('ODbL-1.0'),
+  license: z.literal('MIT'),
   features: z.array(
     z.object({
       type: z.literal('Feature'),
@@ -162,8 +167,8 @@ export const hazardExportSchema = z.object({
         createdAt: z.number().int(),
         updatedAt: z.number().int(),
         // Always present on this export (issue #111) — 'seed' rows must be
-        // self-describing so this ODbL-licensed data can never redistribute
-        // unlabelled fiction.
+        // self-describing so this data can never redistribute unlabelled
+        // fiction.
         source: z.enum(HAZARD_SOURCES),
       }),
     }),
@@ -261,7 +266,7 @@ registry.registerPath({
   method: 'get',
   path: '/hazards/export',
   tags: ['public'],
-  summary: 'Open-data export (GeoJSON, ODbL)',
+  summary: 'Open-data export (GeoJSON, MIT)',
   responses: {
     200: { description: 'FeatureCollection', content: { 'application/geo+json': { schema: hazardExportSchema } } },
   },
