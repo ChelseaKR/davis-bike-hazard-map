@@ -9,6 +9,19 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- Locale negotiation no longer claims Spanish it can't deliver. `es.json` is
+  structure-only (0 of 214 values translated — REVIEW-GATE R3, no unreviewed MT
+  in this civic app), but `negotiate()` matched any *catalogued* locale, so an
+  `es`-preferring browser got `document.documentElement.lang = 'es'` while every
+  string on the page still rendered in English via the `defaultMessage` fallback
+  (issue #112). `src/i18n/config.ts` now separates *catalogued* (`SUPPORTED_LANGUAGES`
+  — has a JSON file, exercises the gates) from *activated* (`ACTIVATED_LANGUAGES`
+  — `negotiate()` will actually select it for a visitor), today `['en']` only.
+  `tests/unit/i18nConfig.test.ts` is the regression guard, including a test that
+  intentionally expires the day `es` is genuinely promoted. Promoting `es` is a
+  two-part, done-together change: add it to `ACTIVATED_LANGUAGES` and flip
+  `ES_REQUIRE_COMPLETE` in `scripts/i18n/check-parity.mjs` — not before real,
+  reviewed translations exist.
 - The open-data export now claims the license this repo actually grants. Four places
   told a consumer of `GET /api/hazards/export` that the data was `ODbL-1.0` — the
   response payload, the OpenAPI schema, `public/privacy.html`, and
