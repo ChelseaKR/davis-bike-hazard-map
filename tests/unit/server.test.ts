@@ -1280,12 +1280,26 @@ describe('311 status sync-back', () => {
   });
 
   it('409s syncing a hazard that was never handed off', async () => {
+    // Approving now hands off automatically (issue #122), so "never handed
+    // off" is a still-pending report, not merely an unapproved-for-311 one.
     const r = await post('/api/reports', baseReport);
     const id = r.json().hazard.id;
-    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
     const res = await post(`/api/moderation/${id}/handoff/sync`, {}, auth());
     expect(res.statusCode).toBe(409);
   });
+
+  it('approving a hazard hands it off automatically (issue #113/#122: forwarding is a consequence of approval, not a separate, unreachable act)', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    expect((await repo.findById(id))!.handoff).toBeUndefined();
+    const res = await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+    expect(res.json().hazard.handoff?.stage).toBe('submitted');
+    const stored = (await repo.findById(id))!;
+    expect(stored.handoff?.stage).toBe('submitted');
+    expect(stored.handoff?.reference).toBe(id);
+    expect(stored.handoffDelivery?.dryRun).toBe(true);
+  });
+
 
   it('the moderator poll applies a fetched status (mocked 311)', async () => {
     const fetchMock: typeof fetch = (async () =>
@@ -1344,17 +1358,20 @@ describe('311 status sync-back', () => {
     const rep = await a.inject({ method: 'POST', url: '/api/reports', payload: baseReport, headers: { 'content-type': 'application/json' } });
     const id = rep.json().hazard.id;
     const h = { 'content-type': 'application/json', authorization: `Bearer ${tok}` };
-    await a.inject({ method: 'POST', url: `/api/moderation/${id}`, payload: { decision: 'approve' }, headers: h });
 
     const body = { reference: id, status: 'Closed - Resolved' };
 
-    // A perfectly-signed call BEFORE the hazard is handed off → 409 (a secret
-    // holder must not be able to resolve a hazard that was never handed off).
+    // A perfectly-signed call BEFORE the hazard is even approved (so
+    // definitely never handed off) → 409 (a secret holder must not be able
+    // to resolve a hazard that was never handed off).
     const preHandoff = await a.inject({ method: 'POST', url: '/api/handoff/webhook', ...signedWebhook(body, clock) });
     expect(preHandoff.statusCode).toBe(409);
     expect(preHandoff.json().error).toBe('not_handed_off');
 
-    await a.inject({ method: 'POST', url: `/api/moderation/${id}/handoff`, payload: {}, headers: h });
+    // Approving now hands off automatically (issue #113/#122), dry-run here
+    // since no gogovWebhookUrl/apiKey is configured — enough to satisfy the
+    // webhook guard below, which only checks that `handoff` is set.
+    await a.inject({ method: 'POST', url: `/api/moderation/${id}`, payload: { decision: 'approve' }, headers: h });
 
     // The OLD scheme (raw static secret in the signature header) → 401.
     const staticSecret = await a.inject({

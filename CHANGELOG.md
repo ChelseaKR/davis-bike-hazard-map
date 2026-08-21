@@ -9,6 +9,24 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- The 311 hand-off has a real entry point now. `forwardHandoff` had exactly
+  three callers, all reachable only from a hand-off that already existed — so
+  nothing in the app could start a *first* hand-off, and the receipt/retry/
+  dead-letter machinery it feeds (R3, shipped 2026-07-17) could never fill
+  (issue #113, #122). Approving a report now forwards it automatically
+  (dry-run unless a real provider is configured), the same best-effort,
+  never-blocks-moderation shape already used for saved-route push alerts on
+  the same code path. The standalone `POST .../handoff` route is now the
+  manual re-send used from the dead-letter list. README corrected in three
+  places that no longer matched the app: the "moderator hits *Sync*" line (no
+  such button exists — the route is real, reachable only via the API today),
+  and the saved-route push-alerts bullet (server-side pieces are all real and
+  tested; `registerHazardAlert`/`removeHazardAlert` have zero call sites, and
+  neither the VAPID key pair nor a "Watch this route/area" UI control exists
+  — left as honestly unreachable rather than wired in this change, since
+  doing it for real needs a new client-facing config endpoint for the VAPID
+  public key plus a whole alerts-management UI, not two buttons).
+
 - Locale negotiation no longer claims Spanish it can't deliver. `es.json` is
   structure-only (0 of 214 values translated — REVIEW-GATE R3, no unreviewed MT
   in this civic app), but `negotiate()` matched any *catalogued* locale, so an

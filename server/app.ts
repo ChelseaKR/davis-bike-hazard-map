@@ -33,6 +33,7 @@ import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
 import { rankRoutes, findFastestAlternative, type RoutePlan } from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
 import type { Repository } from './lib/repository.ts';
+import type { StoredHazard } from './lib/types.ts';
 import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
 import {
   MemoryModeratorStore,
@@ -604,11 +605,50 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return listModerationQueue(repo, { limit, cursor });
   });
 
+  // --- Optional 311 hand-off (EXP-06) ---
+  // Provider is config-only: GOGov (bespoke, default) or Open311 GeoReport v2
+  // (vendor-neutral standard) — see `lib/handoff.ts`. Defined here, ahead of
+  // the approve route below, because forwarding now happens as a consequence
+  // of approval as well as via the standalone route further down.
+  const handoffProviderConfig = {
+    handoffProvider: config.handoffProvider,
+    gogov: { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey, statusUrl: config.gogovStatusUrl },
+    open311: {
+      endpoint: config.open311Endpoint,
+      apiKey: config.open311ApiKey,
+      jurisdictionId: config.open311JurisdictionId,
+      serviceCode: config.open311ServiceCode,
+    },
+  };
+
+  // Forward one hazard and record the outcome. Shared by the approve path
+  // and the standalone re-send route so both go through identical
+  // receipt/metrics handling. Never throws — `forwardHandoff` itself never
+  // throws, and a `repo.update` failure here is the same class of storage
+  // fault every other route in this file lets propagate to the 500 handler.
+  async function performHandoff(hazard: StoredHazard) {
+    const result = await forwardHandoff(hazard, handoffProviderConfig, fetchImpl);
+    // Record the hand-off on the hazard so its status can be synced back and
+    // surfaced on the map/list. Even a dry-run records the intent. The
+    // delivery receipt (R3) records the attempt outcome: a failed transport
+    // schedules an automatic retry (sweepHandoffRetries) instead of vanishing.
+    const receipt = receiptFor(result, hazard.handoffDelivery, now());
+    if (receipt.state === 'retrying' || receipt.state === 'failed') {
+      metrics.handoffFailures.inc();
+    }
+    const updated = await repo.update(hazard.id, {
+      handoff: initialHandoff(hazard, now(), result.provider, result.reference),
+      handoffDelivery: receipt,
+      updatedAt: now(),
+    });
+    return { result, hazard: updated };
+  }
+
   app.post('/api/moderation/:id', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const { decision, reason } = moderationDecisionSchema.parse(req.body);
     const by = (req as AuthedRequest).moderatorUsername;
-    const updated = await moderateHazard(repo, photos, id, decision, now(), reason, by);
+    let updated = await moderateHazard(repo, photos, id, decision, now(), reason, by);
     if (!updated) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
@@ -638,6 +678,22 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         }
       } catch (err) {
         app.log.warn(err, 'alert notify failed');
+      }
+      // 311 hand-off (EXP-06) is a consequence of approval, not a separate
+      // moderator act (issue #122: the retry/dead-letter machinery below has
+      // exactly one entry point — POST .../handoff — and nothing in the app
+      // could reach it, so the queue it drains could never fill). Same
+      // best-effort shape as the push-alert block above: never let a
+      // transport failure block moderation. `!updated.handoff` guards
+      // against ever double-submitting the same hazard to the city, the
+      // concern the retry sweep's own overlap guard exists for.
+      if (!updated.handoff) {
+        try {
+          const { hazard: afterHandoff } = await performHandoff(updated);
+          if (afterHandoff) updated = afterHandoff;
+        } catch (err) {
+          app.log.warn(err, 'handoff forward failed');
+        }
       }
     }
     return { hazard: toPublic(updated) };
@@ -675,40 +731,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return reply.status(204).send();
   });
 
-  // --- Optional 311 hand-off (moderator-triggered, least privilege) ---
-  // Provider is config-only (EXP-06): GOGov (bespoke, default) or Open311
-  // GeoReport v2 (vendor-neutral standard) — see `lib/handoff.ts`.
-  const handoffProviderConfig = {
-    handoffProvider: config.handoffProvider,
-    gogov: { webhookUrl: config.gogovWebhookUrl, apiKey: config.gogovApiKey, statusUrl: config.gogovStatusUrl },
-    open311: {
-      endpoint: config.open311Endpoint,
-      apiKey: config.open311ApiKey,
-      jurisdictionId: config.open311JurisdictionId,
-      serviceCode: config.open311ServiceCode,
-    },
-  };
-
+  // --- 311 re-send (moderator-triggered, least privilege) ---
+  // The automatic forward happens on approval, above. This is the manual
+  // re-send used from the dead-letter list (`HandoffFailures`) once a
+  // hazard's delivery has exhausted its automatic retry budget.
   app.post('/api/moderation/:id/handoff', { preHandler: requireModerator }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const hazard = await repo.findById(id);
     if (!hazard) {
       return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
     }
-    const result = await forwardHandoff(hazard, handoffProviderConfig, fetchImpl);
-    // Record the hand-off on the hazard so its status can be synced back and
-    // surfaced on the map/list. Even a dry-run records the intent. The
-    // delivery receipt (R3) records the attempt outcome: a failed transport
-    // schedules an automatic retry (sweepHandoffRetries) instead of vanishing.
-    const receipt = receiptFor(result, hazard.handoffDelivery, now());
-    if (receipt.state === 'retrying' || receipt.state === 'failed') {
-      metrics.handoffFailures.inc();
-    }
-    const updated = await repo.update(id, {
-      handoff: initialHandoff(hazard, now(), result.provider, result.reference),
-      handoffDelivery: receipt,
-      updatedAt: now(),
-    });
+    const { result, hazard: updated } = await performHandoff(hazard);
     return { result, hazard: updated ? toPublic(updated) : toPublic(hazard) };
   });
 
