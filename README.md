@@ -114,7 +114,7 @@ Per `/STANDARDS/OBSERVABILITY-STANDARD.md`, tier is declared explicitly rather t
   weight advisory), client error reporting (`src/lib/telemetry.ts`), and a cookieless RUM
   web-vitals field beacon (`src/lib/vitals.ts` → `POST /api/metrics/web-vitals`) — OBS-26 closed.
 
-Dated: 2026-08-15. See the Standards Conformance table below (§Standards) for the OBSERVABILITY row.
+Dated: 2026-08-21. See the Standards Conformance table below (§Standards) for the OBSERVABILITY row.
 
 ## Guardrails
 
@@ -152,31 +152,40 @@ export" under [`docs/ROADMAP.md`](./docs/ROADMAP.md) §10 (Legal & compliance),
 still an open item. If that decision is made later, it changes one string in the
 export's `license` field and the schema/docs that mirror it, not this baseline.
 
-## Standards
-Inherits [`/STANDARDS`](../STANDARDS/). Responsible-tech findings are committed in [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and [`docs/audits/`](./docs/audits/).
-
 ## Standards Conformance
+Inherits [`/STANDARDS`](../STANDARDS/), pinned in [`.standards-version`](./.standards-version)
+and fetched at the same ref by [`standards.yml`](./.github/workflows/standards.yml).
+Responsible-tech findings are committed in
+[`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and
+[`docs/audits/`](./docs/audits/).
+
 Per `/STANDARDS/README.md` §"How a repo declares conformance," every standard is
-explicitly scoped. Project-specific evidence lives here; shared requirements
-remain in `/STANDARDS`. This declaration was verified on 2026-07-11.
+explicitly scoped — silent omission is itself the defect. The table declares
+**applicability**; it is not a claim that every applicable standard is fully
+met, so open gaps are named in the row rather than implied away. Where a gap has
+an issue it is cited as `gap tracked in #NN`.
+
+Re-assessed on 2026-08-21 against portfolio-standards **v2.0.0** (released
+2026-08-09), which tightened several gates relative to the v1.0.1 pin this repo
+previously declared against.
 
 | Standard | State | Project-specific evidence |
 |---|---|---|
-| Responsible-Tech Framework | Applies | [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and dated artifacts under [`docs/audits/`](./docs/audits/) |
-| Code Quality | Applies | Strict TypeScript, ESLint/stylelint, coverage-gated Vitest, `make verify`, and the MADR log under [`docs/adr/`](./docs/adr/) |
-| Security & Supply-Chain | Applies | ASVS declaration, SHA-pinned Actions, blocking CodeQL/npm-audit/gitleaks/Trivy, and signed/SBOM-attested release workflow |
-| CI/CD | Applies | Least-privilege workflows, CODEOWNERS, committed [`main` ruleset](./docs/ops/branch-ruleset.json), and local/CI `make verify` parity |
-| Release & Versioning | Applies | SemVer package metadata, Keep-a-Changelog file, and tag-triggered build/scan/SBOM/sign/provenance/boot verification; no release tag has been cut yet |
-| Accessibility | Applies | WCAG 2.2 AA axe and Lighthouse gates, map/list parity, and dated accessibility and screen-reader artifacts |
-| Observability | Applies | Tier A server and Tier B PWA declaration, liveness/readiness probes, structured redacted logs, Prometheus metrics, Sentry, and cookieless Web Vitals |
+| Responsible-Tech Framework | Applies | [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and dated artifacts under [`docs/audits/`](./docs/audits/); three of those artifacts are still stamped 2026-05-31 and predate the 311 retry layer and seeded-hazard labelling |
+| Code Quality | Applies | Strict TypeScript, ESLint/stylelint, coverage-gated Vitest, `make verify`, and the MADR log under [`docs/adr/`](./docs/adr/). v2.0.0's CQ-48 per-module 95% floor for safety-critical paths is **not declared**: coverage is a single repo-wide Vitest threshold and no critical-module set exists |
+| Security & Supply-Chain | Applies | ASVS declaration, SHA-pinned Actions (42/42), blocking CodeQL/npm-audit/gitleaks/Trivy, and a signed, SBOM-attested release workflow. The production dependency audit is clean; the open advisories are all dev-scope |
+| CI/CD | Applies — gap tracked in #120 | Least-privilege workflows, CODEOWNERS, and the committed [`main` ruleset](./docs/ops/branch-ruleset.json). The "local/CI `make verify` parity" this row used to claim is not true today: `verify` runs `test:unit`, not `test:coverage`, and sets no `TEST_DATABASE_URL`, so neither the coverage floor nor the Postgres adapter suite runs locally |
+| Release & Versioning | Applies | SemVer package metadata, Keep-a-Changelog file, and a dispatch-only release authorized from reviewed `main` — signed-tag verification plus ancestry, with verification and publication held by separate jobs. No release tag has been cut yet, so the pipeline is unexercised |
+| Accessibility | Applies | WCAG 2.2 AA axe and Lighthouse gates, map/list parity, and dated accessibility and screen-reader artifacts (both stamped 2026-05-31) |
+| Observability | Applies | Tier A server and Tier B PWA declaration, liveness/readiness probes, structured redacted logs, Prometheus metrics, Sentry, and cookieless Web Vitals. OpenTelemetry spans and a declared SLO document remain open — see §Observability |
 | Performance | Applies | Blocking Lighthouse job with explicit budgets in [`lighthouserc.json`](./lighthouserc.json); service load-baseline expansion remains release-scoped |
-| Internationalization | Applies | FormatJS catalogs in `src/i18n/locales`, extraction/parity/BCP-47/CLDR/logical-CSS gates, and pseudolocale browser coverage; reviewed Spanish copy is still required before Spanish is enabled |
+| Internationalization | Applies — gap tracked in #112 | FormatJS catalogs in `src/i18n/locales`, extraction/parity/BCP-47/CLDR/logical-CSS gates, and pseudolocale browser coverage. All 214 Spanish values are still empty strings while `es` is offered in locale negotiation |
 | AI Evaluation | N/A — no prompt, model, retrieval, or agent surface exists in this application | Applicability registry sets `llm: false` |
-| Documentation | Applies | Root operator/contributor/security/release docs, docs index/scope/audit, and sequential ADR log |
-| Quality & Metrics | Applies | Coverage thresholds, accessibility/e2e/security gates, project metrics ledger in [`docs/ROADMAP.md`](./docs/ROADMAP.md), and the attached PR Definition of Done |
-| AI Development Measurement | Applies | No tool-usage counter is collected and none gates a merge; the merge-blocking gates and the metrics ledger in [`docs/ROADMAP.md`](./docs/ROADMAP.md) are what a change clears regardless of how it was authored |
-| Incident Response | Applies | Severity/label conventions and secret-response procedure inherit from `/STANDARDS`; project security reporting and operational recovery are documented in [`SECURITY.md`](./SECURITY.md) and [`BETA.md`](./BETA.md) |
-| Data Governance | Applies | L2 precise-location/photo handling, minimization, EXIF stripping, retention/GC, coarsened public exports, PostgreSQL backup expectations, and privacy artifacts |
+| Documentation | Applies | Root operator/contributor/security/release docs, docs index/scope/audit, and sequential ADR log. [`docs/DOCUMENTATION-AUDIT.md`](./docs/DOCUMENTATION-AUDIT.md) is generated from the tree by `scripts/doc_audit.py` and drift-checked in `make verify` (issue #123, fixed); v2.0.0's DOC-21 capability ledger has not been written |
+| Quality & Metrics | Applies — gap tracked in #120 | Accessibility, end-to-end, and security gates plus the attached PR Definition of Done. The enforced coverage floor is 89% lines / 86% functions / 89% statements / 84% branches ([`vite.config.ts`](./vite.config.ts)) and runs in CI only — the README's "Testing & gates" table states this split explicitly rather than claiming local/CI parity |
+| AI Development Measurement | Applies | Delivery and quality-debt signals for this repo are mined into the shared portfolio metrics ledger by `/STANDARDS` automation. No repo-local ADM artifact exists and the v2.0.0 BASELINE graduation dates have not been set; every ADM control is a REVIEW gate |
+| Incident Response | Applies | Severity conventions and the secret-response procedure inherit from `/STANDARDS`; project security reporting and operational recovery are documented in [`SECURITY.md`](./SECURITY.md) and [`BETA.md`](./BETA.md). The `incident`/`sevN` issue labels are not created on this repo yet |
+| Data Governance | Applies | L2 precise-location/photo handling, minimization, EXIF stripping, retention/GC, coarsened public exports, PostgreSQL backup expectations, and privacy artifacts. The GeoJSON export declares `MIT`, matching the repository licence (issue #121, fixed) — see §Open data for what that does and does not settle |
 
 The live `protect-main` ruleset blocks force-pushes and deletion and requires the
 documented status checks. [`docs/ops/branch-ruleset.json`](./docs/ops/branch-ruleset.json)
