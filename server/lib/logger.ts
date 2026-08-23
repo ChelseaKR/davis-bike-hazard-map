@@ -88,18 +88,32 @@ export function buildLoggerOptions(config: { isTest: boolean }): FastifyServerOp
 }
 
 /**
- * Emit a single structured JSON line for a fatal condition that happens BEFORE
- * the Fastify (Pino) logger exists — e.g. a missing-required-config guard at
- * boot. Keeps even the earliest failures machine-parseable instead of a bare
- * `console.error` string. Writes to stderr; the caller decides whether to exit.
+ * Emit a single structured JSON line for a condition that happens BEFORE the
+ * Fastify (Pino) logger exists — e.g. a missing-required-config guard, or a
+ * store failing to load, at boot. Keeps even the earliest failures
+ * machine-parseable instead of a bare `console.error` string. Writes to
+ * stderr; the caller decides the `level` and whether to exit.
  */
-export function logBootFatal(message: string, fields: Record<string, unknown> = {}): void {
+function logBoot(level: 'fatal' | 'error', message: string, fields: Record<string, unknown> = {}): void {
   const line = JSON.stringify({
-    level: 'fatal',
+    level,
     time: new Date().toISOString(),
     name: SERVICE_NAME,
     msg: message,
     ...fields,
   });
   process.stderr.write(`${line}\n`);
+}
+
+/** A fatal boot-time condition; the caller decides whether to exit. */
+export function logBootFatal(message: string, fields: Record<string, unknown> = {}): void {
+  logBoot('fatal', message, fields);
+}
+
+/**
+ * A serious but non-fatal boot-time condition — the process keeps running
+ * (e.g. a store degraded gracefully) but an operator needs to know.
+ */
+export function logBootError(message: string, fields: Record<string, unknown> = {}): void {
+  logBoot('error', message, fields);
 }

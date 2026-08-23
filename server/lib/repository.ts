@@ -15,6 +15,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { transition } from '../../shared/statusMachine.ts';
+import { logBootError } from './logger.ts';
 import type { StoredHazard } from './types.ts';
 
 /**
@@ -509,9 +510,24 @@ export class JsonFileRepository extends MemoryRepository {
       if (!Array.isArray(parsed) && parsed.tombstones) {
         for (const [id, deletedAt] of parsed.tombstones) this.tombstones.set(id, deletedAt);
       }
-    } catch {
-      // A malformed file should not crash startup; start empty and overwrite
-      // on the next successful write.
+    } catch (err) {
+      // A malformed/unreadable file should not crash startup — but it must
+      // not silently start empty and then have the next write overwrite the
+      // file with that empty store, permanently destroying whatever was
+      // recoverable in it (this used to be a silent, un-logged data-loss
+      // path). So: log loudly (this runs before the Fastify logger exists —
+      // see server/index.ts) and move the bad file aside so `persist()` can
+      // never clobber it; the store still starts empty and the app still
+      // boots, matching this class's existing "never crash startup" contract.
+      logBootError(`${this.path} could not be loaded — starting with an empty store.`, {
+        path: this.path,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      try {
+        renameSync(this.path, `${this.path}.corrupt-${Date.now()}`);
+      } catch {
+        // Best-effort: the loud log above is the primary signal.
+      }
     }
   }
 
