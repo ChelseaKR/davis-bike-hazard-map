@@ -1,25 +1,49 @@
 name: workflow-lint
 
-# SAST for the GitHub Actions workflows themselves (CICD-19, RTF-06). Runs
-# zizmor against everything under .github/ whenever a workflow/action file
-# changes, plus on main so drift is caught even without a workflow PR.
+# SAST for this repository's own CI configuration (CICD-19, RTF-06). zizmor
+# audits every input it collects by default: the GitHub Actions workflows, any
+# composite action definitions under .github/actions/, the Dependabot config,
+# and the pre-commit config. That set is enumerated from the tree in the
+# "Enumerate" step below rather than hardcoded, so a newly added workflow or
+# action is audited the day it lands instead of silently escaping the gate.
 #
-# Public repo (2026-07-19): `advanced-security: true` uploads zizmor's SARIF
-# to GHAS code scanning so findings surface in the Security tab (and as
-# code-scanning PR annotations). The action treats `advanced-security: true`
-# and `annotations: true` as mutually exclusive — annotations come from code
-# scanning in this mode — so `annotations` is explicitly false. zizmor itself
-# still fails the job on any finding at/above `min-severity` regardless of the
-# upload path, so this stays a real, blocking gate either way (this is the
-# flip the 2026-07-05 remediation note deferred until the repo went public —
+# Public repo (2026-07-19): `advanced-security: true` uploads zizmor's SARIF to
+# GHAS code scanning so findings surface in the Security tab (and as
+# code-scanning PR annotations). The action treats `advanced-security: true` and
+# `annotations: true` as mutually exclusive - annotations come from code
+# scanning in that mode - so `annotations` is explicitly false there. zizmor
+# fails the job on any finding at or above `min-severity` regardless of which
+# reporting path is used, so this stays a real, blocking gate either way (the
+# flip the 2026-07-05 remediation note deferred until the repo went public -
 # P0-3/P0-2).
+#
+# Two passes, not one (issue #131)
+# --------------------------------
+# release.yml pins a reusable workflow in the PRIVATE sibling repo
+# ChelseaKR/portfolio-standards. zizmor's `impostor-commit` audit cannot list
+# that repo's tags with this repo's GITHUB_TOKEN and ABORTS THE WHOLE RUN
+# ("fatal: no audit was performed") instead of emitting a finding - which is why
+# this gate was red on main from 2026-08-21, and why the run that failed had
+# audited only six of the ten workflows before it stopped.
+#
+# So release.yml is audited in a pass of its own, with `impostor-commit` and
+# nothing else disabled (.github/zizmor.release-exception.yml). Every other
+# input keeps the full audit set. Disabling `impostor-commit` repo-wide is the
+# only other thing that avoids the abort, and it would drop pin verification for
+# every third-party action in every workflow. See the config file for the
+# suppression attempts that were tested and did not work.
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/**', '.github/actions/**']
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/dependabot.yml'
+      - '.github/zizmor.release-exception.yml'
+      - '.pre-commit-config.yaml'
   pull_request:
     # No path filter: "zizmor (workflow SAST)" is a required status check in
-    # the main ruleset, so the context must report on every PR — a
+    # the main ruleset, so the context must report on every PR - a
     # path-filtered run never reports and leaves non-workflow PRs unmergeable.
 
 permissions:
@@ -31,6 +55,8 @@ concurrency:
 
 jobs:
   zizmor:
+    # Renaming this job breaks the "zizmor (workflow SAST)" required status
+    # check in the main ruleset (docs/ops/branch-ruleset.json).
     name: zizmor (workflow SAST)
     runs-on: ubuntu-latest
     permissions:
@@ -40,10 +66,90 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - name: Run zizmor
+
+      - name: Enumerate audit inputs and re-prove the release.yml exception
+        id: split
+        env:
+          EXCEPTION: .github/workflows/release.yml
+          PRIVATE_PIN: 'ChelseaKR/portfolio-standards/'
+        run: |
+          set -euo pipefail
+
+          # Everything zizmor collects by default, read from the tree so that a
+          # new workflow or composite action cannot appear un-audited.
+          collected="$(git ls-files -- \
+            '.github/workflows/*.yml'       '.github/workflows/*.yaml' \
+            '.github/actions/**/action.yml' '.github/actions/**/action.yaml' \
+            '.github/dependabot.yml'        '.pre-commit-config.yaml' | sort)"
+
+          if [ -z "${collected}" ]; then
+            echo "::error::no audit inputs were collected; this gate would pass without checking anything"
+            exit 1
+          fi
+          echo "Collected $(printf '%s\n' "${collected}" | wc -l | tr -d ' ') input(s):"
+          printf '%s\n' "${collected}" | sed 's/^/  /'
+
+          # Guard 1: the excepted file must still be one of the collected inputs.
+          if ! printf '%s\n' "${collected}" | grep -qxF "${EXCEPTION}"; then
+            echo "::error::${EXCEPTION} is no longer an audit input."
+            echo "::error::Delete .github/zizmor.release-exception.yml and audit every input in one pass."
+            exit 1
+          fi
+
+          # Guard 2: the exception exists only because release.yml pins a
+          # reusable workflow in a private repo this token cannot read. If that
+          # pin is gone, the exception is obsolete and must not be left to rot.
+          if ! grep -Eq "^[[:space:]]*uses:[[:space:]]*${PRIVATE_PIN}" "${EXCEPTION}"; then
+            echo "::error::${EXCEPTION} no longer pins ${PRIVATE_PIN%/}."
+            echo "::error::The impostor-commit exception is obsolete: delete"
+            echo "::error::.github/zizmor.release-exception.yml, drop the second pass, and close #131."
+            exit 1
+          fi
+
+          # Guard 3: any OTHER collected input pinning that private repo would
+          # abort the full-audit pass exactly the way release.yml does. Say so
+          # here, with the file names, instead of failing as an opaque abort.
+          strays="$(printf '%s\n' "${collected}" | grep -vxF "${EXCEPTION}" \
+            | xargs -r grep -lE "^[[:space:]]*uses:[[:space:]]*${PRIVATE_PIN}" || true)"
+          if [ -n "${strays}" ]; then
+            echo "::error::these inputs also pin the private ${PRIVATE_PIN%/} and would abort the full audit:"
+            printf '%s\n' "${strays}" | sed 's/^/::error::  /'
+            echo "::error::Extend the exception pass to cover them, or make the repo public (#131)."
+            exit 1
+          fi
+
+          full="$(printf '%s\n' "${collected}" | grep -vxF "${EXCEPTION}" | tr '\n' ' ')"
+          full="${full% }"
+          if [ -z "${full}" ]; then
+            echo "::error::the full-audit pass would receive no inputs"
+            exit 1
+          fi
+          echo "full-audit-inputs=${full}" >> "${GITHUB_OUTPUT}"
+          echo "Full-audit pass : ${full}"
+          echo "Exception pass  : ${EXCEPTION}"
+
+      - name: zizmor - full audit set, every input except release.yml
         uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054  # v0.6.2
         with:
-          inputs: .github/workflows
+          inputs: ${{ steps.split.outputs.full-audit-inputs }}
           min-severity: high
           advanced-security: true
           annotations: false
+
+      - name: zizmor - release.yml, impostor-commit excepted (#131)
+        # Runs even when the pass above fails, so one run reports every finding
+        # in the repository rather than only those in the first pass.
+        if: ${{ !cancelled() }}
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054  # v0.6.2
+        with:
+          inputs: .github/workflows/release.yml
+          config: .github/zizmor.release-exception.yml
+          min-severity: high
+          # This pass reports through workflow annotations rather than code
+          # scanning: zizmor-action writes its SARIF to a fixed path and uploads
+          # it under the fixed category "zizmor", so a second advanced-security
+          # upload in the same job would supersede the first pass's analysis and
+          # quietly drop those findings from the Security tab. Failing findings
+          # still fail this step, so the gate is unchanged.
+          advanced-security: false
+          annotations: true
