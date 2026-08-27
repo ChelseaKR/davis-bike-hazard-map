@@ -1,0 +1,51 @@
+# zizmor configuration for the one audited file that cannot be audited whole:
+# .github/workflows/release.yml. Applied by .github/workflows/workflow-lint.yml
+# to that file ALONE, never repo-wide.
+#
+# Why it exists
+# -------------
+# release.yml's `authorize` job pins a reusable workflow in the PRIVATE sibling
+# repository ChelseaKR/portfolio-standards. zizmor's `impostor-commit` audit
+# lists the referenced repository's tags over the GitHub API to confirm that a
+# pinned SHA really belongs to the ref it claims. In CI the default GITHUB_TOKEN
+# is scoped to this repository alone, so that listing comes back "missing or you
+# have no access" and zizmor aborts the entire run:
+#
+#     fatal: no audit was performed
+#     'impostor-commit' audit failed on file://.github/workflows/release.yml
+#     Caused by:
+#         0: error in 'impostor-commit' audit
+#         1: couldn't list tags for ChelseaKR/portfolio-standards
+#         2: can't access ChelseaKR/portfolio-standards: missing or you have no access
+#
+# That is an abort, not a finding. It audited six of the ten workflows and then
+# stopped, so the gate reported red while leaving four workflows unexamined.
+#
+# Why disabling the rule is the only lever
+# ----------------------------------------
+# Verified against zizmor v1.29.0, the version CI runs, with the referenced
+# repository unreadable by the token in use:
+#
+#   * an inline `# zizmor: ignore[impostor-commit]` on the `uses:` line -> still aborts
+#   * `rules.impostor-commit.ignore: ['release.yml:48']` in config      -> still aborts
+#   * `rules.impostor-commit.disable: true`                             -> completes
+#
+# The first two filter results; the abort happens before any result exists to
+# filter. Disabling is the only thing that avoids it, which is why the audit is
+# split into two passes rather than disabling this rule for the whole repository.
+#
+# What it costs
+# -------------
+# Every `uses:` pin inside release.yml loses impostor-commit verification, not
+# just the portfolio-standards one. Every other file in the repository keeps it.
+# The portfolio-standards pin is verified by hand instead, at the `uses:` line.
+#
+# What removes it
+# ---------------
+# Make ChelseaKR/portfolio-standards public, or drop the cross-repo pin from
+# release.yml. Either one trips the guard step in workflow-lint.yml, which fails
+# the build and says to delete this file and audit everything in one pass.
+# Tracked in issue #131.
+rules:
+  impostor-commit:
+    disable: true
