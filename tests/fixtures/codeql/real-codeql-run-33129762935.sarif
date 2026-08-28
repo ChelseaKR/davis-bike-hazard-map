@@ -1,0 +1,99 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "CodeQL",
+          "semanticVersion": "2.26.4",
+          "rules": []
+        },
+        "extensions": [
+          {
+            "name": "codeql/javascript-queries",
+            "semanticVersion": "2.4.4+1d123a2caa0e4e6256a49d963bfcbd51a01617e8",
+            "rules": [
+              {
+                "id": "js/user-controlled-bypass",
+                "name": "js/user-controlled-bypass",
+                "shortDescription": {
+                  "text": "User-controlled bypass of security check"
+                },
+                "defaultConfiguration": {
+                  "enabled": true,
+                  "level": "error"
+                },
+                "properties": {
+                  "tags": [
+                    "security",
+                    "external/cwe/cwe-807",
+                    "external/cwe/cwe-290"
+                  ],
+                  "problem.severity": "error",
+                  "security-severity": "7.8"
+                }
+              },
+              {
+                "id": "js/file-system-race",
+                "name": "js/file-system-race",
+                "shortDescription": {
+                  "text": "Potential file system race condition"
+                },
+                "defaultConfiguration": {
+                  "enabled": true,
+                  "level": "warning"
+                },
+                "properties": {
+                  "tags": [
+                    "security",
+                    "external/cwe/cwe-367"
+                  ],
+                  "problem.severity": "warning",
+                  "security-severity": "7.7"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "ruleId": "js/user-controlled-bypass",
+          "message": {
+            "text": "This condition guards a sensitive [action](1), but a [user-provided value](2) controls it."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "server/app.ts"
+                },
+                "region": {
+                  "startLine": 238
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "js/file-system-race",
+          "message": {
+            "text": "The file may have changed since it [was checked](1)."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "server/lib/repository.ts"
+                },
+                "region": {
+                  "startLine": 324
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

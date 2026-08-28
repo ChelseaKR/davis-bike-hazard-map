@@ -36,6 +36,18 @@ jobs:
     # findings. That's fixed below: the analyze step writes SARIF locally and
     # a dedicated step parses it and fails the job on any error-level
     # (security) result — the blocking gate lives in-run, not in the upload.
+    #
+    # NOTE (2026-08-27): that replacement gate could not fail either. It
+    # selected results with `.level == "error"`, and CodeQL leaves `level` off
+    # a result entirely, inheriting it from the rule's defaultConfiguration —
+    # so the count was 0 for every input, including the run that carried a
+    # security-severity 7.8 finding. It is now scripts/codeql-gate.mjs, which
+    # resolves severity through the rule table, fails closed on a severity it
+    # cannot resolve, and is unit-tested against a committed real SARIF.
+    #
+    # This job is NOT a required status check in docs/ops/branch-ruleset.json,
+    # so a red run here does not itself block a merge. Making it required is a
+    # repository-settings change, tracked separately.
     # Public repo (2026-07-19): `upload: always` also sends the SARIF to GHAS
     # code scanning so findings surface in the Security tab (visibility only;
     # the in-run gate is what blocks). Tracking issue:
@@ -57,21 +69,23 @@ jobs:
         with:
           upload: always
           output: sarif-results
-      - name: Enforce SAST gate on the parsed SARIF (SEC-08) — this is what actually blocks CI now
+      # The gate is a Node script so it can be unit-tested. Pin the runtime
+      # rather than relying on whatever node the runner image happens to ship.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: 22
+      - name: Enforce the SAST gate on the parsed SARIF (SEC-08)
+        # The gate lives in scripts/codeql-gate.mjs so it can be unit-tested
+        # (tests/unit/codeqlGate.test.ts) against a committed, real CodeQL SARIF.
+        # It used to be an inline `jq 'select(.level == "error")'`, which matched
+        # nothing for every input because CodeQL does not set a level on a
+        # result — it inherits it from the rule, and its rules live in
+        # tool.extensions, not tool.driver.rules. The gate reported 0 findings
+        # while a security-severity 7.8 finding was present. See the script
+        # header and .github/codeql-acknowledged.json.
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          files=(sarif-results/*.sarif)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::error::No SARIF output found from the CodeQL analyze step — treating as a failure rather than a silent pass."
-            exit 1
-          fi
-          error_count=$(jq -s '[.[].runs[].results[]? | select(.level == "error")] | length' "${files[@]}")
-          echo "CodeQL error-level (security) findings: ${error_count}"
-          if [ "${error_count}" != "0" ]; then
-            echo "::error::CodeQL found ${error_count} error-level security finding(s). Download the codeql-sarif artifact from this run to see them."
-            exit 1
-          fi
+          node scripts/codeql-gate.mjs sarif-results .github/codeql-acknowledged.json
       - name: Upload SARIF as a build artifact (manual inspection alongside the code-scanning upload — see note above)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "CodeQL error-level findings that have been reviewed and accepted. Consumed by",
+    "scripts/codeql-gate.mjs, which is run by .github/workflows/codeql.yml.",
+    "",
+    "Every entry needs a non-empty ruleId, path and reason; the gate refuses to run",
+    "on an entry missing any of them. An entry that matches no error-level finding",
+    "FAILS the gate, so a stale acknowledgement cannot sit here silently widening it",
+    "after the code it covered has changed or moved.",
+    "",
+    "This list is for findings a human has read and judged. It is not a way to keep",
+    "the build green: if you cannot write the reason, fix the code instead."
+  ],
+  "acknowledged": [
+    {
+      "ruleId": "js/user-controlled-bypass",
+      "path": "server/app.ts",
+      "reason": "authenticateModerator parses the Authorization header before verifying it: `const token = header.startsWith('Bearer ') ? header.slice(7) : ''`. CodeQL sees a user-controlled value deciding a branch on the path to an authorization decision. The branch is scheme parsing, not the decision. Failing it sets token to the empty string, which skips verifyToken, leaves payload null, and returns null - a 401. The only direction a caller can push this condition is toward denial, so it is not a bypass. Authorization itself is verifyToken (HMAC-SHA256 over the server session secret, constant-time compare, expiry checked - server/lib/token.ts) followed by an equality check of the token's `ver` against the account's current tokenVersion, which is what revokes a leaked token. None of that is user-controlled. Reviewed 2026-08-27; re-review if authenticateModerator stops verifying before it trusts."
+    }
+  ]
+}
