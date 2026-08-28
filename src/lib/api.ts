@@ -14,6 +14,7 @@ import type {
 } from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import type { Watch } from '../../shared/alerts.ts';
+import type { AreaCount } from '../../shared/areas.ts';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -83,6 +84,20 @@ export interface HazardFeed {
  */
 export async function fetchHazards(filters?: HazardQuery): Promise<HazardFeed> {
   return request<HazardFeed>(`/hazards${buildHazardQuery(filters)}`);
+}
+
+/**
+ * Fetch reports RECEIVED per Davis area, for the coverage view.
+ *
+ * A different set from `fetchHazards`, on purpose: the feed is what is on the
+ * map now, this is what has ever been reported (minus rejected). The coverage
+ * view calls an area a "data desert" when nobody has reported there, so it must
+ * not be computed from the feed — reports sitting in the moderation queue, or
+ * long since expired, would vanish and the area would read as never observed.
+ */
+export async function fetchCoverage(): Promise<AreaCount[]> {
+  const { areas } = await request<{ areas: AreaCount[] }>('/coverage');
+  return areas;
 }
 
 /** Submit a report. Idempotent on `clientId`, so retries are safe. */

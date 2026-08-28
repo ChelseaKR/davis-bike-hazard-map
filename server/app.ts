@@ -53,6 +53,7 @@ import { openapiSpec } from './openapi.ts';
 const API_VERSION = '1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 import {
+  areaReportCounts,
   confirmHazard,
   createHazard,
   listModerationQueue,
@@ -546,6 +547,26 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .header('content-type', 'application/geo+json')
       .header('access-control-allow-origin', '*') // open data — readable anywhere
       .send(JSON.stringify({ type: 'FeatureCollection', license: 'MIT', features }));
+  });
+
+  // --- Coverage: reports RECEIVED per Davis area (equity view) ---
+  // Not the public feed. The feed is what is on the map now; this is what has
+  // ever been reported, minus rejected. The coverage view labels an area a
+  // "data desert" when nobody has reported there, and a report that is still
+  // in the moderation queue, or has expired, means somebody did — so counting
+  // the feed here would print the opposite of the truth. See areaReportCounts.
+  app.get('/api/coverage', async (req, reply) => {
+    const areas = await areaReportCounts(repo);
+    const body = JSON.stringify({ areas });
+    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+    return reply
+      .header('etag', etag)
+      .header('cache-control', 'no-cache')
+      .header('content-type', 'application/json')
+      .send(body);
   });
 
   // --- Hazard-aware bike route planner ---
