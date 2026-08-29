@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -264,6 +264,45 @@ describe('hazard source / demo-data labelling (issue #111)', () => {
     } finally {
       await repo.close();
     }
+  });
+});
+
+describe('JsonFileRepository — a malformed data file', () => {
+  it('starts empty, logs loudly, and moves the bad file aside instead of silently overwriting it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    // Truncated JSON, e.g. a crash mid hand-edit or a corrupted disk — not
+    // something the atomic temp+rename `persist()` should itself produce, but
+    // a real-world failure mode the loader must still handle.
+    const truncated = '[{"id":"abc123","category":"pothole","severity":"high","status":"approved"';
+    writeFileSync(path, truncated, 'utf8');
+
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let repo: JsonFileRepository;
+    try {
+      repo = new JsonFileRepository(path);
+      // Must not crash startup...
+      expect(await repo.all()).toEqual([]);
+      // ...but must not stay silent either.
+      expect(stderrWrite).toHaveBeenCalledWith(expect.stringContaining('could not be loaded'));
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    // The original bytes must survive somewhere on disk...
+    const corruptCopy = readdirSync(dir).find((f) => f.startsWith('hazards.json.corrupt-'));
+    expect(corruptCopy).toBeDefined();
+    expect(readFileSync(join(dir, corruptCopy!), 'utf8')).toBe(truncated);
+
+    // ...even after the store persists new data to the original path (the
+    // failure this guards: a corrupt-but-maybe-recoverable file silently
+    // replaced by an empty/partial one on the very next write).
+    const photos = new MemoryPhotoStore();
+    await createHazard(repo!, photos, report(), NOW, ttl);
+    expect(readFileSync(join(dir, corruptCopy!), 'utf8')).toBe(truncated);
+
+    await repo!.close();
   });
 });
 
