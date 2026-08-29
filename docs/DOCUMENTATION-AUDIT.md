@@ -26,7 +26,7 @@ These are real predicates, so they can pass or fail.
 | Root process docs | pass | `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` |
 | Root legal, citation, and conduct docs | pass | `LICENSE`, `NOTICE`, `CITATION.cff`, `CODE_OF_CONDUCT.md` |
 | Root-adjacent GitHub templates | pass | `.github/PULL_REQUEST_TEMPLATE.md`, `.github/CODEOWNERS` |
-| Local doc links resolve | pass | 96 in-repo relative links checked in 42 Markdown files; 0 unresolved; 1 outside the repository (counted, not checked) |
+| Local doc links resolve | pass | 97 in-repo relative links checked in 42 Markdown files; 0 unresolved; 1 outside the repository (counted, not checked) |
 
 ## Inventory
 
