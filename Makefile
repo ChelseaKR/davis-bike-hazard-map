@@ -2,7 +2,7 @@
 # These four targets are the contract referenced by the README and CI.
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev build preview start seed verify lint typecheck test a11y e2e e2e-install audit docs-audit docs-audit-check clean
+.PHONY: help install dev build preview start seed verify lint typecheck test a11y e2e e2e-install audit docs-audit docs-audit-check ruleset-check clean
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -56,6 +56,9 @@ docs-audit: ## Regenerate the generated block of docs/DOCUMENTATION-AUDIT.md fro
 
 docs-audit-check: ## Fail if the committed documentation audit has drifted. Part of verify.
 	npm run docs:audit:check
+
+ruleset-check: ## Reconcile docs/ops/branch-ruleset.json with the live protect-main ruleset (needs gh; ARGS=--write to pull live).
+	npm run ruleset:check -- $(ARGS)
 
 clean: ## Remove build + test artifacts.
 	rm -rf dist dist-server coverage playwright-report test-results dev-dist

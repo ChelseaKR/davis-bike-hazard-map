@@ -65,6 +65,7 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 | EXIF / privacy | photos are EXIF-clean; precise location never public |
 | Build | the production PWA bundle builds |
 | Documentation drift | [`docs/DOCUMENTATION-AUDIT.md`](./docs/DOCUMENTATION-AUDIT.md) still matches the tree it describes (`scripts/doc_audit.py --check`) |
+| Required-check honesty | every status check the `main` ruleset requires names a workflow job that exists, reports on every PR into main, and is capable of failing ([`tests/unit/requiredChecks.test.ts`](./tests/unit/requiredChecks.test.ts)) |
 
 **What only CI enforces** ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml))
 
@@ -190,6 +191,17 @@ previously declared against.
 The live `protect-main` ruleset blocks force-pushes and deletion and requires the
 documented status checks. [`docs/ops/branch-ruleset.json`](./docs/ops/branch-ruleset.json)
 is the recovery/import mirror; verify live enforcement before changing it.
+
+The mirror is checked from both sides. `make verify` runs
+[`tests/unit/requiredChecks.test.ts`](./tests/unit/requiredChecks.test.ts), which
+proves every required context in the mirror names a job that exists in
+`.github/workflows`, reports on every pull request into `main`, and can actually
+fail — a required check nothing produces, or one a `continue-on-error` job or a
+row of `echo` steps satisfies, is not a gate. That test is offline on purpose: one
+that read the GitHub API would pass vacuously wherever `gh` is unauthenticated.
+`make ruleset-check` is the other side, comparing the mirror against the live rule
+and failing loudly when `gh` is unavailable or the two disagree; it is not part of
+`make verify` for that reason.
 
 ## Support
 

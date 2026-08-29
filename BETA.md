@@ -178,6 +178,13 @@ live rule as a recovery/import template. POST it only if the live rule is
 missing; creating it while `protect-main` already exists would duplicate the
 policy. WebKit remains advisory and CodeQL remains visible but non-required.
 
+Run `make ruleset-check` to compare the mirror against the live rule (add
+`ARGS=--write` to pull the live rule into the mirror, then review and commit the
+diff). It needs `gh` and fails rather than skipping when it cannot reach GitHub.
+The offline half of the same guarantee is `tests/unit/requiredChecks.test.ts` in
+`make verify`: every context the mirror requires must name a job that exists,
+reports on every pull request into `main`, and is capable of failing.
+
 ## Rollback
 
 ```bash
