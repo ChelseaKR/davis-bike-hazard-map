@@ -61,7 +61,8 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 |------|----------|
 | Lint + typecheck | TS strict, ESLint clean, stylelint logical-property rules |
 | i18n gates | G1 utf-8, G2 extract + no hardcoded strings, G3 BCP-47, G5/G6 catalog parity, G12 CLDR pin |
-| Unit + integration | the unit and component suite (`vitest run`) |
+| Unit + integration | the unit and component suite, coverage-gated (`vitest run --coverage`) |
+| Coverage floor | without a database: lines ≥ 87%, functions ≥ 84%, statements ≥ 86%, branches ≥ 78%. With `TEST_DATABASE_URL` set, the CI floor applies instead: lines ≥ 89%, functions ≥ 86%, statements ≥ 89%, branches ≥ 84% ([`vite.config.ts`](./vite.config.ts)). Two floors because two different amounts of code run — the Postgres adapter and migration runner are measured either way but only execute with a database |
 | EXIF / privacy | photos are EXIF-clean; precise location never public |
 | Build | the production PWA bundle builds |
 | Documentation audit | [`docs/DOCUMENTATION-AUDIT.md`](./docs/DOCUMENTATION-AUDIT.md) still matches the tree it describes, **and** its own presence and link predicates hold against that tree (`scripts/doc_audit.py --check`). Fails closed: an audit that found no docs, no tests, no workflows, or no links to inspect is a failure, not an empty pass, and regenerating cannot turn a failing predicate green ([`tests/unit/docAudit.test.ts`](./tests/unit/docAudit.test.ts)) |
@@ -71,14 +72,14 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 
 | Gate | Enforces |
 |------|----------|
-| Coverage floor | lines ≥ 89%, functions ≥ 86%, statements ≥ 89%, branches ≥ 84% ([`vite.config.ts`](./vite.config.ts)). `make verify` runs `test:unit`, not `test:coverage`, so the floor is a CI gate only |
+| Coverage floor (the enforced one) | lines ≥ 89%, functions ≥ 86%, statements ≥ 89%, branches ≥ 84% ([`vite.config.ts`](./vite.config.ts)). This is the floor the standards declaration cites. `make verify` now runs `test:coverage` too, but without `TEST_DATABASE_URL` it applies the lower DB-off floor above; only CI applies this one |
 | Postgres adapter | `tests/unit/pgRepository.test.ts` runs against a `postgres:16-alpine` service. Locally it **skips** unless you export `TEST_DATABASE_URL` — the suite prints a notice when it does, so a green local run cannot be mistaken for one that exercised the production store |
 | Accessibility | zero axe violations, component (`make a11y`) and full-page incl. contrast (`make e2e`) |
 | Offline → sync | file offline → syncs → moderated → on the map (`make e2e`) |
 | Lighthouse | accessibility assertions blocking; performance and byte-weight advisory |
 | Security | `npm audit` on production dependencies (high/critical), gitleaks secret scan |
 
-To close the gap locally: `docker compose up -d db`, then `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dbhm npm run test:coverage`.
+To hold `make verify` to the full CI floor locally: `docker compose up -d db`, then `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dbhm make verify`.
 
 A **pre-commit hook** (husky + lint-staged) runs ESLint on staged files locally. The HTTP API is described by an **OpenAPI spec** at `GET /api/openapi.json`, and every endpoint is also reachable under the versioned alias `/api/v1/*`.
 
@@ -173,9 +174,9 @@ previously declared against.
 | Standard | State | Project-specific evidence |
 |---|---|---|
 | Responsible-Tech Framework | Applies | [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and dated artifacts under [`docs/audits/`](./docs/audits/); three of those artifacts are still stamped 2026-05-31 and predate the 311 retry layer and seeded-hazard labelling |
-| Code Quality | Applies | Strict TypeScript, ESLint/stylelint, coverage-gated Vitest, `make verify`, and the MADR log under [`docs/adr/`](./docs/adr/). v2.0.0's CQ-48 per-module 95% floor for safety-critical paths is **not declared**: coverage is a single repo-wide Vitest threshold and no critical-module set exists |
+| Code Quality | Applies | Strict TypeScript, ESLint/stylelint, coverage-gated Vitest, `make verify`, and the MADR log under [`docs/adr/`](./docs/adr/). v2.0.0's CQ-48 per-module 95% floor for safety-critical paths is **not declared**: coverage is a repo-wide Vitest threshold — one set of numbers per run mode, neither of them per-module — and no critical-module set exists |
 | Security & Supply-Chain | Applies | ASVS declaration, SHA-pinned Actions (42/42), blocking CodeQL/npm-audit/gitleaks/Trivy, and a signed, SBOM-attested release workflow. The production dependency audit is clean; the open advisories are all dev-scope |
-| CI/CD | Applies — gap tracked in #120 | Least-privilege workflows, CODEOWNERS, and the committed [`main` ruleset](./docs/ops/branch-ruleset.json). The "local/CI `make verify` parity" this row used to claim is not true today: `verify` runs `test:unit`, not `test:coverage`, and sets no `TEST_DATABASE_URL`, so neither the coverage floor nor the Postgres adapter suite runs locally |
+| CI/CD | Applies — gap tracked in #120 | Least-privilege workflows, CODEOWNERS, and the committed [`main` ruleset](./docs/ops/branch-ruleset.json). `verify` now runs `test:coverage`, so a coverage floor is enforced locally as well as in CI. Parity is still not complete and the row does not claim it: `verify` sets no `TEST_DATABASE_URL`, so a local run skips the Postgres adapter suite and is held to the lower DB-off floor |
 | Release & Versioning | Applies | SemVer package metadata, Keep-a-Changelog file, and a dispatch-only release authorized from reviewed `main` — signed-tag verification plus ancestry, with verification and publication held by separate jobs. No release tag has been cut yet, so the pipeline is unexercised |
 | Accessibility | Applies | WCAG 2.2 AA axe and Lighthouse gates, map/list parity, and dated accessibility and screen-reader artifacts (both stamped 2026-05-31) |
 | Observability | Applies | Tier A server and Tier B PWA declaration, liveness/readiness probes, structured redacted logs, Prometheus metrics, Sentry, and cookieless Web Vitals. OpenTelemetry spans and a declared SLO document remain open — see §Observability |
@@ -183,7 +184,7 @@ previously declared against.
 | Internationalization | Applies — gap tracked in #112 | FormatJS catalogs in `src/i18n/locales`, extraction/parity/BCP-47/CLDR/logical-CSS gates, and pseudolocale browser coverage. All 214 Spanish values are still empty strings while `es` is offered in locale negotiation |
 | AI Evaluation | N/A — no prompt, model, retrieval, or agent surface exists in this application | Applicability registry sets `llm: false` |
 | Documentation | Applies | Root operator/contributor/security/release docs, docs index/scope/audit, and sequential ADR log. [`docs/DOCUMENTATION-AUDIT.md`](./docs/DOCUMENTATION-AUDIT.md) is generated from the tree by `scripts/doc_audit.py` and drift-checked in `make verify` (issue #123, fixed); v2.0.0's DOC-21 capability ledger has not been written |
-| Quality & Metrics | Applies — gap tracked in #120 | Accessibility, end-to-end, and security gates plus the attached PR Definition of Done. The enforced coverage floor is 89% lines / 86% functions / 89% statements / 84% branches ([`vite.config.ts`](./vite.config.ts)) and runs in CI only — the README's "Testing & gates" table states this split explicitly rather than claiming local/CI parity |
+| Quality & Metrics | Applies — gap tracked in #120 | Accessibility, end-to-end, and security gates plus the attached PR Definition of Done. The enforced coverage floor is 89% lines / 86% functions / 89% statements / 84% branches ([`vite.config.ts`](./vite.config.ts)) and is applied by CI. `make verify` also enforces a floor now, but a database-less run is held to a lower one (87/84/86/78) because the Postgres adapter does not execute — the README's "Testing & gates" table states this split explicitly rather than claiming local/CI parity |
 | AI Development Measurement | Applies | Delivery and quality-debt signals for this repo are mined into the shared portfolio metrics ledger by `/STANDARDS` automation. No repo-local ADM artifact exists and the v2.0.0 BASELINE graduation dates have not been set; every ADM control is a REVIEW gate |
 | Incident Response | Applies | Severity conventions and the secret-response procedure inherit from `/STANDARDS`; project security reporting and operational recovery are documented in [`SECURITY.md`](./SECURITY.md) and [`BETA.md`](./BETA.md). The `incident`/`sevN` issue labels are not created on this repo yet |
 | Data Governance | Applies | L2 precise-location/photo handling, minimization, EXIF stripping, retention/GC, coarsened public exports, PostgreSQL backup expectations, and privacy artifacts. The GeoJSON export declares `MIT`, matching the repository licence (issue #121, fixed) — see §Open data for what that does and does not settle |

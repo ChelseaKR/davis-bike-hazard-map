@@ -165,13 +165,33 @@ const config: UserConfig = {
         // helpers in it are still unit-tested in push.test.ts.
         'src/lib/push.ts',
       ],
-      // Honest, achieved coverage (text reporter shows ~91.5% lines/stmts,
-      // ~87.7% functions, ~85.5% branches). Set a few points below the measured
-      // numbers so deterministic runs stay green without padding. These clear
-      // the 85 standard (branches ≥80) even with the DB-only Postgres adapter
-      // and migration runner still measured (they are integration-gated on
-      // TEST_DATABASE_URL, exercised by pgRepository.test.ts in the DB CI job).
-      thresholds: { lines: 89, functions: 86, statements: 89, branches: 84 },
+      // Two floors, because two different amounts of code actually execute.
+      //
+      // tests/unit/pgRepository.test.ts and the migration runner are gated on
+      // TEST_DATABASE_URL. CI sets it (a postgres:16-alpine service), so
+      // server/lib/pgRepository.ts and server/lib/migrate.ts are exercised
+      // there. A run without a database still *measures* those files while
+      // their tests skip — pgRepository lands at 1.09% of statements, migrate
+      // at 4.34% — which drags the totals down. Measured 2026-08-29 at 93b4823:
+      //
+      //   TEST_DATABASE_URL set    93.49 stmts  84.29 br  93.64 fn  94.89 lines
+      //   TEST_DATABASE_URL unset  88.85 stmts  81.31 br  87.29 fn  89.87 lines
+      //
+      // One floor cannot serve both, and until 2026-08-29 the resolution was to
+      // run coverage in CI only. That left `make verify` — the merge gate — with
+      // no coverage measurement at all, the single measurement gap among the
+      // repo's gates. So each mode now carries a floor a few points under what
+      // that mode actually achieves.
+      //
+      // The DB-on set is *the* floor: it is what CI enforces, what the standards
+      // declaration cites, and it is unchanged by this split. The DB-off set is
+      // lower because less code runs, not because less is expected, and it is
+      // new — it is a floor where there was none. It cannot be used to land a
+      // change CI would reject, because CI always runs with the database and
+      // therefore always applies the higher set.
+      thresholds: process.env.TEST_DATABASE_URL
+        ? { lines: 89, functions: 86, statements: 89, branches: 84 }
+        : { lines: 87, functions: 84, statements: 86, branches: 78 },
     },
   },
 };
