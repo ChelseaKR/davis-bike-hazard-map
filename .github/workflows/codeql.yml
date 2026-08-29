@@ -83,9 +83,17 @@ jobs:
         # tool.extensions, not tool.driver.rules. The gate reported 0 findings
         # while a security-severity 7.8 finding was present. See the script
         # header and .github/codeql-acknowledged.json.
+        #
+        # The matrix language is an argument because one acknowledgement list
+        # serves every leg while each leg sees only its own SARIF. Without it,
+        # every leg checked every entry for staleness, so the javascript entry
+        # read as stale in the `actions` leg and this job could never be green
+        # in both. Passed through env rather than interpolated into the script.
+        env:
+          ANALYSIS_LANGUAGE: ${{ matrix.language }}
         run: |
           set -euo pipefail
-          node scripts/codeql-gate.mjs sarif-results .github/codeql-acknowledged.json
+          node scripts/codeql-gate.mjs sarif-results .github/codeql-acknowledged.json "${ANALYSIS_LANGUAGE}"
       - name: Upload SARIF as a build artifact (manual inspection alongside the code-scanning upload — see note above)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

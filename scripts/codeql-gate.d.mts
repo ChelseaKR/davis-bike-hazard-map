@@ -45,6 +45,12 @@ export interface Acknowledgement {
   ruleId: string;
   path: string;
   reason: string;
+  /**
+   * The codeql.yml matrix language this entry belongs to. One list serves every
+   * matrix leg, and each leg sees only its own SARIF, so an entry is in scope
+   * (for excusing a finding AND for the staleness check) only in its own leg.
+   */
+  language: string;
 }
 
 export interface Finding {
@@ -64,5 +70,9 @@ export interface Grade {
 
 export function resolveLevel(result: SarifResult, rulesById: Map<string, SarifRule>): string | null;
 export function rulesForRun(run: SarifRun): Map<string, SarifRule>;
-export function gradeSarif(documents: SarifDocument[], acknowledgements?: Acknowledgement[]): Grade;
+export function gradeSarif(
+  documents: SarifDocument[],
+  acknowledgements?: Acknowledgement[],
+  language?: string,
+): Grade;
 export function loadAcknowledgements(path: string): Acknowledgement[];

@@ -48,7 +48,28 @@
  * acknowledgement cannot sit there silently widening the hole after the code it
  * covered has changed. Same shape as the guards in workflow-lint.yml.
  *
- * Usage:  node scripts/codeql-gate.mjs <dir-with-sarif-files> [acknowledgements.json]
+ * ONE LIST, ONE ANALYSIS AT A TIME
+ * --------------------------------
+ * codeql.yml analyses a MATRIX of languages, and each leg runs this gate over
+ * only its own language's SARIF while passing the whole, shared acknowledgement
+ * list. Checking every entry for staleness against one leg's SARIF therefore
+ * made the gate unpassable by construction: the `javascript-typescript` entry
+ * can never appear in the `actions` SARIF, so the `actions` leg reported it
+ * stale and failed no matter what the code said. It failed that way on the very
+ * commit that introduced it.
+ *
+ * So an acknowledgement declares the `language` it belongs to, and only entries
+ * for the language now being graded are in scope — both for excusing a finding
+ * and for the staleness check. Entries for the other legs are neither.
+ *
+ * This is fail-closed on the argument too: with no language, NOTHING is in
+ * scope, so every acknowledged error fails rather than being excused. Forgetting
+ * the argument makes the gate stricter, never looser, and `main()` refuses to
+ * run without it. `tests/unit/codeqlGate.test.ts` additionally requires every
+ * declared language to be one codeql.yml's matrix actually analyses, so an entry
+ * cannot be parked under a language that never runs and so never goes stale.
+ *
+ * Usage:  node scripts/codeql-gate.mjs <dir-with-sarif-files> <acknowledgements.json> <language>
  * Exit 0 = pass, 1 = fail. Deterministic, dependency-free, offline.
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -79,13 +100,19 @@ function pathOf(result) {
 }
 
 /**
- * Grade a set of SARIF documents.
+ * Grade a set of SARIF documents for ONE analysis language.
  *
  * Returns every finding with its resolved level, plus the problems that must
  * fail the build: unresolvable severities, error-level findings that are not
  * acknowledged, and acknowledgements that matched nothing.
+ *
+ * `language` scopes the acknowledgement list to the leg being graded. Entries
+ * for another language are out of scope entirely — they excuse nothing here and
+ * are not checked for staleness here, because this leg's SARIF is not where they
+ * would show up. An empty language puts NOTHING in scope, which is the strict
+ * direction: an acknowledged error then fails.
  */
-export function gradeSarif(documents, acknowledgements = []) {
+export function gradeSarif(documents, acknowledgements = [], language = '') {
   const findings = [];
   for (const doc of documents) {
     for (const run of doc?.runs ?? []) {
@@ -102,6 +129,10 @@ export function gradeSarif(documents, acknowledgements = []) {
     }
   }
 
+  // Only this leg's entries participate, in either direction.
+  const inScope = acknowledgements.filter(
+    (a) => typeof language === 'string' && language !== '' && a.language === language,
+  );
   const used = new Set();
   const matches = (ack, f) => ack.ruleId === f.ruleId && ack.path === f.path;
 
@@ -116,7 +147,7 @@ export function gradeSarif(documents, acknowledgements = []) {
       continue;
     }
     if (f.level !== 'error') continue;
-    const ack = acknowledgements.findIndex((a) => matches(a, f));
+    const ack = inScope.findIndex((a) => matches(a, f));
     if (ack === -1) {
       problems.push(`${f.ruleId} at ${f.path}:${f.line ?? '?'} — error-level finding. ${f.message}`);
     } else {
@@ -124,12 +155,13 @@ export function gradeSarif(documents, acknowledgements = []) {
     }
   }
 
-  acknowledgements.forEach((ack, i) => {
+  inScope.forEach((ack, i) => {
     if (used.has(i)) return;
     problems.push(
-      `stale acknowledgement: ${ack.ruleId} at ${ack.path} matched no error-level finding. ` +
-        `The finding is gone or has moved — delete the entry from ` +
-        `.github/codeql-acknowledged.json rather than leaving it to widen the gate.`,
+      `stale acknowledgement: ${ack.ruleId} at ${ack.path} (${ack.language}) matched no ` +
+        `error-level finding in this analysis. The finding is gone or has moved — delete ` +
+        `the entry from .github/codeql-acknowledged.json rather than leaving it to widen ` +
+        `the gate.`,
     );
   });
 
@@ -143,7 +175,7 @@ export function loadAcknowledgements(path) {
   const entries = parsed?.acknowledged ?? [];
   if (!Array.isArray(entries)) throw new Error(`${path}: "acknowledged" must be an array.`);
   for (const [i, e] of entries.entries()) {
-    for (const field of ['ruleId', 'path', 'reason']) {
+    for (const field of ['ruleId', 'path', 'reason', 'language']) {
       if (typeof e?.[field] !== 'string' || e[field].trim() === '') {
         throw new Error(`${path}: acknowledged[${i}] is missing a non-empty "${field}".`);
       }
@@ -155,8 +187,15 @@ export function loadAcknowledgements(path) {
 function main(argv) {
   const dir = argv[0];
   const ackPath = argv[1] ?? '.github/codeql-acknowledged.json';
-  if (!dir) {
-    console.error('usage: codeql-gate.mjs <dir-with-sarif-files> [acknowledgements.json]');
+  const language = argv[2] ?? '';
+  if (!dir || language === '') {
+    console.error(
+      'usage: codeql-gate.mjs <dir-with-sarif-files> <acknowledgements.json> <language>',
+    );
+    console.error(
+      '::error::The analysis language is required. One acknowledgement list serves every ' +
+        'matrix leg, so the gate has to be told which leg it is grading — see the module header.',
+    );
     return 1;
   }
   if (!existsSync(dir)) {
@@ -178,17 +217,23 @@ function main(argv) {
 
   const documents = files.map((f) => JSON.parse(readFileSync(f, 'utf8')));
   const acknowledgements = loadAcknowledgements(ackPath);
-  const { findings, problems } = gradeSarif(documents, acknowledgements);
+  const { findings, problems } = gradeSarif(documents, acknowledgements, language);
 
   const byLevel = findings.reduce((acc, f) => {
     const key = f.level ?? 'unresolved';
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
-  console.log(`CodeQL gate: ${files.length} SARIF file(s), ${findings.length} finding(s).`);
+  console.log(
+    `CodeQL gate (${language}): ${files.length} SARIF file(s), ${findings.length} finding(s).`,
+  );
   for (const [level, n] of Object.entries(byLevel).sort()) console.log(`  ${level}: ${n}`);
+  const scoped = acknowledgements.filter((a) => a.language === language).length;
   if (acknowledgements.length > 0) {
-    console.log(`  acknowledged entries: ${acknowledgements.length}`);
+    console.log(
+      `  acknowledged entries: ${scoped} in scope for ${language} ` +
+        `(${acknowledgements.length} total across all languages)`,
+    );
   }
 
   if (problems.length === 0) {

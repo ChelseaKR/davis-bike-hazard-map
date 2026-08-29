@@ -23,6 +23,22 @@ import {
 const REAL = resolve(__dirname, '../fixtures/codeql/real-codeql-run-33129762935.sarif');
 const realSarif = () => JSON.parse(readFileSync(REAL, 'utf8'));
 
+/**
+ * The real SARIF from the `actions` leg of run 33226002600 — the run on this
+ * very branch where the gate failed. Trimmed the same way as the javascript
+ * one: the rule table keeps `defaultConfiguration` (the only field severity
+ * resolution reads) and drops the long `help`/`fullDescription` markdown; the
+ * results are untouched.
+ */
+const REAL_ACTIONS = resolve(
+  __dirname,
+  '../fixtures/codeql/real-codeql-run-33226002600-actions.sarif',
+);
+const realActionsSarif = () => JSON.parse(readFileSync(REAL_ACTIONS, 'utf8'));
+
+const JS = 'javascript-typescript';
+const ACTIONS = 'actions';
+
 /** A SARIF document in CodeQL's actual shape: rules in extensions, no result level. */
 function codeqlShaped(rules: { id: string; level?: string }[], results: { ruleId: string; uri: string }[]) {
   return {
@@ -92,7 +108,8 @@ describe('the real CodeQL SARIF this gate was passing', () => {
   it('passes once that one finding is acknowledged, and only that one', () => {
     const { problems } = gradeSarif(
       [realSarif()],
-      [{ ruleId: 'js/user-controlled-bypass', path: 'server/app.ts', reason: 'reviewed' }],
+      [{ ruleId: 'js/user-controlled-bypass', path: 'server/app.ts', language: JS, reason: 'reviewed' }],
+      JS,
     );
     expect(problems).toEqual([]);
   });
@@ -164,9 +181,11 @@ describe('gradeSarif', () => {
         { ruleId: 'js/a', uri: 'server/other.ts' },
       ],
     );
-    const { problems } = gradeSarif([doc], [
-      { ruleId: 'js/a', path: 'server/app.ts', reason: 'reviewed' },
-    ]);
+    const { problems } = gradeSarif(
+      [doc],
+      [{ ruleId: 'js/a', path: 'server/app.ts', language: JS, reason: 'reviewed' }],
+      JS,
+    );
     expect(problems).toHaveLength(2);
     expect(problems.some((p: string) => p.includes('js/b'))).toBe(true);
     expect(problems.some((p: string) => p.includes('server/other.ts'))).toBe(true);
@@ -174,9 +193,11 @@ describe('gradeSarif', () => {
 
   it('FAILS on a stale acknowledgement, so the list cannot rot open', () => {
     const doc = codeqlShaped([], []);
-    const { problems } = gradeSarif([doc], [
-      { ruleId: 'js/gone', path: 'server/removed.ts', reason: 'reviewed' },
-    ]);
+    const { problems } = gradeSarif(
+      [doc],
+      [{ ruleId: 'js/gone', path: 'server/removed.ts', language: JS, reason: 'reviewed' }],
+      JS,
+    );
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain('stale acknowledgement');
   });
@@ -207,8 +228,96 @@ describe('the committed acknowledgement list', () => {
   });
 
   it('covers the real SARIF exactly: no unacknowledged errors, no stale entries', () => {
-    const { problems } = gradeSarif([realSarif()], loadAcknowledgements(ACK));
+    const { problems } = gradeSarif([realSarif()], loadAcknowledgements(ACK), JS);
     expect(problems).toEqual([]);
+  });
+});
+
+/**
+ * The gate could not pass its own matrix.
+ *
+ * codeql.yml analyses two languages and runs this gate once per leg, each time
+ * over only that leg's SARIF but with the whole shared acknowledgement list. The
+ * staleness guard checked every entry against whichever SARIF it happened to
+ * have, so the one `javascript-typescript` entry was reported stale in the
+ * `actions` leg — a failure no change to the code could clear. It failed exactly
+ * that way on the commit that introduced it (run 33226002600).
+ */
+describe('one acknowledgement list, one matrix leg at a time', () => {
+  const REPO = resolve(__dirname, '../..');
+  const ACK = resolve(REPO, '.github/codeql-acknowledged.json');
+
+  it('does not call another leg\'s acknowledgement stale', () => {
+    // Reproduces the CI failure: the committed list against the real `actions`
+    // SARIF. Before language scoping this reported a stale acknowledgement.
+    const { problems } = gradeSarif(
+      [realActionsSarif()],
+      loadAcknowledgements(ACK),
+      ACTIONS,
+    );
+    expect(problems.some((p: string) => p.includes('stale acknowledgement'))).toBe(false);
+  });
+
+  it('would fail on the stale guard alone, even with nothing else to report', () => {
+    // The same list against an EMPTY actions SARIF. Nothing to find, nothing to
+    // excuse: whatever this returns is the guard talking about itself.
+    const empty = { version: '2.1.0', runs: [{ tool: { driver: { rules: [] } }, results: [] }] };
+    expect(gradeSarif([empty], loadAcknowledgements(ACK), ACTIONS).problems).toEqual([]);
+    // ...and the javascript leg still holds its own entry to account.
+    expect(gradeSarif([empty], loadAcknowledgements(ACK), JS).problems).toEqual([
+      expect.stringContaining('stale acknowledgement'),
+    ]);
+  });
+
+  it('an entry for another language excuses nothing in this leg', () => {
+    const doc = codeqlShaped(
+      [{ id: 'actions/x', level: 'error' }],
+      [{ ruleId: 'actions/x', uri: '.github/workflows/release.yml' }],
+    );
+    const ack = [
+      {
+        ruleId: 'actions/x',
+        path: '.github/workflows/release.yml',
+        language: JS,
+        reason: 'reviewed, but filed under the wrong leg',
+      },
+    ];
+    // Scoping must not become a second way to be excused: same rule, same path,
+    // wrong language ⇒ still a failure.
+    const { problems } = gradeSarif([doc], ack, ACTIONS);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('error-level finding');
+  });
+
+  it('FAILS CLOSED with no language: nothing is in scope, so nothing is excused', () => {
+    const { problems } = gradeSarif(
+      [realSarif()],
+      [{ ruleId: 'js/user-controlled-bypass', path: 'server/app.ts', language: JS, reason: 'reviewed' }],
+      '',
+    );
+    // Forgetting the argument makes the gate stricter, never looser.
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('error-level finding');
+  });
+
+  it('refuses an entry that names no language', () => {
+    const bad = resolve(__dirname, '../fixtures/codeql/acknowledged-missing-language.json');
+    expect(() => loadAcknowledgements(bad)).toThrow(/missing a non-empty "language"/);
+  });
+
+  it('every acknowledged language is one the codeql.yml matrix actually analyses', () => {
+    // Closes the escape hatch scoping would otherwise open: an entry filed under
+    // a language no leg runs is checked for staleness by no leg, and could sit
+    // there forever. The matrix is the authority.
+    const workflow = readFileSync(resolve(REPO, '.github/workflows/codeql.yml'), 'utf8');
+    const matrix = /language:\s*\[([^\]]+)\]/.exec(workflow);
+    expect(matrix).not.toBeNull();
+    const languages = matrix![1].split(',').map((l) => l.trim());
+    expect(languages).toContain(JS);
+    expect(languages.length).toBeGreaterThan(1);
+    for (const entry of loadAcknowledgements(ACK)) {
+      expect(languages).toContain(entry.language);
+    }
   });
 });
 
@@ -242,6 +351,13 @@ describe('the workflow actually runs this gate', () => {
 
   it('passes the acknowledgement list, so entries here are the ones in force', () => {
     expect(workflow).toContain('.github/codeql-acknowledged.json');
+  });
+
+  it('tells the gate which matrix leg it is grading', () => {
+    // Without this the gate scopes nothing, every acknowledgement is checked in
+    // every leg, and the job cannot be green in both.
+    expect(workflow).toContain('ANALYSIS_LANGUAGE: ${{ matrix.language }}');
+    expect(workflow).toContain('.github/codeql-acknowledged.json "${ANALYSIS_LANGUAGE}"');
   });
 
   it('no longer selects on a result level CodeQL never sets', () => {
