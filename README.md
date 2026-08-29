@@ -64,7 +64,7 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 | Unit + integration | the unit and component suite (`vitest run`) |
 | EXIF / privacy | photos are EXIF-clean; precise location never public |
 | Build | the production PWA bundle builds |
-| Documentation drift | [`docs/DOCUMENTATION-AUDIT.md`](./docs/DOCUMENTATION-AUDIT.md) still matches the tree it describes (`scripts/doc_audit.py --check`) |
+| Documentation audit | [`docs/DOCUMENTATION-AUDIT.md`](./docs/DOCUMENTATION-AUDIT.md) still matches the tree it describes, **and** its own presence and link predicates hold against that tree (`scripts/doc_audit.py --check`). Fails closed: an audit that found no docs, no tests, no workflows, or no links to inspect is a failure, not an empty pass, and regenerating cannot turn a failing predicate green ([`tests/unit/docAudit.test.ts`](./tests/unit/docAudit.test.ts)) |
 | Required-check honesty | every status check the `main` ruleset requires names a workflow job that exists, reports on every PR into main, and is capable of failing ([`tests/unit/requiredChecks.test.ts`](./tests/unit/requiredChecks.test.ts)) |
 
 **What only CI enforces** ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml))
