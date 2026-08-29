@@ -414,12 +414,33 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const cursor = filters.updatedSince;
     if (cursor !== undefined && cursor >= nowMs - TOMBSTONE_TTL_MS) {
       await repo.expire(nowMs);
+      const resolvedVisibleMs = config.resolvedVisibleDays * DAY_MS;
       const changed = await repo.listUpdatedSince(cursor, nowMs, filters.bbox);
-      const deletedIds = await repo.listTombstones(cursor);
-      const hazards = applyFeedFilters(changed.map(toPublic), filters, nowMs);
+      // A removal reaches the client two ways and BOTH have to be in the
+      // response: a hard delete leaves an id-only tombstone and no row, while a
+      // hazard that expired, was rejected, or whose resolved-visible window ran
+      // out still has a row but has left the public feed. Reporting only the
+      // first is what let a phone on the 30s poll keep drawing an expired
+      // hazard forever — the delta never said it was gone and the client's
+      // merge only removes what `deletedIds` names.
+      const removed = new Set([
+        ...(await repo.listTombstones(cursor)),
+        ...(await repo.listRemovedSince(cursor, nowMs, resolvedVisibleMs)),
+      ]);
+      // Departure wins over "changed": a row can satisfy both (a hazard
+      // resolved this instant under resolvedVisibleDays=0), and the client must
+      // not be handed a hazard the full feed would no longer carry.
+      const hazards = applyFeedFilters(
+        changed.filter((h) => !removed.has(h.id)).map(toPublic),
+        filters,
+        nowMs,
+      );
+      // Removals are deliberately NOT culled by bbox or the display filters:
+      // an extra id the client never held is a no-op, a missing one is a
+      // hazard drawn forever.
       return reply
         .header('cache-control', 'no-cache')
-        .send({ hazards, deletedIds, serverTime: nowMs });
+        .send({ hazards, deletedIds: [...removed], serverTime: nowMs });
     }
 
     // Full feed (first load or a stale cursor). bbox is pushed down to the store

@@ -252,6 +252,28 @@ export class PostgresRepository implements Repository {
     return res.rows.map((r) => r.id);
   }
 
+  async listRemovedSince(since: number, now: number, resolvedVisibleMs: number): Promise<string[]> {
+    // The complement of the public feed, mirroring isPubliclyVisible /
+    // departureTime in repository.ts branch for branch:
+    //   expired | rejected  -> departed at updated_at (the transition stamp)
+    //   approved past TTL   -> departed at expires_at (sweep may not have run)
+    //   resolved            -> departed when its visible window ran out
+    // `pending` is absent by construction: it was never publicly visible.
+    const res = await this.pool.query<{ id: string }>(
+      `SELECT id FROM hazards
+        WHERE (status IN ('expired', 'rejected') AND updated_at >= $1::bigint)
+           OR (status = 'approved'
+               AND expires_at <= $2::bigint
+               AND expires_at >= $1::bigint)
+           OR (status = 'resolved'
+               AND ($3::bigint <= 0
+                    OR COALESCE(resolved_at, 0) < $2::bigint - $3::bigint)
+               AND COALESCE(resolved_at, 0) + $3::bigint >= $1::bigint)`,
+      [since, now, resolvedVisibleMs],
+    );
+    return res.rows.map((r) => r.id);
+  }
+
   async expire(now: number): Promise<number> {
     // WHERE status='approved' mirrors the state machine's single `expire` edge
     // (approved → expired, shared/statusMachine.ts); terminal states are never

@@ -119,6 +119,18 @@ export interface Repository {
    */
   listTombstones(since: number): Promise<string[]>;
   /**
+   * Ids of rows that were still *stored* but have LEFT the public feed at/after
+   * `since` — a hazard that expired, was rejected, or whose resolved-visible
+   * window ran out. A hard delete leaves no row at all and is covered by
+   * `listTombstones`; this is the other half, and without it a delta poll is
+   * silent about every removal that is not a deletion, so a phone on the 30s
+   * poll keeps drawing a hazard that is no longer there.
+   *
+   * `pending` rows are excluded: they have never been publicly visible, so
+   * naming them would leak the id of every unmoderated report to any poller.
+   */
+  listRemovedSince(since: number, now: number, resolvedVisibleMs: number): Promise<string[]>;
+  /**
    * Transition approved rows past their TTL to `expired`, and coarsen their
    * precise location to the public (fuzzed) one — it's only needed while a
    * hazard is actionable. Returns the count expired.
@@ -161,6 +173,47 @@ export interface PendingStats {
 /** Whether a public point lies inside a bounding box (inclusive). */
 export function inBounds(p: { lat: number; lng: number }, b: BBox): boolean {
   return p.lat >= b.minLat && p.lat <= b.maxLat && p.lng >= b.minLng && p.lng <= b.maxLng;
+}
+
+/**
+ * Whether a hazard is in the public feed right now. This is the same predicate
+ * `listActive` + `listRecentlyResolved` apply, stated once so the delta feed's
+ * removals are the exact complement of what the full feed carries.
+ */
+export function isPubliclyVisible(
+  h: Pick<StoredHazard, 'status' | 'expiresAt' | 'resolvedAt'>,
+  now: number,
+  resolvedVisibleMs: number,
+): boolean {
+  if (h.status === 'approved') return h.expiresAt > now;
+  if (h.status === 'resolved') {
+    return resolvedVisibleMs > 0 && (h.resolvedAt ?? 0) >= now - resolvedVisibleMs;
+  }
+  return false;
+}
+
+/**
+ * When a hazard left (or will leave) the public feed, or `null` if it was never
+ * in it. `expired` and `rejected` are stamped on `updatedAt` by the transition
+ * that produced them; an `approved` row past its TTL departs at `expiresAt`
+ * even if the expiry sweep has not run yet; a `resolved` row departs when its
+ * visible window runs out. `pending` returns null — it has never been public.
+ */
+export function departureTime(
+  h: Pick<StoredHazard, 'status' | 'expiresAt' | 'resolvedAt' | 'updatedAt'>,
+  resolvedVisibleMs: number,
+): number | null {
+  switch (h.status) {
+    case 'pending':
+      return null;
+    case 'approved':
+      return h.expiresAt;
+    case 'resolved':
+      return (h.resolvedAt ?? 0) + resolvedVisibleMs;
+    default:
+      // expired | rejected — updatedAt is the moment of the transition.
+      return h.updatedAt;
+  }
 }
 
 export class MemoryRepository implements Repository {
@@ -252,6 +305,16 @@ export class MemoryRepository implements Repository {
     const ids: string[] = [];
     for (const [id, deletedAt] of this.tombstones) {
       if (deletedAt >= since) ids.push(id);
+    }
+    return ids;
+  }
+
+  async listRemovedSince(since: number, now: number, resolvedVisibleMs: number): Promise<string[]> {
+    const ids: string[] = [];
+    for (const h of this.store.values()) {
+      if (isPubliclyVisible(h, now, resolvedVisibleMs)) continue;
+      const departedAt = departureTime(h, resolvedVisibleMs);
+      if (departedAt !== null && departedAt >= since) ids.push(h.id);
     }
     return ids;
   }

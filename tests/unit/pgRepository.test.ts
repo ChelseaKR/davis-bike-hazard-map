@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PostgresRepository } from '../../server/lib/pgRepository.ts';
+import { MemoryRepository, TOMBSTONE_TTL_MS } from '../../server/lib/repository.ts';
 import { createModeratorStore, type ModeratorStore } from '../../server/lib/moderators.ts';
 import {
   createSubscriptionStore,
@@ -366,5 +367,153 @@ suite('PostgresSubscriptionStore', () => {
     expect(await store.remove(sub.id)).toBe(true);
     expect(await store.all()).toEqual([]);
     expect(await store.remove(sub.id)).toBe(false);
+  });
+});
+
+/**
+ * Memory/Postgres parity for the delta feed (FIX-05).
+ *
+ * The delta decides what a phone on the 30s poll draws and, through
+ * `listRemovedSince`, what it stops drawing. Two hand-written implementations
+ * of that predicate — one in TypeScript, one in SQL — agree only by inspection
+ * unless something checks. These run the SAME fixture set through both stores
+ * and compare the id sets, so a divergence fails rather than reaching riders on
+ * whichever store production happens to use.
+ */
+suite('delta feed: memory/Postgres parity', () => {
+  const NOW = 5_000_000;
+  const MIN = 60 * 1000;
+  const RESOLVED_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
+
+  let pg: PostgresRepository;
+
+  /** The same rows in both stores: one of every lifecycle state that matters. */
+  const rows: StoredHazard[] = [
+    // On the map, changed inside the window.
+    hazard({ id: 'live', clientId: 'live', status: 'approved', updatedAt: NOW - MIN, expiresAt: NOW + MIN }),
+    // On the map, unchanged since the cursor.
+    hazard({ id: 'stale', clientId: 'stale', status: 'approved', updatedAt: NOW - 60 * MIN, expiresAt: NOW + MIN }),
+    // Exactly on the cursor boundary.
+    hazard({ id: 'boundary', clientId: 'boundary', status: 'approved', updatedAt: NOW - 10 * MIN, expiresAt: NOW + MIN }),
+    // Left the map: swept to expired.
+    hazard({ id: 'expired', clientId: 'expired', status: 'expired', updatedAt: NOW - MIN, expiresAt: NOW - 2 * MIN }),
+    // Left the map: approved but past its TTL, sweep not yet run.
+    hazard({ id: 'unswept', clientId: 'unswept', status: 'approved', updatedAt: NOW - 60 * MIN, expiresAt: NOW - MIN }),
+    // Left the map: moderator rejection.
+    hazard({ id: 'rejected', clientId: 'rejected', status: 'rejected', updatedAt: NOW - MIN, expiresAt: NOW + MIN }),
+    // Still shown greyed: inside the resolved-visible window.
+    hazard({ id: 'justFixed', clientId: 'justFixed', status: 'resolved', updatedAt: NOW - MIN, resolvedAt: NOW - MIN, expiresAt: NOW + MIN }),
+    // Left the map an hour ago: resolved-visible window ran out. Outside the
+    // 10-minute cursor below, inside the wide one.
+    hazard({ id: 'agedOut', clientId: 'agedOut', status: 'resolved', updatedAt: NOW - RESOLVED_VISIBLE_MS - 60 * MIN, resolvedAt: NOW - RESOLVED_VISIBLE_MS - 60 * MIN, expiresAt: NOW + MIN }),
+    // Never public, and must never be named in a removal.
+    hazard({ id: 'pending', clientId: 'pending', status: 'pending', updatedAt: NOW - MIN, expiresAt: NOW + MIN }),
+  ];
+
+  beforeAll(async () => {
+    pg = new PostgresRepository(URL!);
+    await pg.init();
+  });
+
+  afterAll(async () => {
+    await pg.close();
+  });
+
+  beforeEach(async () => {
+    await pg['pool'].query('TRUNCATE hazards');
+    await pg['pool'].query('TRUNCATE hazard_tombstones');
+  });
+
+  /** Load the fixtures into a fresh memory store and the live Postgres one. */
+  async function bothStores(): Promise<[MemoryRepository, PostgresRepository]> {
+    const mem = new MemoryRepository();
+    for (const row of rows) {
+      await mem.insert(row);
+      await pg.insert(row);
+    }
+    return [mem, pg];
+  }
+
+  const ids = (list: StoredHazard[]) => list.map((h) => h.id).sort();
+  const sorted = (list: string[]) => [...list].sort();
+
+  it('listUpdatedSince returns the same rows from both stores', async () => {
+    const [mem, store] = await bothStores();
+    const since = NOW - 10 * MIN;
+
+    const fromMemory = ids(await mem.listUpdatedSince(since, NOW));
+    expect(sorted(await store.listUpdatedSince(since, NOW).then(ids))).toEqual(fromMemory);
+    // Not vacuous: the cursor really does select a subset.
+    expect(fromMemory).toEqual(['boundary', 'justFixed', 'live']);
+  });
+
+  it('listUpdatedSince culls by bbox identically in both stores', async () => {
+    const [mem, store] = await bothStores();
+    const box = { minLat: 38.5, minLng: -121.8, maxLat: 38.6, maxLng: -121.7 };
+    const outside = { minLat: 10, minLng: 10, maxLat: 11, maxLng: 11 };
+    const since = NOW - 10 * MIN;
+
+    expect(ids(await store.listUpdatedSince(since, NOW, box))).toEqual(
+      ids(await mem.listUpdatedSince(since, NOW, box)),
+    );
+    expect(ids(await store.listUpdatedSince(since, NOW, outside))).toEqual([]);
+    expect(ids(await mem.listUpdatedSince(since, NOW, outside))).toEqual([]);
+  });
+
+  it('listRemovedSince names the same departures in both stores', async () => {
+    const [mem, store] = await bothStores();
+    const since = NOW - 10 * MIN;
+
+    const fromMemory = sorted(await mem.listRemovedSince(since, NOW, RESOLVED_VISIBLE_MS));
+    expect(sorted(await store.listRemovedSince(since, NOW, RESOLVED_VISIBLE_MS))).toEqual(
+      fromMemory,
+    );
+    // The removal set is the complement of the public feed, not a catch-all:
+    // `pending` was never public, `live`/`stale`/`boundary`/`justFixed` still
+    // are, and `agedOut` departed before this cursor so it is not re-reported.
+    expect(fromMemory).toEqual(['expired', 'rejected', 'unswept']);
+  });
+
+  it('listRemovedSince reports a resolved row once its visible window runs out, in both stores', async () => {
+    const [mem, store] = await bothStores();
+    // A cursor old enough to span the moment `agedOut` left the feed.
+    const since = NOW - RESOLVED_VISIBLE_MS - 120 * MIN;
+
+    const fromMemory = sorted(await mem.listRemovedSince(since, NOW, RESOLVED_VISIBLE_MS));
+    expect(sorted(await store.listRemovedSince(since, NOW, RESOLVED_VISIBLE_MS))).toEqual(
+      fromMemory,
+    );
+    expect(fromMemory).toContain('agedOut');
+    expect(fromMemory).not.toContain('justFixed');
+    expect(fromMemory).not.toContain('pending');
+  });
+
+  it('deleteById tombstones in Postgres exactly as it does in memory', async () => {
+    const [mem, store] = await bothStores();
+    const before = Date.now();
+    expect(await mem.deleteById('live')).toBe(true);
+    expect(await store.deleteById('live')).toBe(true);
+    const after = Date.now();
+
+    expect(await store.listTombstones(before)).toEqual(['live']);
+    expect(await mem.listTombstones(before)).toEqual(['live']);
+    expect(await store.listTombstones(after + 1)).toEqual([]);
+    expect(await mem.listTombstones(after + 1)).toEqual([]);
+    // A deleted row leaves no content behind in either store.
+    expect(await store.findById('live')).toBeUndefined();
+    expect(await mem.findById('live')).toBeUndefined();
+  });
+
+  it('expire() prunes tombstones past the TTL in both stores', async () => {
+    const [mem, store] = await bothStores();
+    await mem.deleteById('live');
+    await store.deleteById('live');
+    // Sweep at a clock far enough ahead that the tombstone is past its TTL.
+    const future = Date.now() + TOMBSTONE_TTL_MS + MIN;
+    await mem.expire(future);
+    await store.expire(future);
+
+    expect(await store.listTombstones(0)).toEqual([]);
+    expect(await mem.listTombstones(0)).toEqual([]);
   });
 });
