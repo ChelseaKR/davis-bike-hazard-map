@@ -500,6 +500,29 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'post',
+  path: '/moderation/{id}/osm-note',
+  tags: ['moderation'],
+  security: bearerAuth,
+  summary: 'Draft an anonymous OSM Note for a permanent map-feature hazard (EXP-08)',
+  description:
+    'Suggests the hazard to OpenStreetMap Notes for hazards describing ' +
+    'permanent map features (eligible categories only). Dry-runs — drafts but ' +
+    'never posts — unless OSM_NOTES_ENABLED is configured, which needs a ' +
+    'license/consent review first. The note carries only the fuzzed location, ' +
+    'category/severity labels, and a back-link; never description, photo, or ' +
+    'reporter data. The suggestion (who, dry-run/delivered) is recorded on the ' +
+    'hazard as the audit trail.',
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: { description: 'draft/post result + updated hazard' },
+    400: { description: 'category not OSM-eligible', content: errorContent },
+    401: { description: 'unauthorized', content: errorContent },
+    404: { description: 'not found', content: errorContent },
+  },
+});
+
+registry.registerPath({
   method: 'get',
   path: '/moderation/handoff-failures',
   tags: ['moderation'],
