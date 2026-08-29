@@ -199,6 +199,19 @@ export const handoffFailuresResponseSchema = z.object({
   failures: z.array(z.object({ hazard: hazardSchema, delivery: handoffDeliverySchema.nullable() })),
 });
 
+/**
+ * Body of GET /coverage — reports RECEIVED per named Davis area.
+ *
+ * Deliberately a different set from GET /hazards: the feed is what is on the
+ * map now, this is what has ever been reported (minus rejected). The coverage
+ * view needs the latter, because an area whose reports are all pending or
+ * expired has been observed, and must not be labelled a data desert. See
+ * areaReportCounts() in server/lib/hazards.ts.
+ */
+export const coverageResponseSchema = z.object({
+  areas: z.array(z.object({ name: z.string(), count: z.number().int().nonnegative() })),
+});
+
 const json = (schema: z.ZodTypeAny) => ({ 'application/json': { schema } });
 const errorContent = json(errorSchema);
 
@@ -279,6 +292,20 @@ registry.registerPath({
   summary: 'Open-data export (GeoJSON, MIT)',
   responses: {
     200: { description: 'FeatureCollection', content: { 'application/geo+json': { schema: hazardExportSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/coverage',
+  tags: ['public'],
+  summary: 'Reports received per Davis area (equity coverage view)',
+  description:
+    'Counts every report ever received except rejected ones — NOT the public feed. ' +
+    'An area whose reports are all pending, expired or long-resolved has still been ' +
+    'observed, and must not read as a data desert. Aggregate counts only.',
+  responses: {
+    200: { description: 'per-area report tallies', content: json(coverageResponseSchema) },
   },
 });
 
