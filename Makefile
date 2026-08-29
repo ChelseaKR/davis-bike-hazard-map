@@ -54,7 +54,7 @@ audit: ## Run the responsible-tech gates (privacy + accessibility tests).
 docs-audit: ## Regenerate the generated block of docs/DOCUMENTATION-AUDIT.md from the tree.
 	npm run docs:audit
 
-docs-audit-check: ## Fail if the committed documentation audit has drifted. Part of verify.
+docs-audit-check: ## Fail if the documentation audit drifted or its own checks do not hold. Part of verify.
 	npm run docs:audit:check
 
 ruleset-check: ## Reconcile docs/ops/branch-ruleset.json with the live protect-main ruleset (needs gh; ARGS=--write to pull live).
