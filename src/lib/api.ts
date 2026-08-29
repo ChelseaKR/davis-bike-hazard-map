@@ -50,23 +50,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** Optional delta-poll cursor layered on top of the display filters. */
+export type HazardQuery = HazardFilters & { updatedSince?: number };
+
 /** Build the public hazards query string from filters. */
-export function buildHazardQuery(filters?: HazardFilters): string {
+export function buildHazardQuery(filters?: HazardQuery): string {
   if (!filters) return '';
   const params = new URLSearchParams();
   if (filters.categories?.length) params.set('categories', filters.categories.join(','));
   if (filters.minSeverity) params.set('minSeverity', filters.minSeverity);
   if (filters.withinDays) params.set('withinDays', String(filters.withinDays));
+  if (filters.updatedSince !== undefined) params.set('updatedSince', String(filters.updatedSince));
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
-/** Fetch the public (approved, unexpired) hazard list. */
-export async function fetchHazards(filters?: HazardFilters): Promise<Hazard[]> {
-  const { hazards } = await request<{ hazards: Hazard[] }>(
-    `/hazards${buildHazardQuery(filters)}`,
-  );
-  return hazards;
+/**
+ * The public feed response. `deletedIds` and `serverTime` are present on delta
+ * responses (a poll that passed `updatedSince`); a full feed omits `deletedIds`
+ * (the client then treats it as a full refresh) and carries `serverTime` so the
+ * client can seed its delta cursor.
+ */
+export interface HazardFeed {
+  hazards: Hazard[];
+  deletedIds?: string[];
+  serverTime?: number;
+}
+
+/**
+ * Fetch the public hazard feed. With no `updatedSince` this is the full feed;
+ * with a cursor it returns only what changed since (plus id-only tombstones).
+ */
+export async function fetchHazards(filters?: HazardQuery): Promise<HazardFeed> {
+  return request<HazardFeed>(`/hazards${buildHazardQuery(filters)}`);
 }
 
 /** Submit a report. Idempotent on `clientId`, so retries are safe. */

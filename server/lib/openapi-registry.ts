@@ -254,10 +254,20 @@ registry.registerPath({
       minSeverity: z.enum(SEVERITIES).optional(),
       withinDays: z.coerce.number().int().positive().max(365).optional(),
       bbox: z.string().optional().openapi({ description: 'minLat,minLng,maxLat,maxLng' }),
+      updatedSince: z.coerce.number().int().nonnegative().optional().openapi({
+        description:
+          'epoch-ms delta cursor (last serverTime seen). Returns only changed rows plus ' +
+          'deletedIds tombstones; an over-old cursor is ignored and the full feed returned',
+      }),
     }),
   },
   responses: {
-    200: { description: 'feed (ETag/304 supported)', content: json(hazardFeedResponseSchema) },
+    200: {
+      description:
+        'feed (ETag/304 supported). With updatedSince: a delta of changed rows plus deletedIds. ' +
+        'serverTime seeds the next delta cursor; a response without deletedIds is a full refresh.',
+      content: json(hazardFeedResponseSchema),
+    },
     304: { description: 'not modified' },
   },
 });

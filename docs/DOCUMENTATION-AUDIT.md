@@ -31,11 +31,11 @@ Counts, not verdicts. A count cannot pass or fail; it can only be current, which
 | Surface | Count | Evidence |
 | --- | ---: | --- |
 | Hand-authored docs | 45 | Markdown anywhere in the tree outside build and dependency directories, plus the root legal and template files |
-| Test files | 81 | every file under `tests/` |
-| Test declarations | 639 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
+| Test files | 82 | every file under `tests/` |
+| Test declarations | 660 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
 | Workflow files | 10 | `.github/workflows/*.yml` |
 | Architecture decision records | 10 | `docs/adr/*.md` |
-| Database migrations | 8 | `migrations/*.sql` |
+| Database migrations | 9 | `migrations/*.sql` |
 
 ### By category
 

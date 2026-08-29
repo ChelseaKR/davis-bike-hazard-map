@@ -47,10 +47,10 @@ describe('buildHazardQuery', () => {
 });
 
 describe('fetchHazards', () => {
-  it('returns the hazards array', async () => {
+  it('returns the hazard feed', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ hazards: [{ id: 'h1' }] })));
-    const hazards = await fetchHazards();
-    expect(hazards).toEqual([{ id: 'h1' }]);
+    const feed = await fetchHazards();
+    expect(feed.hazards).toEqual([{ id: 'h1' }]);
   });
 });
 
