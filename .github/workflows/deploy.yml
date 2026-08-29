@@ -1,9 +1,49 @@
-name: Deploy (Fly.io)
+name: Deploy (Fly.io) [no-op until FLY_API_TOKEN is set]
 
 # Auto-deploys the beta on every push to main, once a FLY_API_TOKEN secret is
-# configured (Settings → Secrets and variables → Actions). Until then the
-# deploy step is skipped cleanly, so this workflow stays green. Can also be run
-# on demand from the Actions tab.
+# configured (Settings → Secrets and variables → Actions). Can also be run on
+# demand from the Actions tab.
+#
+# Why the name says "no-op", and why there are two jobs
+# ----------------------------------------------------
+# The hosted beta is deliberately paused (BETA.md explains the cost rationale
+# and carries the resume command). That pause is correct. What was wrong was
+# how it *reported*: until 2026-08-29 this workflow was a single job named
+# "Fly.io" whose deploy step carried `if: env.FLY_API_TOKEN != ''`. With no
+# token set, the step skipped, every other step succeeded, and the job — and so
+# the whole run — reported **success**. On the Actions tab that is a green check
+# next to "Deploy (Fly.io)" on every push to main, which reads as "the beta
+# deployed" when nothing was deployed at all. Six consecutive green runs said
+# "deployed" about a service that returns 404.
+#
+# Secrets cannot be referenced from a job-level `if:` — that is a GitHub
+# restriction, and it is why the skip lived inside the step in the first place.
+# The way around it is a job whose only purpose is to turn "is the secret set?"
+# into a plain output that a job-level `if:` *can* read. So:
+#
+#   token-check  always runs, reads the secret, publishes present=true|false
+#   deploy       needs token-check, `if: present == 'true'`
+#
+# With no token, `deploy` now reports **skipped** and renders grey in the run's
+# job list, instead of a green "Fly.io". `token-check` also emits a workflow
+# warning, so the run summary carries a visible "nothing was deployed" banner
+# rather than an unqualified green check.
+#
+# One honest limitation, stated rather than hidden: a run whose only executed
+# job succeeded still rolls up to a green check in the Actions *list*. GitHub
+# offers no way to report a run as "skipped" while a job in it had to execute,
+# and the only alternative — failing the run — would paint main red on every
+# push for a pause that is intentional. So the list stays green; the workflow
+# name, the skipped job, and the warning annotation are what carry the meaning.
+#
+# FLY_API_TOKEN must be a **repository** secret, not an Environment secret.
+# `token-check` deliberately does not declare `environment: production` (it
+# deploys nothing, so it should not open a deployment record or trip the
+# environment's reviewer gate). A job without an environment cannot read that
+# environment's secrets, so a token stored on the `production` environment
+# would leave `token-check` reporting absent and `deploy` skipped forever. That
+# failure mode is at least loud — the run says in warning text that it did not
+# deploy — but the fix is to store the token at repository scope.
 on:
   push:
     branches: [main]
@@ -17,8 +57,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  token-check:
+    # Exists solely to lift the secret into a job output, because a job-level
+    # `if:` cannot reference `secrets`. Deploys nothing and needs no source, so
+    # it checks out nothing and holds no permissions.
+    name: Deploy configured?
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - name: Is FLY_API_TOKEN set?
+        id: check
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${FLY_API_TOKEN:-}" ]; then
+            echo "present=true" >> "${GITHUB_OUTPUT}"
+            echo "::notice title=Deploy enabled::FLY_API_TOKEN is set; the deploy job will run."
+          else
+            echo "present=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning title=NOTHING WAS DEPLOYED::FLY_API_TOKEN is not set, so the deploy job was skipped and no deploy happened. The hosted beta is paused on purpose — see BETA.md for the rationale and the resume command. This run is green because the configuration check ran, not because anything shipped."
+          fi
+
   deploy:
     name: Fly.io
+    needs: token-check
+    # Reads the plain output above, which is what makes the skip visible at job
+    # level. Without a token this job renders as skipped, not as a green deploy.
+    if: ${{ needs.token-check.outputs.present == 'true' }}
     runs-on: ubuntu-latest
     # Gates production deploys behind a GitHub Environment (CICD-22). This
     # workflow edit alone does not add a required reviewer — that's a
@@ -29,16 +97,12 @@ jobs:
     # the run. See docs/ARCHITECTURE.md ADR-8 and
     # audit-2026-07-05/davis-bike-hazard-map-REMEDIATION.md P1-8.
     environment: production
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1  # v1
       - name: Deploy
-        if: ${{ env.FLY_API_TOKEN != '' }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy --remote-only
-      - name: Skipped (no token)
-        if: ${{ env.FLY_API_TOKEN == '' }}
-        run: echo "FLY_API_TOKEN not set — skipping deploy. See BETA.md to configure."

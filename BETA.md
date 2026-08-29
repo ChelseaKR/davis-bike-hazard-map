@@ -61,7 +61,9 @@ aws apprunner start-deployment --region us-west-2 \
 ```
 
 The GitHub Actions Fly workflow (`.github/workflows/deploy.yml`) is unrelated to
-this AWS deployment and stays inert unless a `FLY_API_TOKEN` secret is set.
+this AWS deployment and stays inert unless a `FLY_API_TOKEN` secret is set. Its
+deploy job reports as skipped while the token is absent, so its runs do not read
+as deployments of this service.
 
 ---
 
@@ -102,7 +104,13 @@ fly tokens create deploy -x 999999h          # prints a token
 gh secret set FLY_API_TOKEN --app actions     # paste it when prompted
 ```
 
-Until the secret exists the deploy job skips cleanly (stays green).
+Until the secret exists, the `Deploy configured?` job reports that the token is
+absent and the `Fly.io` deploy job is **skipped** — the workflow is named
+`Deploy (Fly.io) [no-op until FLY_API_TOKEN is set]` and the run carries a
+warning saying nothing was deployed, so a green run in the Actions list is not
+mistaken for a deployment. Set the token at **repository** scope, as the
+`gh secret set` line above does: an Environment-scoped secret is invisible to
+the configuration check and would leave the deploy skipped.
 
 ## 3. Smoke test the beta
 
