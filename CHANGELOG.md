@@ -9,6 +9,24 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- The moderator "resolve" decision has an entry point (issue #140). It was
+  fully built server-side and completely unreachable from the app:
+  `shared/statusMachine.ts` makes `pending → resolved` and `approved →
+  resolved` legal, `moderationDecisionSchema` accepts `'resolve'`,
+  `MODERATION_TRANSITIONS.resolve` applies it, `POST /api/moderation/:id`
+  handles it, and `decideModeration` is typed for it — and no client code ever
+  passed it. With the quickstart defaults (no 311 provider configured) the only
+  path to `resolved` was the 311 sync-back, so a hazard on the public map could
+  never be marked fixed from the running app; the only way was `curl`. Same
+  shipped-unreachable pattern as #113 and #122. `ModerationPanel` now shows a
+  second list — hazards already live on the public map, which the pending queue
+  never contained — with **Mark resolved** on each, and **Already fixed** as a
+  third action on a pending report. The live count is tri-state on purpose: a
+  failed read renders "Live on the map (unknown)" and says the count is unknown
+  rather than zero, and "Nothing is live on the map right now" appears only
+  after a read that actually returned nothing. Seven tests, all of which fail
+  without the controls, are the reachability guard #122 asked for.
+
 - The CodeQL SAST gate can fail, and the four error-level findings it had been
   passing are fixed at source rather than waived. The blocking step was
   `jq '… select(.level == "error") …'` over CodeQL SARIF; CodeQL does not put a

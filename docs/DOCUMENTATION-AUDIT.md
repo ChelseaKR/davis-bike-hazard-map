@@ -36,7 +36,7 @@ Counts, not verdicts. A count cannot pass or fail; it can only be current, which
 | --- | ---: | --- |
 | Hand-authored docs | 46 | Markdown anywhere in the tree outside build and dependency directories, plus the root legal and template files |
 | Test files | 91 | every file under `tests/` |
-| Test declarations | 752 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
+| Test declarations | 759 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
 | Workflow files | 10 | `.github/workflows/*.yml` |
 | Architecture decision records | 10 | `docs/adr/*.md` |
 | Database migrations | 9 | `migrations/*.sql` |
@@ -71,8 +71,8 @@ Up to 5 representative files per category; the complete list follows below.
 ## Package and localization metadata
 
 - Node package `davis-bike-hazard-map` at version `0.1.0` (scripts: `a11y`, `build`, `dev`, `dev:client`, `dev:server`, `docs:audit`, `docs:audit:check`, `e2e`, `e2e:i18n`, `i18n:bcp47`, `i18n:cldr`, `i18n:extract`, `i18n:extract:check`, `i18n:gates`, `i18n:no-hardcoded`, `i18n:parity`, `i18n:pseudo:gen`, `i18n:utf8`, `lint`, `lint:css`, `lint:fix`, `prepare`, `preview`, `ruleset:check`, `seed`, `start`, `test`, `test:coverage`, `test:unit`, `test:watch`, `typecheck`, `verify`).
-- Locale catalog `src/i18n/locales/en.json`: 221 keys, 0 with an empty message.
-- Locale catalog `src/i18n/locales/es.json`: 221 keys, 221 with an empty message.
+- Locale catalog `src/i18n/locales/en.json`: 229 keys, 0 with an empty message.
+- Locale catalog `src/i18n/locales/es.json`: 229 keys, 229 with an empty message.
 
 ## Full hand-authored doc inventory
 

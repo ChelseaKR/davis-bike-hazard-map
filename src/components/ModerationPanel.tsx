@@ -13,6 +13,7 @@ import type { Hazard, HazardCategory } from '../../shared/types.ts';
 import { OSM_ELIGIBLE_CATEGORIES } from '../../shared/types.ts';
 import {
   decideModeration,
+  fetchHazards,
   fetchModerationPhoto,
   fetchModerationQueue,
   login,
@@ -103,6 +104,16 @@ export function ModerationPanel() {
   const [busy, setBusy] = useState(false);
   // Per-hazard hint after an OSM Note suggestion (dry-run result), keyed by id.
   const [osmHints, setOsmHints] = useState<Record<string, string>>({});
+  // Hazards already live on the public map, so a moderator has somewhere to
+  // mark one resolved (#140). Approving is not the end of a hazard's life: the
+  // pothole gets filled, and until this list existed the only thing in the whole
+  // app that could say so was the 311 sync-back, which needs a configured
+  // provider that the quickstart does not have.
+  const [live, setLive] = useState<Hazard[]>([]);
+  // Tri-state on purpose. "0 live hazards" and "we could not find out" are
+  // different facts, and rendering the second as the first is the failure mode
+  // this repo keeps finding in its own dashboards. Only `ready` may show a count.
+  const [liveState, setLiveState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   const signOut = useCallback((message?: string) => {
     localStorage.removeItem(SESSION_KEY);
@@ -110,8 +121,30 @@ export function ModerationPanel() {
     setQueue([]);
     setNextCursor(null);
     setTotal(0);
+    setLive([]);
+    setLiveState('idle');
     setPassword('');
     if (message) setError(message);
+  }, []);
+
+  /**
+   * Load what is currently live on the public map.
+   *
+   * The public feed is exactly the right source: it is what a resident sees, so
+   * it is what a moderator is being asked about. On failure the list is emptied
+   * AND the state is set to `error`, so the heading says the count is unknown
+   * rather than quietly claiming zero.
+   */
+  const loadLive = useCallback(async () => {
+    setLiveState('loading');
+    try {
+      const { hazards } = await fetchHazards();
+      setLive(hazards.filter((h) => h.status === 'approved'));
+      setLiveState('ready');
+    } catch {
+      setLive([]);
+      setLiveState('error');
+    }
   }, []);
 
   // Fetch one queue page (FIX-04). Without a cursor the queue is reloaded from
@@ -149,7 +182,10 @@ export function ModerationPanel() {
   );
 
   useEffect(() => {
-    if (session) void load(session.token);
+    if (session) {
+      void load(session.token);
+      void loadLive();
+    }
     // Load once on mount with a stored session. Deliberately excludes `load`
     // from deps: re-running on every render-scoped `load` identity change
     // would refetch the queue in a loop. No tracking issue filed yet — CQ-35
@@ -168,6 +204,7 @@ export function ModerationPanel() {
       setSession(s);
       setPassword('');
       await load(s.token);
+      await loadLive();
     } catch {
       setError(
         intl.formatMessage({
@@ -187,9 +224,14 @@ export function ModerationPanel() {
     if (!session) return;
     setBusy(true);
     try {
+      // A decision can come from either list, and `resolve` is legal from
+      // `pending` and from `approved`. Only decrement the pending backlog when
+      // the hazard actually came off the pending queue.
+      const wasPending = queue.some((h) => h.id === id);
       await decideModeration(id, decision, session.token);
       setQueue((q) => q.filter((h) => h.id !== id));
-      setTotal((t) => Math.max(0, t - 1));
+      setLive((l) => l.filter((h) => h.id !== id));
+      if (wasPending) setTotal((t) => Math.max(0, t - 1));
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {
         signOut(
@@ -334,7 +376,14 @@ export function ModerationPanel() {
             values={{ username: session.username }}
           />
         </span>
-        <button type="button" className="btn btn-small" onClick={() => load(session.token)}>
+        <button
+          type="button"
+          className="btn btn-small"
+          onClick={() => {
+            void load(session.token);
+            void loadLive();
+          }}
+        >
           <FormattedMessage id="common.refresh" defaultMessage="Refresh" />
         </button>
         <button type="button" className="btn btn-small" onClick={() => signOut()}>
@@ -398,6 +447,20 @@ export function ModerationPanel() {
                 >
                   <FormattedMessage id="moderation.reject" defaultMessage="Reject" />
                 </button>
+                {/* pending → resolved is legal (shared/statusMachine.ts): a
+                    report can arrive about something already fixed, and that
+                    is neither an approval nor a rejection. */}
+                <button
+                  type="button"
+                  className="btn btn-small btn-resolve"
+                  disabled={busy}
+                  onClick={() => decide(h.id, 'resolve')}
+                >
+                  <FormattedMessage
+                    id="moderation.resolve"
+                    defaultMessage="Already fixed"
+                  />
+                </button>
                 {isOsmEligible(h.category) && (
                   <button
                     type="button"
@@ -428,6 +491,98 @@ export function ModerationPanel() {
           />
         </button>
       )}
+      {/* --- Live on the public map (#140) ---
+          Approving a hazard is not the end of its life. Until this list
+          existed, the only thing in the whole app that could move an approved
+          hazard to `resolved` was the 311 sync-back, which needs a configured
+          provider (GOGOV_STATUS_URL/GOGOV_WEBHOOK_SECRET, both empty in the
+          quickstart) and a hand-off that already succeeded. With defaults, an
+          approved hazard could never be marked fixed from the running app at
+          all. */}
+      <section
+        className="moderation-live"
+        aria-label={intl.formatMessage({
+          id: 'moderation.aria.live',
+          defaultMessage: 'Hazards live on the map',
+        })}
+      >
+        <div className="moderation-head">
+          <h3>
+            {liveState === 'ready' ? (
+              <FormattedMessage
+                id="moderation.live.heading"
+                defaultMessage="Live on the map ({count})"
+                values={{ count: live.length }}
+              />
+            ) : liveState === 'error' ? (
+              // Never a number here. A failed read is not zero hazards.
+              <FormattedMessage
+                id="moderation.live.headingUnknown"
+                defaultMessage="Live on the map (unknown)"
+              />
+            ) : (
+              <FormattedMessage
+                id="moderation.live.headingLoading"
+                defaultMessage="Live on the map (loading…)"
+              />
+            )}
+          </h3>
+          <button type="button" className="btn btn-small" disabled={busy} onClick={() => void loadLive()}>
+            <FormattedMessage id="common.refresh" defaultMessage="Refresh" />
+          </button>
+        </div>
+        {liveState === 'error' && (
+          <p role="alert" className="error-text">
+            <FormattedMessage
+              id="moderation.live.error"
+              defaultMessage="Could not load what is live on the map, so the count above is unknown — not zero. Try Refresh."
+            />
+          </p>
+        )}
+        {liveState === 'ready' && live.length === 0 && (
+          <p className="empty-state">
+            <FormattedMessage
+              id="moderation.live.empty"
+              defaultMessage="Nothing is live on the map right now."
+            />
+          </p>
+        )}
+        {live.length > 0 && (
+          <ul className="moderation-list">
+            {live.map((h) => (
+              <li key={h.id} className="moderation-item">
+                <div className="moderation-item-head">
+                  <strong>{labels.category(h.category)}</strong>
+                  <span className={`severity-text severity-text-${h.severity}`}>
+                    {labels.severity(h.severity)}
+                  </span>
+                  <span className="hint">
+                    <FormattedMessage
+                      id="moderation.filed"
+                      defaultMessage="filed {when}"
+                      values={{ when: timeAgo(h.createdAt, now) }}
+                    />
+                  </span>
+                </div>
+                {h.description && <p>{h.description}</p>}
+                <div className="moderation-actions">
+                  <button
+                    type="button"
+                    className="btn btn-small btn-resolve"
+                    disabled={busy}
+                    onClick={() => decide(h.id, 'resolve')}
+                  >
+                    <FormattedMessage
+                      id="moderation.live.resolve"
+                      defaultMessage="Mark resolved"
+                    />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <HandoffFailures token={session.token} />
     </section>
   );
