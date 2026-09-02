@@ -1,0 +1,10 @@
+{
+  "_comment": "Fixture: an acknowledgement with no language. The loader must refuse it \u2014 an entry with no leg is checked for staleness in no leg, which is exactly the hole language scoping closes.",
+  "acknowledged": [
+    {
+      "ruleId": "js/user-controlled-bypass",
+      "path": "server/app.ts",
+      "reason": "Reviewed and accepted, but this entry names no analysis language."
+    }
+  ]
+}

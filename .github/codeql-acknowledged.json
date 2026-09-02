@@ -1,0 +1,29 @@
+{
+  "_comment": [
+    "CodeQL error-level findings that have been reviewed and accepted. Consumed by",
+    "scripts/codeql-gate.mjs, which is run by .github/workflows/codeql.yml.",
+    "",
+    "Every entry needs a non-empty ruleId, path, language and reason; the gate refuses",
+    "to run on an entry missing any of them. An entry that matches no error-level",
+    "finding FAILS the gate, so a stale acknowledgement cannot sit here silently",
+    "widening it after the code it covered has changed or moved.",
+    "",
+    "`language` names the codeql.yml matrix leg the entry belongs to. Each leg runs",
+    "the gate over only its own SARIF, so an entry is in scope only in its own leg —",
+    "without that, a javascript-typescript entry read as stale in the actions leg and",
+    "the gate could never be green in both. tests/unit/codeqlGate.test.ts requires the",
+    "language to be one the matrix actually analyses, so an entry cannot be parked",
+    "under a language that never runs and so never goes stale.",
+    "",
+    "This list is for findings a human has read and judged. It is not a way to keep",
+    "the build green: if you cannot write the reason, fix the code instead."
+  ],
+  "acknowledged": [
+    {
+      "ruleId": "actions/cache-poisoning/poisonable-step",
+      "path": ".github/workflows/release.yml",
+      "language": "actions",
+      "reason": "Recording a decision the repository owner has already made and published, not making one: GHAS code-scanning alerts #10 and #11 (both this rule, both this file, at the `npm ci` and `make verify` steps of the `verify` job) were dismissed as false-positive by ChelseaKR on 2026-08-21T17:05Z. This entry covers both instances - the gate matches an acknowledgement by ruleId and path, so one entry answers every finding of this rule in this file. Substance: CodeQL reads `needs.authorize.outputs.release-commit` as untrusted code checked out in a default-branch context. It is not untrusted. The `authorize` job resolves the dispatched tag against the pinned portfolio-standards authorizer, verifies the annotated tag's SSH signature against .github/allowed_signers, and proves the tagged commit is an ancestor of main before emitting that output; CodeQL cannot see any of that. There is also no source fix available: a release-verification job exists precisely to run the repository's own build at the tagged commit, and actions/setup-node has no input that disables its Node-distribution tool cache (release.yml already carries the matching zizmor ignore and that note). Re-review if the authorize job stops verifying the tag signature and the ancestry of the commit it emits, or if setup-node gains a tool-cache toggle."
+    }
+  ]
+}

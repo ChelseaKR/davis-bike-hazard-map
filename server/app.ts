@@ -50,7 +50,7 @@ import {
 } from './lib/moderators.ts';
 import { verifyPassword } from './lib/password.ts';
 import { LoginThrottle } from './lib/loginThrottle.ts';
-import { issueToken, verifyToken } from './lib/token.ts';
+import { issueToken, verifyBearerHeader } from './lib/token.ts';
 import { createMetrics } from './lib/metrics.ts';
 import { buildLoggerOptions } from './lib/logger.ts';
 import { captureError, captureClientError } from './lib/sentry.ts';
@@ -243,9 +243,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
    * revocation rules.
    */
   const authenticateModerator = async (req: FastifyRequest): Promise<string | null> => {
-    const header = req.headers.authorization ?? '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    const payload = token ? verifyToken(token, config.sessionSecret, now()) : null;
+    // One step, on purpose: scheme parsing and signature verification are not
+    // separable here, so no attacker-controlled value decides whether the
+    // verification runs (see verifyBearerHeader in server/lib/token.ts, and
+    // CodeQL js/user-controlled-bypass, which the earlier split flagged).
+    const payload = verifyBearerHeader(req.headers.authorization, config.sessionSecret, now());
     if (!payload) return null;
     // Revocation: the token's version must still match the account's current
     // one (a bump signs everyone out / kills a leaked token).

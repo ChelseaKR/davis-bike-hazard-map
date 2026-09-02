@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { mockClient } from 'aws-sdk-client-mock';
 import {
   GetObjectCommand,
@@ -15,6 +15,7 @@ import {
   FilePhotoStore,
   S3PhotoStore,
   createPhotoStore,
+  resolveWithin,
 } from '../../server/lib/photoStore.ts';
 
 const bytes = (s: string) => new TextEncoder().encode(s);
@@ -52,6 +53,48 @@ describe('FilePhotoStore', () => {
   it('rejects unsafe ids (path-traversal guard)', async () => {
     const store = new FilePhotoStore(join(dir, 'photos'));
     await expect(store.put('../evil', bytes('x'))).rejects.toThrow(/unsafe photo id/);
+  });
+
+  it('keeps every file it touches inside the photo directory', async () => {
+    const root = join(dir, 'photos');
+    const store = new FilePhotoStore(root);
+    await store.put('2222', bytes('x'));
+    // put() writes `${dest}.tmp` then renames; both must have stayed under root.
+    for (const name of readdirSync(root)) {
+      expect(resolve(root, name).startsWith(`${resolve(root)}${sep}`)).toBe(true);
+    }
+  });
+});
+
+// The containment layer on its own. assertSafeId is a FORMAT check (does this
+// look like an id this server issued); resolveWithin is a CONTAINMENT check
+// (is the path we are about to touch under the photo directory). Only the
+// second is local to the file-system call, and it is what CodeQL
+// js/path-injection wants to see: before it existed, `join(dir, id)` left
+// three error-level findings standing on existsSync/readFileSync/rmSync.
+describe('resolveWithin (photo path containment)', () => {
+  const root = '/srv/data/photos';
+
+  it('resolves an ordinary id to a path inside the directory', () => {
+    expect(resolveWithin(root, 'abc-123')).toBe(join(root, 'abc-123'));
+  });
+
+  it('refuses a parent-directory escape', () => {
+    expect(() => resolveWithin(root, '../secrets')).toThrow(/unsafe photo id/);
+    expect(() => resolveWithin(root, 'a/../../secrets')).toThrow(/unsafe photo id/);
+  });
+
+  it('refuses an absolute path', () => {
+    expect(() => resolveWithin(root, '/etc/passwd')).toThrow(/unsafe photo id/);
+  });
+
+  it('refuses the directory itself and a sibling with the same prefix', () => {
+    expect(() => resolveWithin(root, '.')).toThrow(/unsafe photo id/);
+    expect(() => resolveWithin(root, '../photos-evil/x')).toThrow(/unsafe photo id/);
+  });
+
+  it('allows a nested path that stays inside', () => {
+    expect(resolveWithin(root, 'sub/abc')).toBe(join(root, 'sub', 'abc'));
   });
 });
 

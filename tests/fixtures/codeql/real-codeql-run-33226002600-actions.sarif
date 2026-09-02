@@ -1,0 +1,566 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "CodeQL",
+          "semanticVersion": "2.26.4",
+          "rules": []
+        },
+        "extensions": [
+          {
+            "name": "codeql/actions-queries",
+            "semanticVersion": "0.6.34+1d123a2caa0e4e6256a49d963bfcbd51a01617e8",
+            "notifications": [
+              {
+                "id": "actions/diagnostics/successfully-extracted-files",
+                "name": "actions/diagnostics/successfully-extracted-files",
+                "shortDescription": {
+                  "text": "Extracted files"
+                },
+                "fullDescription": {
+                  "text": "List all files that were extracted."
+                },
+                "defaultConfiguration": {
+                  "enabled": true
+                },
+                "properties": {
+                  "tags": [
+                    "successfully-extracted-files"
+                  ],
+                  "description": "List all files that were extracted.",
+                  "id": "actions/diagnostics/successfully-extracted-files",
+                  "kind": "diagnostic",
+                  "name": "Extracted files"
+                }
+              }
+            ],
+            "locations": [
+              {
+                "uri": "file:///opt/hostedtoolcache/CodeQL/2.26.4/x64/codeql/qlpacks/codeql/actions-queries/0.6.34/",
+                "description": {
+                  "text": "The QL pack root directory."
+                },
+                "properties": {
+                  "tags": [
+                    "CodeQL/LocalPackRoot"
+                  ]
+                }
+              },
+              {
+                "uri": "file:///opt/hostedtoolcache/CodeQL/2.26.4/x64/codeql/qlpacks/codeql/actions-queries/0.6.34/qlpack.yml",
+                "description": {
+                  "text": "The QL pack definition file."
+                },
+                "properties": {
+                  "tags": [
+                    "CodeQL/LocalPackDefinitionFile"
+                  ]
+                }
+              }
+            ],
+            "rules": [
+              {
+                "id": "actions/cache-poisoning/poisonable-step",
+                "name": "actions/cache-poisoning/poisonable-step",
+                "shortDescription": {
+                  "text": "Cache Poisoning via execution of untrusted code"
+                },
+                "defaultConfiguration": {
+                  "enabled": true,
+                  "level": "error"
+                },
+                "properties": {
+                  "tags": [
+                    "actions",
+                    "security",
+                    "external/cwe/cwe-349"
+                  ],
+                  "description": "The cache can be poisoned by untrusted code, leading to a cache poisoning attack.",
+                  "id": "actions/cache-poisoning/poisonable-step",
+                  "kind": "path-problem",
+                  "name": "Cache Poisoning via execution of untrusted code",
+                  "precision": "high",
+                  "problem.severity": "error",
+                  "security-severity": "7.5"
+                }
+              },
+              {
+                "id": "actions/untrusted-checkout/medium",
+                "name": "actions/untrusted-checkout/medium",
+                "shortDescription": {
+                  "text": "Checkout of untrusted code in a non-privileged context"
+                },
+                "defaultConfiguration": {
+                  "enabled": true,
+                  "level": "warning"
+                },
+                "properties": {
+                  "tags": [
+                    "actions",
+                    "security",
+                    "external/cwe/cwe-829"
+                  ],
+                  "description": "Checking out and running the build script from a fork executes untrusted code. Even in a\n              non-privileged workflow, this can be abused, for example to compromise self-hosted runners\n              or to poison caches and artifacts that are later consumed by privileged workflows.",
+                  "id": "actions/untrusted-checkout/medium",
+                  "kind": "problem",
+                  "name": "Checkout of untrusted code in a non-privileged context",
+                  "precision": "medium",
+                  "problem.severity": "warning",
+                  "security-severity": "5.0"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "ruleId": "actions/cache-poisoning/poisonable-step",
+          "rule": {
+            "id": "actions/cache-poisoning/poisonable-step",
+            "index": 18,
+            "toolComponent": {
+              "index": 1
+            }
+          },
+          "message": {
+            "text": "Potential cache poisoning in the context of the default branch due to privilege checkout of untrusted code from [needs.authorize.outputs.release-commit](1). ([workflow_dispatch](2))."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 83,
+                  "startColumn": 9,
+                  "endLine": 88,
+                  "endColumn": 7
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "8d8a26d083ef0bf6:1",
+            "primaryLocationStartColumnFingerprint": "2"
+          },
+          "codeFlows": [
+            {
+              "threadFlows": [
+                {
+                  "locations": [
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 65,
+                            "startColumn": 17,
+                            "endColumn": 62
+                          }
+                        },
+                        "message": {
+                          "text": "needs.authorize.outputs.release-commit"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 63,
+                            "startColumn": 9,
+                            "endLine": 67,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Uses Step"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 67,
+                            "startColumn": 9,
+                            "endLine": 78,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Run Step"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 78,
+                            "startColumn": 9,
+                            "endLine": 83,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Uses Step"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 83,
+                            "startColumn": 9,
+                            "endLine": 88,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Run Step"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "relatedLocations": [
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 65,
+                  "startColumn": 17,
+                  "endColumn": 62
+                }
+              },
+              "message": {
+                "text": "needs.authorize.outputs.release-commit"
+              }
+            },
+            {
+              "id": 2,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 16,
+                  "startColumn": 3,
+                  "endColumn": 20
+                }
+              },
+              "message": {
+                "text": "workflow_dispatch"
+              }
+            },
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 65,
+                  "startColumn": 17,
+                  "endColumn": 62
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "actions/cache-poisoning/poisonable-step",
+          "rule": {
+            "id": "actions/cache-poisoning/poisonable-step",
+            "index": 18,
+            "toolComponent": {
+              "index": 1
+            }
+          },
+          "message": {
+            "text": "Potential cache poisoning in the context of the default branch due to privilege checkout of untrusted code from [needs.authorize.outputs.release-commit](1). ([workflow_dispatch](2))."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 88,
+                  "startColumn": 9,
+                  "endLine": 90,
+                  "endColumn": 3
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "b4fd2b7d0bb5d23:1",
+            "primaryLocationStartColumnFingerprint": "2"
+          },
+          "codeFlows": [
+            {
+              "threadFlows": [
+                {
+                  "locations": [
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 65,
+                            "startColumn": 17,
+                            "endColumn": 62
+                          }
+                        },
+                        "message": {
+                          "text": "needs.authorize.outputs.release-commit"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 63,
+                            "startColumn": 9,
+                            "endLine": 67,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Uses Step"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 67,
+                            "startColumn": 9,
+                            "endLine": 78,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Run Step"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 78,
+                            "startColumn": 9,
+                            "endLine": 83,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Uses Step"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 83,
+                            "startColumn": 9,
+                            "endLine": 88,
+                            "endColumn": 7
+                          }
+                        },
+                        "message": {
+                          "text": "Run Step"
+                        }
+                      }
+                    },
+                    {
+                      "location": {
+                        "physicalLocation": {
+                          "artifactLocation": {
+                            "uri": ".github/workflows/release.yml",
+                            "uriBaseId": "%SRCROOT%",
+                            "index": 0
+                          },
+                          "region": {
+                            "startLine": 88,
+                            "startColumn": 9,
+                            "endLine": 90,
+                            "endColumn": 3
+                          }
+                        },
+                        "message": {
+                          "text": "Run Step"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "relatedLocations": [
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 65,
+                  "startColumn": 17,
+                  "endColumn": 62
+                }
+              },
+              "message": {
+                "text": "needs.authorize.outputs.release-commit"
+              }
+            },
+            {
+              "id": 2,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 16,
+                  "startColumn": 3,
+                  "endColumn": 20
+                }
+              },
+              "message": {
+                "text": "workflow_dispatch"
+              }
+            },
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 65,
+                  "startColumn": 17,
+                  "endColumn": 62
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "actions/untrusted-checkout/medium",
+          "rule": {
+            "id": "actions/untrusted-checkout/medium",
+            "index": 22,
+            "toolComponent": {
+              "index": 1
+            }
+          },
+          "message": {
+            "text": "Potential unsafe checkout of untrusted pull request on non-privileged workflow."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/release.yml",
+                  "uriBaseId": "%SRCROOT%",
+                  "index": 0
+                },
+                "region": {
+                  "startLine": 63,
+                  "startColumn": 9,
+                  "endLine": 67,
+                  "endColumn": 7
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "primaryLocationLineHash": "b10eb51c40667844:1",
+            "primaryLocationStartColumnFingerprint": "2"
+          }
+        }
+      ]
+    }
+  ]
+}
