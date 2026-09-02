@@ -20,10 +20,10 @@
   ],
   "acknowledged": [
     {
-      "ruleId": "js/user-controlled-bypass",
-      "path": "server/app.ts",
-      "language": "javascript-typescript",
-      "reason": "authenticateModerator parses the Authorization header before verifying it: `const token = header.startsWith('Bearer ') ? header.slice(7) : ''`. CodeQL sees a user-controlled value deciding a branch on the path to an authorization decision. The branch is scheme parsing, not the decision. Failing it sets token to the empty string, which skips verifyToken, leaves payload null, and returns null - a 401. The only direction a caller can push this condition is toward denial, so it is not a bypass. Authorization itself is verifyToken (HMAC-SHA256 over the server session secret, constant-time compare, expiry checked - server/lib/token.ts) followed by an equality check of the token's `ver` against the account's current tokenVersion, which is what revokes a leaked token. None of that is user-controlled. Reviewed 2026-08-27; re-review if authenticateModerator stops verifying before it trusts."
+      "ruleId": "actions/cache-poisoning/poisonable-step",
+      "path": ".github/workflows/release.yml",
+      "language": "actions",
+      "reason": "Recording a decision the repository owner has already made and published, not making one: GHAS code-scanning alerts #10 and #11 (both this rule, both this file, at the `npm ci` and `make verify` steps of the `verify` job) were dismissed as false-positive by ChelseaKR on 2026-08-21T17:05Z. This entry covers both instances - the gate matches an acknowledgement by ruleId and path, so one entry answers every finding of this rule in this file. Substance: CodeQL reads `needs.authorize.outputs.release-commit` as untrusted code checked out in a default-branch context. It is not untrusted. The `authorize` job resolves the dispatched tag against the pinned portfolio-standards authorizer, verifies the annotated tag's SSH signature against .github/allowed_signers, and proves the tagged commit is an ancestor of main before emitting that output; CodeQL cannot see any of that. There is also no source fix available: a release-verification job exists precisely to run the repository's own build at the tagged commit, and actions/setup-node has no input that disables its Node-distribution tool cache (release.yml already carries the matching zizmor ignore and that note). Re-review if the authorize job stops verifying the tag signature and the ancestry of the commit it emits, or if setup-node gains a tool-cache toggle."
     }
   ]
 }

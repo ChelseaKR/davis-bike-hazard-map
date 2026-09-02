@@ -7,7 +7,7 @@
  * Memory/File adapters satisfy it trivially for tests and single-node dev.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import {
   S3Client,
   GetObjectCommand,
@@ -26,6 +26,34 @@ export interface PhotoStore {
 /** Ids are server-generated (UUID + `-thumb`); reject anything else. */
 function assertSafeId(id: string): void {
   if (!/^[A-Za-z0-9-]+$/.test(id)) throw new Error(`unsafe photo id: ${id}`);
+}
+
+/**
+ * Resolve `id` to an absolute path that is provably inside `dir`.
+ *
+ * `assertSafeId` is a FORMAT check: it says the id looks like one this server
+ * issued. This is a CONTAINMENT check: it says the path we are about to touch
+ * is under the photo directory, whatever the id turned out to be. The two are
+ * not the same property, and only the second one is local to the file system
+ * call — which is why the first, on its own, left three error-level
+ * `js/path-injection` findings (CWE-22/23/36/73) standing on
+ * `existsSync`/`readFileSync`/`rmSync`: the id reaching those sinks is
+ * `req.params.id` off `GET /api/photos/:id`.
+ *
+ * Escape is refused here rather than at the caller, so no adapter method can
+ * forget it and no future relaxation of the id regex can turn into a traversal.
+ */
+export function resolveWithin(dir: string, id: string): string {
+  const root = resolve(dir);
+  const full = resolve(root, id);
+  if (!full.startsWith(`${root}${sep}`)) throw new Error(`unsafe photo id: ${id}`);
+  return full;
+}
+
+/** Both layers, in the order a file-system call needs them. */
+function containedPath(dir: string, id: string): string {
+  assertSafeId(id);
+  return resolveWithin(dir, id);
 }
 
 export class MemoryPhotoStore implements PhotoStore {
@@ -52,8 +80,7 @@ export class FilePhotoStore implements PhotoStore {
   }
 
   private path(id: string): string {
-    assertSafeId(id);
-    return join(this.dir, id);
+    return containedPath(this.dir, id);
   }
 
   async put(id: string, bytes: Uint8Array): Promise<void> {

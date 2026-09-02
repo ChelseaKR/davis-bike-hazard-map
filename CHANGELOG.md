@@ -9,6 +9,35 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- The CodeQL SAST gate can fail, and the four error-level findings it had been
+  passing are fixed at source rather than waived. The blocking step was
+  `jq '… select(.level == "error") …'` over CodeQL SARIF; CodeQL does not put a
+  `level` on a result (SARIF 2.1.0 §3.27.10 inherits it from the rule's
+  `defaultConfiguration`, and CodeQL keeps its rules in `tool.extensions`, not
+  `tool.driver.rules`), so the count was `0` for every input and the step the
+  workflow itself labelled "this is what actually blocks CI now" went green on
+  anything — including a run carrying a security-severity 7.8 finding. The gate
+  is now `scripts/codeql-gate.mjs`: it resolves severity through the rule table,
+  fails closed on a severity it cannot resolve, is scoped to the matrix leg it
+  is grading, and reads `.github/codeql-acknowledged.json`, where every entry
+  needs a written reason and an entry matching nothing fails the build so the
+  list cannot rot open. Then the findings themselves:
+  `js/user-controlled-bypass` (7.8, CWE-807/CWE-290) at `server/app.ts` —
+  `authenticateModerator` split the `Authorization` header before verifying it,
+  letting an attacker-controlled value decide whether the signature check ran at
+  all; header parsing and verification are now one step,
+  `verifyBearerHeader` in `server/lib/token.ts`, and a test pins the shape so a
+  refactor cannot re-split it. `js/path-injection` ×3 (CWE-22/23/36/73) at
+  `server/lib/photoStore.ts` — the id reaching `existsSync`/`readFileSync`/
+  `rmSync` is `req.params.id` off `GET /api/photos/:id`, guarded only by a
+  format check in another function; a containment check (`resolveWithin`)
+  now refuses any resolved path outside the photo directory, at the call. The
+  two `actions/cache-poisoning/poisonable-step` findings in `release.yml` are
+  acknowledged with the reasoning, recording the dismissal already made on
+  GHAS alerts #10/#11 — `authorize` verifies the tag signature and the
+  commit's ancestry before emitting the ref CodeQL reads as untrusted, and
+  `actions/setup-node` has no tool-cache toggle.
+
 - The documentation-audit gate can fail on something other than staleness.
   `scripts/doc_audit.py --check` re-rendered the generated block of
   `docs/DOCUMENTATION-AUDIT.md` and diffed it against the committed text, so

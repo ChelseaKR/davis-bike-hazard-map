@@ -227,9 +227,32 @@ describe('the committed acknowledgement list', () => {
     expect(() => loadAcknowledgements(bad)).toThrow(/missing a non-empty "reason"/);
   });
 
-  it('covers the real SARIF exactly: no unacknowledged errors, no stale entries', () => {
-    const { problems } = gradeSarif([realSarif()], loadAcknowledgements(ACK), JS);
+  it('covers the real actions SARIF exactly: no unacknowledged errors, no stale entries', () => {
+    const { problems } = gradeSarif([realActionsSarif()], loadAcknowledgements(ACK), ACTIONS);
     expect(problems).toEqual([]);
+  });
+
+  /**
+   * The 7.8 finding this PR is named after is FIXED, not excused.
+   *
+   * It was acknowledged here at first, with reasoning. It is not any more:
+   * `authenticateModerator` no longer branches on an attacker-controlled value
+   * on the way to the authorization decision (server/lib/token.ts
+   * `verifyBearerHeader`), so there is nothing left to acknowledge. An entry
+   * for it would now be stale, and the guard above would say so.
+   */
+  it('holds no entry for js/user-controlled-bypass — that one was fixed at source', () => {
+    const entries = loadAcknowledgements(ACK);
+    expect(entries.some((e: { ruleId: string }) => e.ruleId === 'js/user-controlled-bypass')).toBe(
+      false,
+    );
+    // And the historical SARIF that carried it is therefore NOT covered by the
+    // committed list: the record of the defect still fails the gate, which is
+    // what "fixed at source" is supposed to look like from here.
+    const { problems } = gradeSarif([realSarif()], entries, JS);
+    expect(problems).toEqual([
+      expect.stringContaining('js/user-controlled-bypass at server/app.ts'),
+    ]);
   });
 });
 
@@ -248,23 +271,22 @@ describe('one acknowledgement list, one matrix leg at a time', () => {
   const ACK = resolve(REPO, '.github/codeql-acknowledged.json');
 
   it('does not call another leg\'s acknowledgement stale', () => {
-    // Reproduces the CI failure: the committed list against the real `actions`
-    // SARIF. Before language scoping this reported a stale acknowledgement.
-    const { problems } = gradeSarif(
-      [realActionsSarif()],
-      loadAcknowledgements(ACK),
-      ACTIONS,
-    );
+    // Reproduces the CI failure with the legs the other way round: the
+    // committed list (one `actions` entry) against a real `javascript` SARIF.
+    // Before language scoping, an entry belonging to the other leg was reported
+    // stale here no matter what the code said.
+    const { problems } = gradeSarif([realSarif()], loadAcknowledgements(ACK), JS);
     expect(problems.some((p: string) => p.includes('stale acknowledgement'))).toBe(false);
   });
 
   it('would fail on the stale guard alone, even with nothing else to report', () => {
-    // The same list against an EMPTY actions SARIF. Nothing to find, nothing to
-    // excuse: whatever this returns is the guard talking about itself.
+    // The same list against an EMPTY SARIF. Nothing to find, nothing to excuse:
+    // whatever this returns is the guard talking about itself.
     const empty = { version: '2.1.0', runs: [{ tool: { driver: { rules: [] } }, results: [] }] };
-    expect(gradeSarif([empty], loadAcknowledgements(ACK), ACTIONS).problems).toEqual([]);
-    // ...and the javascript leg still holds its own entry to account.
-    expect(gradeSarif([empty], loadAcknowledgements(ACK), JS).problems).toEqual([
+    // The javascript leg holds no entry of its own, so it has nothing to say.
+    expect(gradeSarif([empty], loadAcknowledgements(ACK), JS).problems).toEqual([]);
+    // The actions leg does, and it accounts for it.
+    expect(gradeSarif([empty], loadAcknowledgements(ACK), ACTIONS).problems).toEqual([
       expect.stringContaining('stale acknowledgement'),
     ]);
   });

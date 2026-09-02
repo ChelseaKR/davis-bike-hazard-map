@@ -63,3 +63,41 @@ export function verifyToken(token: string, secret: string, now: number): Session
     return null;
   }
 }
+
+const BEARER = 'Bearer ';
+
+/**
+ * Verify a whole `Authorization` header value in one step.
+ *
+ * Parsing the `Bearer ` scheme and verifying the signature are deliberately
+ * NOT separable at the call site. Callers used to do this:
+ *
+ *     const header = req.headers.authorization ?? '';
+ *     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+ *     const payload = token ? verifyToken(token, secret, now()) : null;
+ *
+ * which put an attacker-controlled value in a condition that decides whether
+ * the verification step runs at all — CodeQL `js/user-controlled-bypass`
+ * (CWE-807/CWE-290, security-severity 7.8) flagged exactly that line. The
+ * behaviour was safe (the false branch denies), but the shape is the one that
+ * goes wrong the moment someone adds an `else`, and a security gate that has
+ * to be argued with on every scan is a gate nobody reads.
+ *
+ * Here there is nothing to bypass: a missing header, a wrong scheme, a
+ * malformed token and a bad signature all take the same single path through
+ * `verifyToken` and produce the same answer, `null`. No caller branches on the
+ * shape of the header on the way to an authorization decision, because no
+ * caller ever sees it.
+ */
+export function verifyBearerHeader(
+  header: string | undefined,
+  secret: string,
+  now: number,
+): SessionPayload | null {
+  const value = header ?? '';
+  // A value select, not a guard: verifyToken runs on every path. A header that
+  // does not carry the Bearer scheme becomes the empty string, which
+  // verifyToken rejects like any other unusable token.
+  const token = value.slice(0, BEARER.length) === BEARER ? value.slice(BEARER.length) : '';
+  return verifyToken(token, secret, now);
+}
