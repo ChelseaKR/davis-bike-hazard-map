@@ -29,10 +29,18 @@ import {
   handoffStatusSchema,
   alertSubscriptionSchema,
 } from '../shared/validation.ts';
-import { SEVERITY_RANK, type Severity } from '../shared/types.ts';
-import { rankRoutes, findFastestAlternative, type RoutePlan } from '../shared/routing.ts';
+import { SEVERITY_RANK, type Hazard, type Severity } from '../shared/types.ts';
+import type { ValidatedHazardFilters } from '../shared/validation.ts';
+import {
+  rankRoutes,
+  findFastestAlternative,
+  isDarkAt,
+  DAVIS_LAT,
+  DAVIS_LNG,
+  type RoutePlan,
+} from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
-import type { Repository } from './lib/repository.ts';
+import { TOMBSTONE_TTL_MS, type Repository } from './lib/repository.ts';
 import type { StoredHazard } from './lib/types.ts';
 import { MemoryPhotoStore, type PhotoStore } from './lib/photoStore.ts';
 import {
@@ -52,6 +60,7 @@ import { openapiSpec } from './openapi.ts';
 const API_VERSION = '1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 import {
+  areaReportCounts,
   confirmHazard,
   createHazard,
   listModerationQueue,
@@ -67,6 +76,7 @@ import {
   sweepHandoffRetries,
   type HandoffRetrySweepResult,
 } from './lib/handoffRetry.ts';
+import { postOsmNote, isOsmEligible } from './lib/osmNotes.ts';
 import { fetchRoutes } from './lib/routing.ts';
 import { applyHandoffStatus, initialHandoff } from './lib/lifecycle.ts';
 import {
@@ -402,31 +412,56 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Public feed ---
   app.get('/api/hazards', async (req, reply) => {
     const filters = hazardFiltersSchema.parse(parseHazardQuery(req.query));
-    // bbox is pushed down to the store (SQL) for spatial culling at scale. The
-    // feed also carries recently-resolved hazards (greyed client-side) so a fix
-    // is visible, not just an absence — see listPublicFeed.
-    let hazards = await listPublicFeed(
-      repo,
-      now(),
-      config.resolvedVisibleDays * DAY_MS,
-      filters.bbox,
-    );
+    const nowMs = now();
 
-    if (filters.categories?.length) {
-      const set = new Set(filters.categories);
-      hazards = hazards.filter((h) => set.has(h.category));
-    }
-    if (filters.minSeverity) {
-      const min = SEVERITY_RANK[filters.minSeverity];
-      hazards = hazards.filter((h) => SEVERITY_RANK[h.severity] >= min);
-    }
-    if (filters.withinDays) {
-      const cutoff = now() - filters.withinDays * 24 * 60 * 60 * 1000;
-      hazards = hazards.filter((h) => h.updatedAt >= cutoff);
+    // Delta feed for the 30s mobile poll: the client sends the last serverTime
+    // it saw as `updatedSince`, and we return only what changed since — the
+    // changed rows plus id-only tombstones for removals — so a poll ships bytes
+    // proportional to the churn, not the whole feed. A cursor older than we keep
+    // tombstones for can't be served losslessly, so we fall through to the full
+    // feed (a response with no `deletedIds` tells the client to fully refresh).
+    const cursor = filters.updatedSince;
+    if (cursor !== undefined && cursor >= nowMs - TOMBSTONE_TTL_MS) {
+      await repo.expire(nowMs);
+      const resolvedVisibleMs = config.resolvedVisibleDays * DAY_MS;
+      const changed = await repo.listUpdatedSince(cursor, nowMs, filters.bbox);
+      // A removal reaches the client two ways and BOTH have to be in the
+      // response: a hard delete leaves an id-only tombstone and no row, while a
+      // hazard that expired, was rejected, or whose resolved-visible window ran
+      // out still has a row but has left the public feed. Reporting only the
+      // first is what let a phone on the 30s poll keep drawing an expired
+      // hazard forever — the delta never said it was gone and the client's
+      // merge only removes what `deletedIds` names.
+      const removed = new Set([
+        ...(await repo.listTombstones(cursor)),
+        ...(await repo.listRemovedSince(cursor, nowMs, resolvedVisibleMs)),
+      ]);
+      // Departure wins over "changed": a row can satisfy both (a hazard
+      // resolved this instant under resolvedVisibleDays=0), and the client must
+      // not be handed a hazard the full feed would no longer carry.
+      const hazards = applyFeedFilters(
+        changed.filter((h) => !removed.has(h.id)).map(toPublic),
+        filters,
+        nowMs,
+      );
+      // Removals are deliberately NOT culled by bbox or the display filters:
+      // an extra id the client never held is a no-op, a missing one is a
+      // hazard drawn forever.
+      return reply
+        .header('cache-control', 'no-cache')
+        .send({ hazards, deletedIds: [...removed], serverTime: nowMs });
     }
 
-    // Conditional request: hash the payload so repeat polls (every 30s) get a
-    // cheap 304 instead of re-downloading the whole feed.
+    // Full feed (first load or a stale cursor). bbox is pushed down to the store
+    // (SQL) for spatial culling at scale. The feed also carries recently-resolved
+    // hazards (greyed client-side) so a fix is visible, not just an absence.
+    let hazards = await listPublicFeed(repo, nowMs, config.resolvedVisibleDays * DAY_MS, filters.bbox);
+    hazards = applyFeedFilters(hazards, filters, nowMs);
+
+    // Conditional request: hash the payload so repeat polls get a cheap 304
+    // instead of re-downloading the whole feed. `serverTime` is sent OUTSIDE the
+    // hashed body so it doesn't bust the ETag; the client uses it to seed its
+    // delta cursor after the first full load.
     const body = JSON.stringify({ hazards });
     const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
     if (req.headers['if-none-match'] === etag) {
@@ -436,7 +471,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .header('etag', etag)
       .header('cache-control', 'no-cache')
       .header('content-type', 'application/json')
-      .send(body);
+      .send(JSON.stringify({ hazards, serverTime: nowMs }));
   });
 
   // --- Submit a report (idempotent on clientId) ---
@@ -522,6 +557,26 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .send(JSON.stringify({ type: 'FeatureCollection', license: 'MIT', features }));
   });
 
+  // --- Coverage: reports RECEIVED per Davis area (equity view) ---
+  // Not the public feed. The feed is what is on the map now; this is what has
+  // ever been reported, minus rejected. The coverage view labels an area a
+  // "data desert" when nobody has reported there, and a report that is still
+  // in the moderation queue, or has expired, means somebody did — so counting
+  // the feed here would print the opposite of the truth. See areaReportCounts.
+  app.get('/api/coverage', async (req, reply) => {
+    const areas = await areaReportCounts(repo);
+    const body = JSON.stringify({ areas });
+    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+    return reply
+      .header('etag', etag)
+      .header('cache-control', 'no-cache')
+      .header('content-type', 'application/json')
+      .send(body);
+  });
+
   // --- Hazard-aware bike route planner ---
   // Proxies an OSRM cycling backend (server-side, so the browser stays
   // same-origin / offline-cacheable), then re-ranks the candidate routes to
@@ -533,11 +588,20 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       to: parsePoint(q.to),
     });
 
-    const hazards = await listPublic(repo, now());
+    const at = now();
+    const hazards = await listPublic(repo, at);
     const { routes, source } = await fetchRoutes(from, to, { routingUrl: config.routingUrl }, fetchImpl);
+    // After civil twilight, weight poor-visibility hazards higher — an unlit
+    // path matters more in the dark. Derived from the request time + Davis
+    // location so it's honest and needs no external API.
+    const isDark = isDarkAt(at, DAVIS_LAT, DAVIS_LNG);
     // Corridor slightly wider than the privacy fuzz grid (~70 m cells) so a
     // hazard published a cell away from the true spot still influences scoring.
-    const ranked = rankRoutes(routes, hazards, { now: now(), corridorMeters: 45 });
+    const ranked = rankRoutes(routes, hazards, {
+      now: at,
+      corridorMeters: 45,
+      conditions: { isDark },
+    });
     const best = ranked[0];
 
     const plan: RoutePlan = {
@@ -548,6 +612,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       nearby: best.nearby,
       alternativesConsidered: routes.length,
       fastestAlternative: findFastestAlternative(ranked),
+      ...(isDark ? { nightWeighting: true } : {}),
     };
     return { plan };
   });
@@ -806,6 +871,41 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return handoffSweepInFlight;
   });
 
+  // --- Optional OSM Notes feedback loop (moderator-triggered, dry-run default) ---
+  // Drafts an anonymous OSM Note for a hazard describing a permanent map feature
+  // (eligible categories only). Dry-runs unless OSM_NOTES_ENABLED is set. The
+  // note carries only the FUZZED location + category/severity labels + a
+  // back-link — never description, photo, or reporter data (see osmNotes.ts).
+  app.post('/api/moderation/:id/osm-note', { preHandler: requireModerator }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const hazard = await repo.findById(id);
+    if (!hazard) {
+      return reply.status(404).send({ error: 'not_found', message: 'Hazard not found.' });
+    }
+    if (!isOsmEligible(hazard.category)) {
+      return reply.status(400).send({
+        error: 'ineligible_category',
+        message: 'Only permanent-infrastructure categories can be suggested to OSM.',
+      });
+    }
+    const result = await postOsmNote(
+      hazard,
+      {
+        enabled: config.osmNotesEnabled,
+        apiUrl: config.osmNotesApiUrl,
+      },
+      fetchImpl,
+    );
+    // Record the suggestion (who + dry-run/delivered) as the audit trail, the
+    // same way the 311 hand-off records its intent. Even a dry-run is recorded.
+    const by = (req as AuthedRequest).moderatorUsername;
+    const updated = await repo.update(id, {
+      osmNote: { by, at: now(), dryRun: result.dryRun, delivered: result.delivered },
+      updatedAt: now(),
+    });
+    return { result, hazard: updated ? toPublic(updated) : toPublic(hazard) };
+  });
+
   // --- 311 status sync-back: inbound webhook (city/GOGov → us) ---
   // Cryptographically hardened ingress (FIX-02) for the product's highest-trust
   // claim. The sender must present an HMAC-SHA256 over the RAW body plus a
@@ -901,12 +1001,39 @@ function parseHazardQuery(query: unknown): Record<string, unknown> {
   }
   if (typeof q.minSeverity === 'string' && q.minSeverity) out.minSeverity = q.minSeverity;
   if (typeof q.withinDays === 'string' && q.withinDays) out.withinDays = q.withinDays;
+  if (typeof q.updatedSince === 'string' && q.updatedSince) out.updatedSince = q.updatedSince;
   // bbox=minLat,minLng,maxLat,maxLng (Leaflet getBounds order: S,W,N,E).
   if (typeof q.bbox === 'string' && q.bbox) {
     const parts = q.bbox.split(',').map(Number);
     if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
       out.bbox = { minLat: parts[0], minLng: parts[1], maxLat: parts[2], maxLng: parts[3] };
     }
+  }
+  return out;
+}
+
+/**
+ * Apply the category / min-severity / recency filters shared by the full and
+ * delta feeds (bbox is pushed down to the store). Kept in one place so both
+ * paths cull identically.
+ */
+function applyFeedFilters(
+  hazards: Hazard[],
+  filters: ValidatedHazardFilters,
+  nowMs: number,
+): Hazard[] {
+  let out = hazards;
+  if (filters.categories?.length) {
+    const set = new Set(filters.categories);
+    out = out.filter((h) => set.has(h.category));
+  }
+  if (filters.minSeverity) {
+    const min = SEVERITY_RANK[filters.minSeverity];
+    out = out.filter((h) => SEVERITY_RANK[h.severity] >= min);
+  }
+  if (filters.withinDays) {
+    const cutoff = nowMs - filters.withinDays * 24 * 60 * 60 * 1000;
+    out = out.filter((h) => h.updatedAt >= cutoff);
   }
   return out;
 }

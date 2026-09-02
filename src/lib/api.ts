@@ -14,6 +14,7 @@ import type {
 } from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import type { Watch } from '../../shared/alerts.ts';
+import type { AreaCount } from '../../shared/areas.ts';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -50,23 +51,53 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** Optional delta-poll cursor layered on top of the display filters. */
+export type HazardQuery = HazardFilters & { updatedSince?: number };
+
 /** Build the public hazards query string from filters. */
-export function buildHazardQuery(filters?: HazardFilters): string {
+export function buildHazardQuery(filters?: HazardQuery): string {
   if (!filters) return '';
   const params = new URLSearchParams();
   if (filters.categories?.length) params.set('categories', filters.categories.join(','));
   if (filters.minSeverity) params.set('minSeverity', filters.minSeverity);
   if (filters.withinDays) params.set('withinDays', String(filters.withinDays));
+  if (filters.updatedSince !== undefined) params.set('updatedSince', String(filters.updatedSince));
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
-/** Fetch the public (approved, unexpired) hazard list. */
-export async function fetchHazards(filters?: HazardFilters): Promise<Hazard[]> {
-  const { hazards } = await request<{ hazards: Hazard[] }>(
-    `/hazards${buildHazardQuery(filters)}`,
-  );
-  return hazards;
+/**
+ * The public feed response. `deletedIds` and `serverTime` are present on delta
+ * responses (a poll that passed `updatedSince`); a full feed omits `deletedIds`
+ * (the client then treats it as a full refresh) and carries `serverTime` so the
+ * client can seed its delta cursor.
+ */
+export interface HazardFeed {
+  hazards: Hazard[];
+  deletedIds?: string[];
+  serverTime?: number;
+}
+
+/**
+ * Fetch the public hazard feed. With no `updatedSince` this is the full feed;
+ * with a cursor it returns only what changed since (plus id-only tombstones).
+ */
+export async function fetchHazards(filters?: HazardQuery): Promise<HazardFeed> {
+  return request<HazardFeed>(`/hazards${buildHazardQuery(filters)}`);
+}
+
+/**
+ * Fetch reports RECEIVED per Davis area, for the coverage view.
+ *
+ * A different set from `fetchHazards`, on purpose: the feed is what is on the
+ * map now, this is what has ever been reported (minus rejected). The coverage
+ * view calls an area a "data desert" when nobody has reported there, so it must
+ * not be computed from the feed — reports sitting in the moderation queue, or
+ * long since expired, would vanish and the area would read as never observed.
+ */
+export async function fetchCoverage(): Promise<AreaCount[]> {
+  const { areas } = await request<{ areas: AreaCount[] }>('/coverage');
+  return areas;
 }
 
 /** Submit a report. Idempotent on `clientId`, so retries are safe. */
@@ -257,5 +288,29 @@ export async function decideModeration(
     method: 'POST',
     headers: { authorization: `Bearer ${token}` },
     body: JSON.stringify({ decision, reason }),
+  });
+}
+
+/** Result of an OSM Note suggestion (dry-run by default). */
+export interface OsmNoteResult {
+  delivered: boolean;
+  dryRun: boolean;
+  payload: { lat: number; lon: number; text: string };
+  status?: number;
+  error?: string;
+}
+
+/**
+ * Moderation: draft (dry-run by default) an OSM Note for a permanent-infrastructure
+ * hazard. Only eligible categories are accepted server-side (400 otherwise).
+ */
+export async function suggestOsmNote(
+  id: string,
+  token: string,
+): Promise<{ result: OsmNoteResult; hazard: Hazard }> {
+  return request<{ result: OsmNoteResult; hazard: Hazard }>(`/moderation/${id}/osm-note`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
   });
 }

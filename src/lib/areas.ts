@@ -1,76 +1,32 @@
 /**
- * Coverage-by-area bucketing for the equity view.
+ * Coverage-by-area presentation for the equity view.
  *
  * The map can mislead: an empty area reads as "safe" when it often just means
  * "under-reported". Bucketing reports into named Davis areas surfaces that gap
  * explicitly — see docs/audits/coverage-equity.md.
  *
- * Areas are approximate, ordered boxes; the first box that contains a (fuzzed,
- * public) point wins, with an "Elsewhere in Davis" fallback.
+ * The area boxes themselves live in `shared/areas.ts`, because the server
+ * tallies reports against the same boxes for `GET /api/coverage`. This module
+ * is the client-side read of those tallies: exposure normalization and the
+ * data-desert call-out.
  */
 import type { Hazard } from '../../shared/types.ts';
+import { DAVIS_AREAS, ELSEWHERE_AREA, tallyByArea, type AreaCount } from '../../shared/areas.ts';
 
-export interface Area {
-  name: string;
-  minLat: number;
-  minLng: number;
-  maxLat: number;
-  maxLng: number;
-  /**
-   * Relative estimated cycling *exposure* for the area (unitless weight, only
-   * meaningful relative to the other areas' weights). This is a deliberately
-   * COARSE heuristic — a rough stand-in for "how much riding happens here" so
-   * the coverage view can flag where reports are scarce *relative to ridership*
-   * rather than in absolute terms. It is NOT a measured ridership/population
-   * figure; the literature (research roadmap EV-SKEW) warns that exposure
-   * denominators are themselves uncertain and can introduce bias, so this is
-   * surfaced qualitatively, always paired with the limits note in CoverageView,
-   * and never presented as ground truth. See docs/audits/coverage-equity.md.
-   */
-  exposureWeight: number;
-}
-
-export const DAVIS_AREAS: Area[] = [
-  { name: 'UC Davis campus', minLat: 38.53, maxLat: 38.545, minLng: -121.77, maxLng: -121.745, exposureWeight: 5 },
-  { name: 'North Davis', minLat: 38.56, maxLat: 38.6, minLng: -121.8, maxLng: -121.7, exposureWeight: 3 },
-  { name: 'South Davis', minLat: 38.5, maxLat: 38.535, minLng: -121.8, maxLng: -121.7, exposureWeight: 2 },
-  { name: 'West Davis', minLat: 38.535, maxLat: 38.56, minLng: -121.8, maxLng: -121.755, exposureWeight: 3 },
-  { name: 'East Davis', minLat: 38.535, maxLat: 38.56, minLng: -121.73, maxLng: -121.7, exposureWeight: 3 },
-  { name: 'Central Davis', minLat: 38.535, maxLat: 38.56, minLng: -121.755, maxLng: -121.73, exposureWeight: 4 },
-];
-
-const ELSEWHERE = 'Elsewhere in Davis';
-
-export interface AreaCount {
-  name: string;
-  count: number;
-}
-
-function areaFor(h: Hazard): string {
-  const a = DAVIS_AREAS.find(
-    (area) =>
-      h.location.lat >= area.minLat &&
-      h.location.lat <= area.maxLat &&
-      h.location.lng >= area.minLng &&
-      h.location.lng <= area.maxLng,
-  );
-  return a?.name ?? ELSEWHERE;
-}
+export { DAVIS_AREAS, ELSEWHERE_AREA, type AreaCount };
+export type { Area } from '../../shared/areas.ts';
 
 /**
- * Count hazards per area. Every named area is always present (so zero-report
- * areas are visible — that's the point), with "Elsewhere in Davis" appended
- * only when something lands outside the named boxes.
+ * Tally the hazards *currently in the public feed* by area.
+ *
+ * NOTE the set: the public feed carries approved-and-unexpired hazards plus
+ * recently-resolved ones. It is NOT "reports received" — pending, rejected,
+ * expired and older-resolved reports are all absent from it. Use this only
+ * where the count is explicitly described as what is on the map right now;
+ * `GET /api/coverage` is the authority on reports received.
  */
 export function bucketByArea(hazards: Hazard[]): AreaCount[] {
-  const counts = new Map<string, number>(DAVIS_AREAS.map((a) => [a.name, 0]));
-  for (const h of hazards) {
-    const key = areaFor(h);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  const named = DAVIS_AREAS.map((a) => ({ name: a.name, count: counts.get(a.name) ?? 0 }));
-  const elsewhere = counts.get(ELSEWHERE) ?? 0;
-  return elsewhere > 0 ? [...named, { name: ELSEWHERE, count: elsewhere }] : named;
+  return tallyByArea(hazards.map((h) => h.location));
 }
 
 /** How an area's report share compares to its estimated cycling exposure. */
@@ -108,22 +64,23 @@ const OVER_RATIO = 1.5;
  * exposure weights are a rough heuristic (see `Area.exposureWeight`), so the
  * output is intentionally qualitative and MUST be shown with the limits note.
  *
+ * Takes tallies rather than hazards on purpose. The tally that belongs here is
+ * *reports received* (`GET /api/coverage`), not the public feed: an area whose
+ * reports are all still in the moderation queue, or have since expired, has in
+ * fact been observed, and calling it a data desert would state the opposite of
+ * the truth in the one surface built to stop absence reading as safety.
+ *
  * Pure and total: with zero reports every exposed area is flagged as a data
  * desert; the "Elsewhere in Davis" bucket has no exposure baseline and is only
  * included when something lands there.
  */
-export function normalizeCoverage(hazards: Hazard[]): AreaCoverage[] {
-  const counts = new Map<string, number>(DAVIS_AREAS.map((a) => [a.name, 0]));
-  for (const h of hazards) {
-    const key = areaFor(h);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  const total = hazards.length;
+export function normalizeCoverage(counts: AreaCount[]): AreaCoverage[] {
+  const byName = new Map(counts.map((c) => [c.name, c.count]));
+  const total = counts.reduce((sum, c) => sum + c.count, 0);
   const totalWeight = DAVIS_AREAS.reduce((sum, a) => sum + a.exposureWeight, 0);
 
   const named: AreaCoverage[] = DAVIS_AREAS.map((a) => {
-    const count = counts.get(a.name) ?? 0;
+    const count = byName.get(a.name) ?? 0;
     const expectedShare = totalWeight > 0 ? a.exposureWeight / totalWeight : null;
     const observedShare = total > 0 ? count / total : 0;
     const isDataDesert = count === 0 && a.exposureWeight > 0;
@@ -141,10 +98,10 @@ export function normalizeCoverage(hazards: Hazard[]): AreaCoverage[] {
     return { name: a.name, count, exposureWeight: a.exposureWeight, expectedShare, observedShare, representation, isDataDesert };
   });
 
-  const elsewhere = counts.get(ELSEWHERE) ?? 0;
+  const elsewhere = byName.get(ELSEWHERE_AREA) ?? 0;
   if (elsewhere > 0) {
     named.push({
-      name: ELSEWHERE,
+      name: ELSEWHERE_AREA,
       count: elsewhere,
       exposureWeight: 0,
       expectedShare: null,

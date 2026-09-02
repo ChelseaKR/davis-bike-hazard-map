@@ -47,7 +47,7 @@ describe('bucketByArea', () => {
 
 describe('normalizeCoverage (equity-aware)', () => {
   it('flags every exposed area as a data desert when there are no reports', () => {
-    const cov = normalizeCoverage([]);
+    const cov = normalizeCoverage(bucketByArea([]));
     expect(cov).toHaveLength(6);
     expect(cov.every((a) => a.isDataDesert)).toBe(true);
     expect(cov.every((a) => a.representation === 'none')).toBe(true);
@@ -55,7 +55,7 @@ describe('normalizeCoverage (equity-aware)', () => {
   });
 
   it('marks an area with reports as not a data desert', () => {
-    const cov = normalizeCoverage([at(38.5449, -121.7405, 'c')]); // Central Davis
+    const cov = normalizeCoverage(bucketByArea([at(38.5449, -121.7405, 'c')])); // Central Davis
     const central = cov.find((a) => a.name === 'Central Davis')!;
     expect(central.count).toBe(1);
     expect(central.isDataDesert).toBe(false);
@@ -67,7 +67,7 @@ describe('normalizeCoverage (equity-aware)', () => {
   it('reads a high-ridership area with all the reports as over-represented, and starves the rest', () => {
     // Pile several reports into Central Davis only.
     const many = Array.from({ length: 8 }, (_, i) => at(38.5449, -121.7405, `c${i}`));
-    const cov = normalizeCoverage(many);
+    const cov = normalizeCoverage(bucketByArea(many));
     const central = cov.find((a) => a.name === 'Central Davis')!;
     expect(central.observedShare).toBe(1);
     expect(central.representation).toBe('over');
@@ -75,8 +75,20 @@ describe('normalizeCoverage (equity-aware)', () => {
     expect(cov.find((a) => a.name === 'UC Davis campus')!.representation).toBe('none');
   });
 
+  it('takes tallies, so an area reported but absent from the feed is not a desert', () => {
+    // The tally the view is given comes from GET /api/coverage: reports
+    // received. A North Davis report that is pending, or has expired, is
+    // invisible to the public feed but must still clear the desert flag.
+    const cov = normalizeCoverage([
+      { name: 'North Davis', count: 3 },
+      { name: 'Central Davis', count: 0 },
+    ]);
+    expect(cov.find((a) => a.name === 'North Davis')!.isDataDesert).toBe(false);
+    expect(cov.find((a) => a.name === 'Central Davis')!.isDataDesert).toBe(true);
+  });
+
   it('gives the "Elsewhere" bucket no exposure baseline and never calls it a desert', () => {
-    const cov = normalizeCoverage([at(38.59, -121.69, 'x')]); // far NE corner
+    const cov = normalizeCoverage(bucketByArea([at(38.59, -121.69, 'x')])); // far NE corner
     const elsewhere = cov.find((a) => a.name === 'Elsewhere in Davis')!;
     expect(elsewhere.exposureWeight).toBe(0);
     expect(elsewhere.expectedShare).toBeNull();

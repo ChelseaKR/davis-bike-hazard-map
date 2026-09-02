@@ -9,6 +9,27 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- The documentation-audit gate can fail on something other than staleness.
+  `scripts/doc_audit.py --check` re-rendered the generated block of
+  `docs/DOCUMENTATION-AUDIT.md` and diffed it against the committed text, so
+  "the file is current" was the only proposition it could ever fail on. Two
+  failures rode through green: a broken relative link that had been through
+  `make docs-audit` (the block honestly recorded
+  `| Local doc links resolve | fail |` and named the link, matched the tree,
+  and the gate printed "doc audit OK" and exited 0), and a tree with nothing
+  in it (no `README.md`, no `tests/`, no `.github/workflows/` — every presence
+  row rendered `fail` and the gate still exited 0, reporting success having
+  inspected zero test files, zero workflows and zero links). Because the
+  documented fix for a merge conflict in that file is "run `make docs-audit`
+  and commit the result", routine conflict resolution was also the laundering
+  path. The predicates are now asserted against the tree, the audit fails
+  closed when it finds nothing to audit or cannot read what it found, and
+  regenerating cannot turn a failing predicate green. `--check` exits `1` on
+  drift and `2` when the audit itself failed; `tests/unit/docAudit.test.ts`
+  holds both directions. The file itself stays committed: it is linked from
+  the README, `docs/README.md`, `docs/PROJECT-SCOPE.md` and `docs/I18N.md`,
+  and `docs/PROJECT-SCOPE.md` delegates its counts to it explicitly.
+
 - Cleared all 6 open Dependabot alerts (2 high, 4 moderate — js-yaml quadratic
   CPU consumption, nanoid infinite-loop generator, and five undici advisories
   including response desync and cross-user cache disclosure). `npm audit fix`

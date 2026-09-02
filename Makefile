@@ -26,7 +26,7 @@ start: ## Run the API server (serves the built client in production).
 seed: ## Load a first pass of demo hazards into the data store.
 	DATABASE_PATH=./data/hazards.json npm run seed
 
-verify: ## Lint + typecheck + unit tests + build. The merge gate.
+verify: ## Lint + typecheck + coverage-gated unit tests + build. The merge gate.
 	npm run verify
 
 lint: ## ESLint over client, server, and tests.
@@ -35,7 +35,7 @@ lint: ## ESLint over client, server, and tests.
 typecheck: ## TypeScript type checking, no emit.
 	npm run typecheck
 
-test: ## Unit + component + server tests (Vitest).
+test: ## Unit + component + server tests (Vitest), no coverage floor. `verify` runs the floor.
 	npm run test:unit
 
 a11y: ## Accessibility tests (axe) — release gate.
@@ -54,7 +54,7 @@ audit: ## Run the responsible-tech gates (privacy + accessibility tests).
 docs-audit: ## Regenerate the generated block of docs/DOCUMENTATION-AUDIT.md from the tree.
 	npm run docs:audit
 
-docs-audit-check: ## Fail if the committed documentation audit has drifted. Part of verify.
+docs-audit-check: ## Fail if the documentation audit drifted or its own checks do not hold. Part of verify.
 	npm run docs:audit:check
 
 ruleset-check: ## Reconcile docs/ops/branch-ruleset.json with the live protect-main ruleset (needs gh; ARGS=--write to pull live).

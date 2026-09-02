@@ -36,6 +36,33 @@ Three deliberate choices about honesty, the first two inherited from nearmiss:
   never exists on a CI runner, so resolving those would make the gate pass or fail on
   where it ran. They are reported separately instead.
 
+``--check`` asserts the audit's own predicates, not only that the file is current.
+Until 2026-08-28 it did exactly one thing: re-render the block and compare it to the
+committed text. That made "the file is up to date" the *only* proposition it could
+ever fail on, and it let two failures through green:
+
+* **A failing predicate, regenerated.** Break a relative link, run ``make docs-audit``,
+  and the committed block honestly records ``| Local doc links resolve | fail |`` plus
+  an "Unresolved links" section naming the broken link. Because the block then matched
+  the tree, ``--check`` printed "doc audit OK" and exited 0. The documented remedy for
+  a merge conflict in this file is "run ``make docs-audit`` and commit the result", so
+  the ordinary conflict-resolution workflow was also the way to launder a real failure
+  into a green gate.
+* **Nothing to audit.** Against a tree with no ``README.md``, no ``tests/`` and no
+  ``.github/workflows/``, every presence row rendered ``fail`` and the gate still
+  exited 0, reporting success having inspected zero test files, zero workflows and
+  zero links.
+
+Both are the failure this file was created to remove — a validation surface reporting
+success about records it did not inspect — reintroduced one level up, in the checker
+rather than in the document. So the predicates are now evaluated against the tree and
+asserted directly, the audit fails closed when it finds nothing to audit or cannot read
+what it found, and regenerating cannot turn a failing predicate green.
+
+Exit codes: ``0`` green; ``1`` the committed block has drifted from the tree; ``2`` the
+audit itself failed (a predicate is failing, there was nothing to audit, or an input
+could not be read).
+
 Pure standard library; no network; deterministic (identical tree, identical bytes).
 """
 
@@ -51,6 +78,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 AUDIT = ROOT / "docs" / "DOCUMENTATION-AUDIT.md"
+
+# Exit codes, distinguished so a failure says which kind it is.
+EXIT_OK = 0
+EXIT_DRIFT = 1
+EXIT_AUDIT_FAILED = 2
+
+
+class AuditError(RuntimeError):
+    """The audit could not be performed. Never reported as a pass.
+
+    Raised when an input cannot be read or parsed, or when a surface the audit
+    exists to inspect is empty. An audit that inspected nothing has not passed;
+    it has failed to run, and the two must never render identically.
+    """
+
 
 BEGIN = "<!-- BEGIN GENERATED: doc-audit (scripts/doc_audit.py) -->"
 END = "<!-- END GENERATED: doc-audit -->"
@@ -148,6 +190,30 @@ def _relative(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
+def _read_text(path: Path) -> str:
+    """Read a file the audit depends on, or fail closed.
+
+    A document that cannot be decoded is not a document with nothing in it. Letting
+    the read raise a bare traceback, or worse skipping the file, would let the audit
+    report on a subset of the tree while presenting as a report on all of it.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise AuditError(f"cannot read {_relative(path)}: {exc}") from exc
+
+
+def _read_json(path: Path) -> dict:
+    """Parse a JSON input the audit depends on, or fail closed."""
+    try:
+        parsed = json.loads(_read_text(path))
+    except json.JSONDecodeError as exc:
+        raise AuditError(f"cannot parse {_relative(path)} as JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise AuditError(f"{_relative(path)} is not a JSON object")
+    return parsed
+
+
 def _excluded(rel: str) -> bool:
     if rel in EXCLUDED_FILES:
         return True
@@ -191,7 +257,7 @@ def _test_declarations(files: Iterable[str]) -> int:
     for rel in files:
         if not rel.endswith((".ts", ".tsx")):
             continue
-        total += len(_TEST_DECL.findall((ROOT / rel).read_text(encoding="utf-8")))
+        total += len(_TEST_DECL.findall(_read_text(ROOT / rel)))
     return total
 
 
@@ -213,7 +279,7 @@ def _migrations() -> list[str]:
 
 
 def _package() -> tuple[str, str, list[str]]:
-    data = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    data = _read_json(ROOT / "package.json")
     return data.get("name", "unknown"), data.get("version", "unknown"), sorted(data.get("scripts", {}))
 
 
@@ -224,7 +290,7 @@ def _locale_catalogs() -> list[tuple[str, int, int]]:
         return []
     out = []
     for path in sorted(locales.glob("*.json")):
-        catalog = json.loads(path.read_text(encoding="utf-8"))
+        catalog = _read_json(path)
         empty = 0
         for value in catalog.values():
             message = value.get("defaultMessage", "") if isinstance(value, dict) else value
@@ -275,7 +341,7 @@ def _check_links(docs: Iterable[str]) -> tuple[int, int, list[str]]:
         path = ROOT / rel
         if path.suffix != ".md":
             continue
-        for target in _link_targets(path.read_text(encoding="utf-8")):
+        for target in _link_targets(_read_text(path)):
             # Textual normalisation only: realpath would fold `..` *and*, on some
             # platforms, the case this check exists to catch.
             resolved = Path(os.path.normpath(path.parent / target))
@@ -303,7 +369,40 @@ def _bullets(items: Iterable[str]) -> str:
     return "\n".join(f"- `{item}`" for item in items)
 
 
-def _render() -> str:
+# Surfaces this audit exists to inspect. Each must be non-empty for the run to mean
+# anything: a report of "0 test files, 0 workflow files, 0 links checked" is not a
+# clean tree, it is an audit that found nothing and must say so. The floor is `> 0`
+# rather than a remembered number on purpose — a hard-coded expected count would be
+# the typed-figure defect this tool was written to delete, and would go stale the
+# first time a test was added.
+def _floors(
+    docs: list[str],
+    markdown_docs: list[str],
+    tests: list[str],
+    workflows: list[str],
+    links_checked: int,
+) -> list[str]:
+    surfaces = (
+        ("hand-authored docs", len(docs)),
+        ("Markdown documents", len(markdown_docs)),
+        ("test files under `tests/`", len(tests)),
+        ("workflow files under `.github/workflows/`", len(workflows)),
+        ("in-repo relative links", links_checked),
+    )
+    return [
+        f"found no {surface} to audit; an audit that inspected nothing cannot pass"
+        for surface, count in surfaces
+        if count == 0
+    ]
+
+
+def _render() -> tuple[str, list[str]]:
+    """Render the generated block, and report every way the audit itself failed.
+
+    The failures are returned rather than only rendered into the text, so that
+    `--check` can assert them against the tree. Writing `fail` into the document
+    makes a record; returning it here is what makes it a gate.
+    """
     docs = _authored_docs()
     tests = _test_files()
     workflows = _workflows()
@@ -403,14 +502,29 @@ def _render() -> str:
     if unresolved:
         lines += ["## Unresolved links", "", _bullets(unresolved), ""]
     lines.append(END)
-    return "\n".join(lines) + "\n"
+
+    failures: list[str] = []
+    if readme_missing:
+        failures.append("entry doc missing: `README.md`")
+    for label, missing in (
+        ("root process docs", missing_process),
+        ("root legal, citation, and conduct docs", missing_legal),
+        ("root-adjacent GitHub templates", missing_templates),
+    ):
+        if missing:
+            failures.append(f"{label} missing: {', '.join(f'`{m}`' for m in missing)}")
+    for link in unresolved:
+        failures.append(f"unresolved local link: {link}")
+    failures += _floors(docs, markdown_docs, tests, workflows, checked)
+
+    return "\n".join(lines) + "\n", failures
 
 
 def _splice(document: str, generated: str) -> str:
     start = document.find(BEGIN)
     end = document.find(END)
     if start == -1 or end == -1:
-        raise SystemExit(
+        raise AuditError(
             f"docs/DOCUMENTATION-AUDIT.md is missing the generated-block markers "
             f"({BEGIN} … {END})"
         )
@@ -426,24 +540,53 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    document = AUDIT.read_text(encoding="utf-8")
-    updated = _splice(document, _render())
+    document = _read_text(AUDIT)
+    generated, failures = _render()
+    updated = _splice(document, generated)
+
+    def _report_failures() -> None:
+        print(
+            "doc audit FAILED: the audit's own checks do not hold against this tree.\n"
+            "  Regenerating will NOT fix these — the document would faithfully record a\n"
+            "  failure, which is not the same as passing. Fix the tree:",
+            file=sys.stderr,
+        )
+        for failure in failures:
+            print(f"  - {failure}", file=sys.stderr)
 
     if args.check:
+        # Predicates first. A failing predicate is a worse finding than a stale file,
+        # and telling someone to "run `make docs-audit` and commit the result" when a
+        # link is broken is precisely how a real failure used to be laundered green.
+        if failures:
+            _report_failures()
+            return EXIT_AUDIT_FAILED
         if updated != document:
             print(
                 "doc audit FAILED: docs/DOCUMENTATION-AUDIT.md no longer describes this tree.\n"
                 "  Run `make docs-audit` and commit the result.",
                 file=sys.stderr,
             )
-            return 1
+            return EXIT_DRIFT
         print("doc audit OK: the committed inventory, counts, and link check match the tree.")
-        return 0
+        return EXIT_OK
 
+    # Write first, so the document records what is actually true, then fail on it. The
+    # record and the verdict are separate things and neither substitutes for the other.
     AUDIT.write_text(updated, encoding="utf-8")
     print(f"doc audit: regenerated the generated block in {_relative(AUDIT)}.")
-    return 0
+    if failures:
+        _report_failures()
+        return EXIT_AUDIT_FAILED
+    return EXIT_OK
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except AuditError as exc:
+        # Fail closed: an audit that could not read or parse what it set out to
+        # inspect has not passed, and must not exit 0 or spray a traceback that
+        # reads as a crash rather than a verdict.
+        print(f"doc audit FAILED: {exc}", file=sys.stderr)
+        raise SystemExit(EXIT_AUDIT_FAILED) from exc

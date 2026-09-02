@@ -199,6 +199,19 @@ export const handoffFailuresResponseSchema = z.object({
   failures: z.array(z.object({ hazard: hazardSchema, delivery: handoffDeliverySchema.nullable() })),
 });
 
+/**
+ * Body of GET /coverage — reports RECEIVED per named Davis area.
+ *
+ * Deliberately a different set from GET /hazards: the feed is what is on the
+ * map now, this is what has ever been reported (minus rejected). The coverage
+ * view needs the latter, because an area whose reports are all pending or
+ * expired has been observed, and must not be labelled a data desert. See
+ * areaReportCounts() in server/lib/hazards.ts.
+ */
+export const coverageResponseSchema = z.object({
+  areas: z.array(z.object({ name: z.string(), count: z.number().int().nonnegative() })),
+});
+
 const json = (schema: z.ZodTypeAny) => ({ 'application/json': { schema } });
 const errorContent = json(errorSchema);
 
@@ -254,10 +267,20 @@ registry.registerPath({
       minSeverity: z.enum(SEVERITIES).optional(),
       withinDays: z.coerce.number().int().positive().max(365).optional(),
       bbox: z.string().optional().openapi({ description: 'minLat,minLng,maxLat,maxLng' }),
+      updatedSince: z.coerce.number().int().nonnegative().optional().openapi({
+        description:
+          'epoch-ms delta cursor (last serverTime seen). Returns only changed rows plus ' +
+          'deletedIds tombstones; an over-old cursor is ignored and the full feed returned',
+      }),
     }),
   },
   responses: {
-    200: { description: 'feed (ETag/304 supported)', content: json(hazardFeedResponseSchema) },
+    200: {
+      description:
+        'feed (ETag/304 supported). With updatedSince: a delta of changed rows plus deletedIds. ' +
+        'serverTime seeds the next delta cursor; a response without deletedIds is a full refresh.',
+      content: json(hazardFeedResponseSchema),
+    },
     304: { description: 'not modified' },
   },
 });
@@ -269,6 +292,20 @@ registry.registerPath({
   summary: 'Open-data export (GeoJSON, MIT)',
   responses: {
     200: { description: 'FeatureCollection', content: { 'application/geo+json': { schema: hazardExportSchema } } },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/coverage',
+  tags: ['public'],
+  summary: 'Reports received per Davis area (equity coverage view)',
+  description:
+    'Counts every report ever received except rejected ones — NOT the public feed. ' +
+    'An area whose reports are all pending, expired or long-resolved has still been ' +
+    'observed, and must not read as a data desert. Aggregate counts only.',
+  responses: {
+    200: { description: 'per-area report tallies', content: json(coverageResponseSchema) },
   },
 });
 
@@ -460,6 +497,29 @@ registry.registerPath({
     '(POSTing here again).',
   request: { params: z.object({ id: z.string() }) },
   responses: { 200: { description: 'result + updated hazard' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/moderation/{id}/osm-note',
+  tags: ['moderation'],
+  security: bearerAuth,
+  summary: 'Draft an anonymous OSM Note for a permanent map-feature hazard (EXP-08)',
+  description:
+    'Suggests the hazard to OpenStreetMap Notes for hazards describing ' +
+    'permanent map features (eligible categories only). Dry-runs — drafts but ' +
+    'never posts — unless OSM_NOTES_ENABLED is configured, which needs a ' +
+    'license/consent review first. The note carries only the fuzzed location, ' +
+    'category/severity labels, and a back-link; never description, photo, or ' +
+    'reporter data. The suggestion (who, dry-run/delivered) is recorded on the ' +
+    'hazard as the audit trail.',
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: { description: 'draft/post result + updated hazard' },
+    400: { description: 'category not OSM-eligible', content: errorContent },
+    401: { description: 'unauthorized', content: errorContent },
+    404: { description: 'not found', content: errorContent },
+  },
 });
 
 registry.registerPath({

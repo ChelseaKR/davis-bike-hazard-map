@@ -766,6 +766,17 @@ textarea {
   padding: 0.6rem 0.8rem;
   margin: 0.75rem 0 0;
 }
+/* Shown when GET /api/coverage could not be read and the view is falling back
+   to the public feed. Deliberately quieter than the desert call-out: it reports
+   a missing measurement, not a finding about a neighbourhood. */
+.coverage-partial {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+  margin: 0.75rem 0 0;
+}
 .coverage-limits {
   margin-top: 1rem;
   border-top: 1px solid var(--line);

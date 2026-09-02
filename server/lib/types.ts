@@ -21,6 +21,22 @@ export interface ModerationAction {
 }
 
 /**
+ * Audit record of an OSM Note suggestion (EXP-08). Records WHO triggered it and
+ * whether it was a dry-run draft or an actual post — the moderation audit trail
+ * for the OSM feedback loop, mirroring how `handoff` records the 311 hand-off.
+ */
+export interface OsmNoteRecord {
+  /** Username of the moderator who triggered the suggestion (audit trail). */
+  by?: string;
+  /** Epoch ms the suggestion was made. */
+  at: number;
+  /** True when it was only drafted (feature disabled), false when posted. */
+  dryRun: boolean;
+  /** True when a live post was accepted by OSM. */
+  delivered: boolean;
+}
+
+/**
  * Reference to a photo whose bytes live in the PhotoStore (keyed by hazard id),
  * NOT inline in this record. Only the mime is kept here so the record stays
  * small and the JSON file doesn't carry base64.
@@ -78,6 +94,8 @@ export interface StoredHazard {
   handoff?: HandoffInfo | null;
   /** Delivery receipt for the hand-off (R3), or null/undefined. Server-internal. */
   handoffDelivery?: HandoffDelivery | null;
+  /** OSM Note suggestion audit record (EXP-08), or null/undefined. */
+  osmNote?: OsmNoteRecord | null;
   moderation: ModerationAction[];
   /**
    * Provenance (issue #111): `'report'` for a real submission, `'seed'` for

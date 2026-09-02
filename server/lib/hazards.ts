@@ -10,6 +10,7 @@ import type { Hazard, HazardSource, Severity } from '../../shared/types.ts';
 import { canTransition, transition, type TransitionCause } from '../../shared/statusMachine.ts';
 import type { ValidatedReport } from '../../shared/validation.ts';
 import { fuzzCoordinate } from '../../shared/geo.ts';
+import { tallyByArea, type AreaCount } from '../../shared/areas.ts';
 import { dataUrlToBytes } from '../../shared/exif.ts';
 import { processPhoto } from './image.ts';
 import { newId } from './id.ts';
@@ -323,4 +324,32 @@ export async function migrateInlinePhotos(repo: Repository, photos: PhotoStore):
     }
   }
   return migrated;
+}
+
+/**
+ * Reports received per named Davis area — the tally behind `GET /api/coverage`.
+ *
+ * WHY THIS IS NOT THE PUBLIC FEED. The coverage view exists to stop "no
+ * reports" being read as "safe" (docs/audits/coverage-equity.md). Counting the
+ * public feed would defeat that: the feed carries only approved, unexpired
+ * hazards plus recently-resolved ones, so an area whose reports are all still
+ * in the moderation queue, or have since expired, or were resolved a while
+ * back, would be labelled a *data desert* — the exact inversion of the truth,
+ * printed in the one surface built to prevent it.
+ *
+ * So the tally is over every report ever received, minus `rejected` ones. A
+ * rejected report is a moderator's finding that it was not a real hazard; if
+ * rejected reports counted, a spam burst could silently retire an area's
+ * data-desert warning, which is a cheap way to make a neighbourhood look
+ * observed when nobody has ever ridden through and reported it.
+ *
+ * What this discloses: one integer per area, over about six boxes covering
+ * whole quadrants of the city, derived from the already-fuzzed public
+ * coordinate. No ids, timestamps, statuses or per-report data — pending reports
+ * are indistinguishable from expired ones inside the total, and the components
+ * are never served separately.
+ */
+export async function areaReportCounts(repo: Repository): Promise<AreaCount[]> {
+  const received = (await repo.all()).filter((h) => h.status !== 'rejected');
+  return tallyByArea(received.map((h) => h.publicLocation));
 }
