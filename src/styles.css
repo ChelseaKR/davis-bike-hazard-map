@@ -194,6 +194,11 @@ a {
   border-color: var(--danger);
   color: var(--danger);
 }
+.btn-resolve {
+  background: var(--surface);
+  border-color: var(--brand-dark);
+  color: var(--brand-dark);
+}
 
 /* --- Status banner --- */
 .status-banner {
@@ -647,6 +652,16 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+}
+/* Hazards already live on the public map, where "mark resolved" lives (#140). */
+.moderation-live {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.moderation-live h3 {
+  margin: 0;
+  font-size: 1.05rem;
 }
 /* --- Duplicate-report nudge (report flow) --- */
 .dupe-nudge {
