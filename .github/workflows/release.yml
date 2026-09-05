@@ -55,6 +55,7 @@ jobs:
     name: re-verify at the tagged commit (REL-14)
     needs: authorize
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # No package-manager cache here (unlike ci.yml): a tag push builds an
     # artifact that gets published later in this same workflow, so a poisoned
     # cache entry is a real supply-chain risk in a way it isn't on ci.yml's
@@ -91,6 +92,7 @@ jobs:
     name: build · scan · publish (GHCR, by digest) · SBOM · sign · attest
     needs: [authorize, verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # No caching in this job (CI-CD-STANDARD §"Caching is disabled"/SLSA build
     # isolation): a release job builds, signs, and publishes, so a poisoned
     # cache entry is a real supply-chain risk here in a way it isn't in ci.yml.
@@ -200,6 +202,7 @@ jobs:
   publish-release:
     needs: [authorize, package]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
@@ -225,6 +228,7 @@ jobs:
     name: verify-published — pull by digest, cosign verify, boot, /livez (REL-16)
     needs: [package]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
