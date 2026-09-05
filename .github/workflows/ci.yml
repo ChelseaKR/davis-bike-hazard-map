@@ -21,6 +21,7 @@ jobs:
   verify:
     name: Lint · Typecheck · Unit · Build (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -81,6 +82,7 @@ jobs:
   e2e:
     name: End-to-end (Chromium + Firefox)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -114,6 +116,7 @@ jobs:
   lighthouse:
     name: Lighthouse performance budget
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Blocking now: accessibility is an error-level assertion (hard gate);
     # performance/FCP/TTI/byte-weight stay warn-level (advisory, noise-tolerant).
     steps:
@@ -133,6 +136,7 @@ jobs:
   security:
     name: Security (dependency audit + secret scan)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

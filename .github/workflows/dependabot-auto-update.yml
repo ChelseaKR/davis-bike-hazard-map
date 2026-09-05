@@ -86,6 +86,7 @@ jobs:
   repoint:
     name: Re-point stuck Dependabot branches
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # A fork has neither the secret nor the problem.
     if: ${{ !github.event.repository.fork }}
     steps:

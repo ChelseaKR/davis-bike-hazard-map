@@ -63,6 +63,7 @@ jobs:
     # it checks out nothing and holds no permissions.
     name: Deploy configured?
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions: {}
     outputs:
       present: ${{ steps.check.outputs.present }}
@@ -88,6 +89,7 @@ jobs:
     # level. Without a token this job renders as skipped, not as a green deploy.
     if: ${{ needs.token-check.outputs.present == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Gates production deploys behind a GitHub Environment (CICD-22). This
     # workflow edit alone does not add a required reviewer — that's a
     # repo-settings action (Settings → Environments → production → required
