@@ -20,18 +20,21 @@ name: workflow-lint
 # Two passes, not one (issue #131)
 # --------------------------------
 # release.yml pins a reusable workflow in the PRIVATE sibling repo
-# ChelseaKR/portfolio-standards. zizmor's `impostor-commit` audit cannot list
-# that repo's tags with this repo's GITHUB_TOKEN and ABORTS THE WHOLE RUN
-# ("fatal: no audit was performed") instead of emitting a finding - which is why
-# this gate was red on main from 2026-08-21, and why the run that failed had
-# audited only six of the ten workflows before it stopped.
+# ChelseaKR/portfolio-standards. Any zizmor audit that resolves a
+# cross-repository ref cannot list that repo's refs with this repo's
+# GITHUB_TOKEN, and ABORTS THE WHOLE RUN ("fatal: no audit was performed")
+# instead of emitting a finding - which is why this gate was red on main from
+# 2026-08-21, and why the run that failed had audited only six of the ten
+# workflows before it stopped. Two audits behave this way today:
+# `impostor-commit`, and `stale-action-refs` as of zizmor v1.30.0.
 #
-# So release.yml is audited in a pass of its own, with `impostor-commit` and
+# So release.yml is audited in a pass of its own, with those two audits and
 # nothing else disabled (.github/zizmor.release-exception.yml). Every other
-# input keeps the full audit set. Disabling `impostor-commit` repo-wide is the
-# only other thing that avoids the abort, and it would drop pin verification for
-# every third-party action in every workflow. See the config file for the
-# suppression attempts that were tested and did not work.
+# input keeps the full audit set. Disabling them repo-wide is the only other
+# thing that avoids the abort, and it would drop pin verification for every
+# third-party action in every workflow. See the config file for the suppression
+# attempts that were tested and did not work, and for what to do when a future
+# zizmor release adds a third audit of this shape.
 on:
   push:
     branches: [main]
@@ -136,7 +139,7 @@ jobs:
           advanced-security: true
           annotations: false
 
-      - name: zizmor - release.yml, impostor-commit excepted (#131)
+      - name: zizmor - release.yml, cross-repo audits excepted (#131)
         # Runs even when the pass above fails, so one run reports every finding
         # in the repository rather than only those in the first pass.
         if: ${{ !cancelled() }}
