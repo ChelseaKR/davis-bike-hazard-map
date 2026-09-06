@@ -187,6 +187,7 @@
   "report.duplicates.aria": "Possible duplicates nearby",
   "report.duplicates.confirm": "Confirm it instead",
   "report.duplicates.confirmed": "Thanks — we counted your \"I saw it too.\" You don't need to file a duplicate. If this is a different hazard, you can still submit it below.",
+  "report.duplicates.confirmedAlready": "You had already confirmed this one, so it stays counted once — confirmations count once per device. You don't need to file a duplicate. If this is a different hazard, you can still submit it below.",
   "report.duplicates.explanation": "{count, plural, one {A similar hazard was} other {# similar hazards were}} reported close to here. Confirming an existing report (I saw it too) is more useful than filing a duplicate — it strengthens the one report the city sees.",
   "report.duplicates.heading": "Already reported nearby?",
   "report.duplicates.meta": "{category} · {severity} severity · {distance} away · {confirmations, plural, one {# confirmation} other {# confirmations}}",

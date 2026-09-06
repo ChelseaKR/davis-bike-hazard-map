@@ -115,6 +115,39 @@ describe('ReportForm', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not claim a count moved when this device had already confirmed it (#177)', async () => {
+    // Confirmations are counted once per device, so the nudge's original wording
+    // — "we counted your I saw it too" — became capable of being false the moment
+    // the cap landed. It must not assert a count moved on the strength of a
+    // request that succeeded without moving one.
+    mockGeolocation({ latitude: 38.5449, longitude: -121.7405 });
+    const onConfirmExisting = vi.fn().mockResolvedValue(false);
+    render(
+      <ReportForm nearbyHazards={[nearbyPothole()]} onConfirmExisting={onConfirmExisting} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /use my location/i }));
+    await screen.findByRole('region', { name: /possible duplicates nearby/i });
+    await userEvent.click(screen.getByRole('button', { name: /confirm it instead/i }));
+
+    expect(await screen.findByText(/had already confirmed this one/i)).toBeInTheDocument();
+    expect(screen.queryByText(/we counted your/i)).not.toBeInTheDocument();
+    // The actionable half still holds: they do not need to file a duplicate.
+    expect(screen.getByText(/don't need to file a duplicate/i)).toBeInTheDocument();
+  });
+
+  it('says the confirmation counted when the caller reports it did', async () => {
+    mockGeolocation({ latitude: 38.5449, longitude: -121.7405 });
+    const onConfirmExisting = vi.fn().mockResolvedValue(true);
+    render(
+      <ReportForm nearbyHazards={[nearbyPothole()]} onConfirmExisting={onConfirmExisting} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /use my location/i }));
+    await screen.findByRole('region', { name: /possible duplicates nearby/i });
+    await userEvent.click(screen.getByRole('button', { name: /confirm it instead/i }));
+    expect(await screen.findByText(/we counted your/i)).toBeInTheDocument();
+  });
+
   it('does not nudge when the chosen category has no nearby match', async () => {
     mockGeolocation({ latitude: 38.5449, longitude: -121.7405 });
     render(<ReportForm nearbyHazards={[nearbyPothole()]} onConfirmExisting={vi.fn()} />);
