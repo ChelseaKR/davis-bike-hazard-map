@@ -18,7 +18,7 @@ import { DAVIS_CENTER } from '../../shared/validation.ts';
 import { config } from '../config.ts';
 import { hazardIcon } from './mapIcons.ts';
 import { timeAgo } from '../lib/format.ts';
-import { categoryLabel, severityLabel, lifecycleLabel, handoffLabel } from '../i18n/labels.ts';
+import { categoryLabel, severityLabel, lifecycleLabel, handoffNote } from '../i18n/labels.ts';
 
 interface MapViewProps {
   hazards: Hazard[];
@@ -69,11 +69,10 @@ export function buildPopup(
 
   if (hazard.handoff) {
     const handoff = document.createElement('p');
-    handoff.className = 'map-popup-note';
-    handoff.textContent = intl.formatMessage(
-      { id: 'hazard.card.handoff', defaultMessage: 'City 311: {status}' },
-      { status: handoffLabel(intl, hazard.handoff.stage) },
-    );
+    handoff.className = `map-popup-note hazard-handoff-${hazard.handoff.delivery}`;
+    // Same string as the list card (issue #162): a dry-run or a failed transport
+    // must not read here as a completed submission either.
+    handoff.textContent = handoffNote(intl, hazard.handoff);
     el.appendChild(handoff);
   }
 

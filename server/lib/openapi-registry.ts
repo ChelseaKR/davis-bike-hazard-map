@@ -18,6 +18,7 @@ import {
   SEVERITIES,
   HAZARD_STATUSES,
   HAZARD_SOURCES,
+  HANDOFF_DELIVERY_KINDS,
   HANDOFF_STAGES,
   type Hazard,
 } from '../../shared/types.ts';
@@ -59,6 +60,17 @@ const handoffInfo = registry.register(
       reference: z.string(),
       externalStatus: z.string(),
       stage: z.enum(HANDOFF_STAGES),
+      delivery: z.enum(HANDOFF_DELIVERY_KINDS).openapi({
+        description:
+          'Whether anything actually reached the city. `stage` is the CITY\'s view of ' +
+          'the ticket and is set to `submitted` the moment a forward is attempted, ' +
+          'dry-run or not, so it cannot answer this on its own (issue #162). ' +
+          '`delivered` = a provider accepted it or the city synced a status back; ' +
+          '`dry_run` = no provider configured, nothing was sent; ' +
+          '`undelivered` = a real attempt failed and is retrying or dead-lettered; ' +
+          '`unknown` = no delivery receipt exists. Do not render anything but ' +
+          '`delivered` as a completed submission.',
+      }),
       submittedAt: z.number().int(),
       updatedAt: z.number().int(),
       note: z.string().nullish(),

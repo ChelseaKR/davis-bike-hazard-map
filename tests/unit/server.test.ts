@@ -887,6 +887,51 @@ describe('311 hand-off delivery receipts + retry (R3)', () => {
     await a.close();
   });
 
+  it('the public feed marks a failed hand-off as undelivered, and flips it once it lands (issue #162)', async () => {
+    const { app: a, token: tok, repo: r } = await buildAppWithModerator(liveGogovConfig, failFetch);
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id = created.json().hazard.id;
+    const h = { 'content-type': 'application/json', authorization: `Bearer ${tok}` };
+    await a.inject({ method: 'POST', url: `/api/moderation/${id}`, payload: { decision: 'approve' }, headers: h });
+
+    // A connection the city never answered used to publish byte-identical text
+    // to a successful submission.
+    expect((await r.findById(id))!.handoffDelivery!.state).toBe('retrying');
+    const red = await a.inject({ method: 'GET', url: '/api/hazards' });
+    expect(red.json().hazards.find((x: { id: string }) => x.id === id).handoff.delivery).toBe(
+      'undelivered',
+    );
+    await a.close();
+
+    // Derived, not stored: a later successful attempt flips the public answer
+    // with no second write to keep in step.
+    const { app: b, token: tok2, repo: r2 } = await buildAppWithModerator(liveGogovConfig, okFetch);
+    const created2 = await b.inject({
+      method: 'POST',
+      url: '/api/reports',
+      payload: baseReport,
+      headers: { 'content-type': 'application/json' },
+    });
+    const id2 = created2.json().hazard.id;
+    await b.inject({
+      method: 'POST',
+      url: `/api/moderation/${id2}`,
+      payload: { decision: 'approve' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${tok2}` },
+    });
+    expect((await r2.findById(id2))!.handoffDelivery!.state).toBe('submitted');
+    const green = await b.inject({ method: 'GET', url: '/api/hazards' });
+    expect(green.json().hazards.find((x: { id: string }) => x.id === id2).handoff.delivery).toBe(
+      'delivered',
+    );
+    await b.close();
+  });
+
   it('never exposes the delivery receipt in any public projection', async () => {
     const { app: a, token: tok } = await buildAppWithModerator(liveGogovConfig, failFetch);
     const created = await a.inject({
@@ -1372,11 +1417,33 @@ describe('311 status sync-back', () => {
     const id = r.json().hazard.id;
     expect((await repo.findById(id))!.handoff).toBeUndefined();
     const res = await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
-    expect(res.json().hazard.handoff?.stage).toBe('submitted');
     const stored = (await repo.findById(id))!;
     expect(stored.handoff?.stage).toBe('submitted');
     expect(stored.handoff?.reference).toBe(id);
     expect(stored.handoffDelivery?.dryRun).toBe(true);
+    // Issue #162: the stored `stage` records the ATTEMPT, and this default
+    // config has no provider, so nothing left the process. The PUBLIC record
+    // must say so — asserting only `stage === 'submitted'` here is what let a
+    // dry run be published as a completed civic action.
+    expect(res.json().hazard.handoff?.delivery).toBe('dry_run');
+  });
+
+  it('the public feed marks a dry-run hand-off as not sent (issue #162)', async () => {
+    const r = await post('/api/reports', baseReport);
+    const id = r.json().hazard.id;
+    await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());
+
+    const feed = await app.inject({ method: 'GET', url: '/api/hazards' });
+    const pub = feed.json().hazards.find((h: { id: string }) => h.id === id);
+    expect(pub.handoff.delivery).toBe('dry_run');
+
+    // The reporter's own trail is projected through the same code path.
+    const trail = await app.inject({ method: 'GET', url: `/api/reports/${baseReport.clientId}` });
+    expect(trail.json().hazard.handoff.delivery).toBe('dry_run');
+
+    // And the internal receipt still never crosses the boundary.
+    expect(feed.body).not.toContain('handoffDelivery');
+    expect(feed.body).not.toContain('lastError');
   });
 
 
