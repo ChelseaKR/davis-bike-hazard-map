@@ -59,6 +59,8 @@
   "handoffFailures.lastTried": "{attempts, plural, one {# attempt} other {# attempts}}, last tried {when}",
   "handoffFailures.resend": "Re-send to 311",
   "hazard.card.confirm": "I saw this too",
+  "hazard.card.confirmAlready": "You already confirmed this one, so the count stays where it is. Confirmations are counted once per device so the number means riders, not taps.",
+  "hazard.card.confirmCounted": "Thanks — your confirmation was counted.",
   "hazard.card.confirmationsLabel": "Confirmations",
   "hazard.card.demoBadge": "Demo data",
   "hazard.card.demoNote": "Demo data — a fictional example, not a real report.",

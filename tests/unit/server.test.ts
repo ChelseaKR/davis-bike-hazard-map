@@ -31,7 +31,7 @@ const testConfig = {
   resolvedVisibleDays: 7,
   corsOrigins: [],
   serveClient: false,
-  rateLimit: { max: 10_000, windowMs: 60_000, reportsPerHour: 10_000 },
+  rateLimit: { max: 10_000, windowMs: 60_000, reportsPerHour: 10_000, confirmationsPerHour: 10_000 },
   ttlDays: { low: 14, moderate: 21, high: 30 },
 } as typeof serverConfig;
 
@@ -587,21 +587,91 @@ describe('photo privacy', () => {
 });
 
 describe('lifecycle', () => {
-  it('confirms an approved hazard and increments the count', async () => {
+  // Distinct device ids, because the per-device cap (#177) is now real: reusing
+  // one across these tests would suppress the second confirmation and the
+  // failure would look like a lifecycle bug.
+  const DEVICE_A = '11111111-1111-4111-8111-111111111111';
+  const DEVICE_B = '22222222-2222-4222-8222-222222222222';
+
+  async function approvedHazard(): Promise<string> {
     const res = await post('/api/reports', baseReport);
     const id = res.json().hazard.id;
     await post(`/api/moderation/${id}`, { decision: 'approve' }, { authorization: `Bearer ${token}` });
+    return id;
+  }
 
-    const conf = await post(`/api/hazards/${id}/confirm`, {});
+  it('confirms an approved hazard and increments the count', async () => {
+    const id = await approvedHazard();
+    const conf = await post(`/api/hazards/${id}/confirm`, { deviceId: DEVICE_A });
     expect(conf.statusCode).toBe(200);
     expect(conf.json().hazard.confirmations).toBe(1);
+    expect(conf.json().counted).toBe(true);
   });
 
   it('404s confirming an unknown or unapproved hazard', async () => {
     const res = await post('/api/reports', baseReport); // still pending
     const id = res.json().hazard.id;
-    expect((await post(`/api/hazards/${id}/confirm`, {})).statusCode).toBe(404);
-    expect((await post(`/api/hazards/does-not-exist/confirm`, {})).statusCode).toBe(404);
+    expect((await post(`/api/hazards/${id}/confirm`, { deviceId: DEVICE_A })).statusCode).toBe(404);
+    expect(
+      (await post('/api/hazards/does-not-exist/confirm', { deviceId: DEVICE_A })).statusCode,
+    ).toBe(404);
+  });
+
+  it('one device confirming ten times counts once (#177)', async () => {
+    const id = await approvedHazard();
+    let last;
+    for (let i = 0; i < 10; i++) {
+      last = await post(`/api/hazards/${id}/confirm`, { deviceId: DEVICE_A });
+      expect(last.statusCode).toBe(200);
+    }
+    // The repeats are a SUCCESS with an unchanged number, not an error: a rider
+    // whose second tap 4xx'd would be told their confirmation failed when it had
+    // simply already landed.
+    expect(last!.json().counted).toBe(false);
+    expect(last!.json().hazard.confirmations).toBe(1);
+  });
+
+  it('a suppressed confirmation does not extend the hazard expiry either', async () => {
+    // The count is the visible half; `expiresAt` is the other. Extending it on a
+    // repeat tap would let one phone hold a hazard on the map indefinitely, which
+    // is itself a published claim that someone saw it recently.
+    //
+    // THE CLOCK MUST ADVANCE between the two taps. `expiresAt` is derived from
+    // `now`, so two confirmations at the same instant produce the same expiry
+    // whether or not the suppressed one wrote it — the assertion would hold
+    // against an implementation that extends on every tap. Found by a negative
+    // control that landed in the file and changed nothing observable.
+    const id = await approvedHazard();
+    const first = await post(`/api/hazards/${id}/confirm`, { deviceId: DEVICE_A });
+    clock += 60 * 60 * 1000; // one hour, still well inside the 12h cap window
+    const after = await post(`/api/hazards/${id}/confirm`, { deviceId: DEVICE_A });
+    expect(after.json().counted).toBe(false);
+    expect(after.json().hazard.expiresAt).toBe(first.json().hazard.expiresAt);
+    expect(after.json().hazard.updatedAt).toBe(first.json().hazard.updatedAt);
+  });
+
+  it('two different devices both count — the cap must not suppress real riders', async () => {
+    const id = await approvedHazard();
+    expect((await post(`/api/hazards/${id}/confirm`, { deviceId: DEVICE_A })).json().counted).toBe(
+      true,
+    );
+    const second = await post(`/api/hazards/${id}/confirm`, { deviceId: DEVICE_B });
+    expect(second.json().counted).toBe(true);
+    expect(second.json().hazard.confirmations).toBe(2);
+  });
+
+  it('a confirmation with no deviceId is refused, not silently counted', async () => {
+    // The cap's whole integrity: if omitting the field were allowed through,
+    // turning the cap off would be a matter of sending less.
+    const id = await approvedHazard();
+    expect((await post(`/api/hazards/${id}/confirm`, {})).statusCode).toBe(400);
+    expect(
+      (await post(`/api/hazards/${id}/confirm`, { deviceId: 'not-a-uuid' })).statusCode,
+    ).toBe(400);
+    // And the count really did not move.
+    const feed = await app.inject({ method: 'GET', url: '/api/hazards' });
+    const hazard = feed.json().hazards.find((h: { id: string }) => h.id === id);
+    expect(hazard.confirmations).toBe(0);
   });
 
   it('rejected reports never become public', async () => {
@@ -1160,7 +1230,9 @@ describe('data lifecycle & privacy', () => {
       expect(h).not.toHaveProperty('clientId');
     }
 
-    const confirm = await post(`/api/hazards/${id}/confirm`, {});
+    const confirm = await post(`/api/hazards/${id}/confirm`, {
+      deviceId: '33333333-3333-4333-8333-333333333333',
+    });
     expect(confirm.json().hazard).not.toHaveProperty('clientId');
     expect(confirm.payload).not.toContain(baseReport.clientId);
 

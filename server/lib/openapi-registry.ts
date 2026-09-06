@@ -25,6 +25,7 @@ import {
 import {
   geoPointSchema,
   reportSubmissionSchema,
+  confirmSubmissionSchema,
   moderationDecisionSchema,
   loginSchema,
   clientErrorSchema,
@@ -147,6 +148,11 @@ export const moderationQueueResponseSchema = z.object({
 });
 
 export const hazardResponseSchema = z.object({ hazard: hazardSchema });
+/** Confirm adds `counted`: false when this device already confirmed it (#177). */
+export const confirmResponseSchema = z.object({
+  hazard: hazardSchema,
+  counted: z.boolean(),
+});
 
 export const sessionResponseSchema = z.object({
   token: z.string(),
@@ -343,9 +349,24 @@ registry.registerPath({
   path: '/hazards/{id}/confirm',
   tags: ['public'],
   summary: 'Confirm a hazard ("I saw this too")',
-  request: { params: z.object({ id: z.string() }) },
+  description:
+    'Counted once per device per hazard within a rolling window (#177), so the ' +
+    'published `confirmations` number means riders rather than taps. `deviceId` ' +
+    'is a device-scoped UUID the client mints and keeps; it is REQUIRED, because ' +
+    'a cap that can be switched off by omitting a field is not a cap. The server ' +
+    'never stores it — only a rotating salted HMAC of (deviceId, hazard), in ' +
+    'memory, for the window. A repeat inside the window is a 200 with ' +
+    '`counted: false`: the request succeeded and the count deliberately did not ' +
+    'move. NOTE: this is a courtesy against double-taps, not an anti-abuse ' +
+    'control — the id is client-supplied, so anything that rotates a UUID ' +
+    'defeats it.',
+  request: {
+    params: z.object({ id: z.string() }),
+    body: { content: json(confirmSubmissionSchema) },
+  },
   responses: {
-    200: { description: 'updated', content: json(hazardResponseSchema) },
+    200: { description: 'updated', content: json(confirmResponseSchema) },
+    400: { description: 'deviceId missing or not a UUID', content: errorContent },
     404: { description: 'not active', content: errorContent },
   },
 });

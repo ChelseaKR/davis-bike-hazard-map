@@ -63,6 +63,24 @@ export const reportSubmissionSchema = z.object({
 
 export type ValidatedReport = z.infer<typeof reportSubmissionSchema>;
 
+/**
+ * Body of `POST /api/hazards/:id/confirm`.
+ *
+ * `deviceId` is REQUIRED, and that is the point of the schema. If it were
+ * optional, omitting it would be the trivial way past the per-device cap — a
+ * gate that anyone can turn off by sending less is not a gate. It is a
+ * device-scoped UUID the client mints once and keeps (see `src/lib/deviceId.ts`),
+ * NOT a report's `clientId`: report ids are minted per submission, so they would
+ * identify nothing across two confirmations.
+ *
+ * The server never stores it. See `server/lib/confirmationCap.ts`.
+ */
+export const confirmSubmissionSchema = z.object({
+  deviceId: z.string().uuid(),
+});
+
+export type ValidatedConfirm = z.infer<typeof confirmSubmissionSchema>;
+
 /** A geographic bounding box (south, west, north, east). */
 export const bboxSchema = z
   .object({

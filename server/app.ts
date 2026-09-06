@@ -18,6 +18,7 @@ import helmet from '@fastify/helmet';
 import { createHash } from 'node:crypto';
 import { ZodError } from 'zod';
 import {
+  confirmSubmissionSchema,
   reportSubmissionSchema,
   hazardFiltersSchema,
   moderationDecisionSchema,
@@ -51,6 +52,7 @@ import {
 } from './lib/moderators.ts';
 import { verifyPassword } from './lib/password.ts';
 import { LoginThrottle } from './lib/loginThrottle.ts';
+import { ConfirmationCap } from './lib/confirmationCap.ts';
 import { issueToken, verifyBearerHeader } from './lib/token.ts';
 import { createMetrics } from './lib/metrics.ts';
 import { buildLoggerOptions } from './lib/logger.ts';
@@ -273,6 +275,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // operational constraint (documented in the README runbook), and scaling
   // out requires moving these counters to a shared store first.
   const loginThrottle = new LoginThrottle();
+
+  // Per-device confirmation cap (#177). Same per-process caveat as the throttle
+  // above, and the same runbook constraint: a restart or a second instance resets
+  // the window. Deliberately not persisted — see server/lib/confirmationCap.ts on
+  // why a durable per-device confirmation ledger is a movement trace of a cyclist.
+  const confirmationCap = new ConfirmationCap({ secret: config.sessionSecret });
 
   // Replay guard for the inbound 311 webhook: a verified signature may be
   // presented only once within its freshness window (FIX-02). Bounded + self-
@@ -628,14 +636,40 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   // --- Confirm a hazard ("I saw this too") ---
-  app.post('/api/hazards/:id/confirm', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const updated = await confirmHazard(repo, id, now(), ttlOpts(config));
-    if (!updated) {
-      return reply.status(404).send({ error: 'not_found', message: 'Hazard not found or not active.' });
-    }
-    return { hazard: toPublic(updated) };
-  });
+  // The body carries a device-scoped UUID and it is REQUIRED (a zod parse
+  // failure is a 400). Making it optional would mean the per-device cap could be
+  // switched off by sending less, which is a gate that cannot fail.
+  //
+  // The response says whether the confirmation `counted`. A rider whose second
+  // tap is suppressed is told so, rather than watching a number not move: a
+  // silent no-op reads as a broken button, and the next thing a person does with
+  // a broken button is press it again.
+  app.post(
+    '/api/hazards/:id/confirm',
+    {
+      config: {
+        rateLimit: {
+          max: config.rateLimit.confirmationsPerHour,
+          timeWindow: 60 * 60 * 1000,
+        },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const { deviceId } = confirmSubmissionSchema.parse(req.body);
+      // Claiming BEFORE the write, and unconditionally, is what makes the cap
+      // hold: a check that ran only after a successful update would let two
+      // concurrent taps both pass. The cost is that a claim is spent even when
+      // the hazard turns out to be gone, which only ever suppresses a
+      // confirmation of a hazard that cannot be confirmed anyway.
+      const fresh = confirmationCap.claim(deviceId, id, now());
+      const outcome = await confirmHazard(repo, id, now(), ttlOpts(config), !fresh);
+      if (!outcome) {
+        return reply.status(404).send({ error: 'not_found', message: 'Hazard not found or not active.' });
+      }
+      return { hazard: toPublic(outcome.hazard), counted: outcome.counted };
+    },
+  );
 
   // --- Serve a moderated photo ---
   // Public branch: approved + live hazards only (cacheable). Moderator branch

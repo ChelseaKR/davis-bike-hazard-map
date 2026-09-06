@@ -5,6 +5,7 @@
  * alone — accessibility), and every card carries the "reported, not verified"
  * framing the transparency audit requires.
  */
+import { useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { lifecycleStage, type Hazard } from '../../shared/types.ts';
 import { timeAgo, formatLatLng } from '../lib/format.ts';
@@ -14,7 +15,13 @@ import { HazardPhoto } from './HazardPhoto.tsx';
 
 interface HazardCardProps {
   hazard: Hazard;
-  onConfirm?: (id: string) => void;
+  /**
+   * Confirm this hazard. May resolve to whether the confirmation actually
+   * COUNTED — false meaning this device already confirmed it inside the server's
+   * window (#177). Resolving to `undefined` means the caller did not say, and the
+   * card then claims nothing.
+   */
+  onConfirm?: (id: string) => void | Promise<boolean | void>;
   onFocusOnMap?: (hazard: Hazard) => void;
   now?: number;
 }
@@ -33,6 +40,11 @@ export function HazardCard({
 }: HazardCardProps) {
   const effectiveNow = useNow(now);
   const intl = useIntl();
+  // What the last confirmation from this device did. `null` is "nothing to say"
+  // and is NOT the same as "it counted": a suppressed confirmation that showed
+  // no feedback would read as a broken button, and the next thing a rider does
+  // with a broken button is press it again.
+  const [confirmNote, setConfirmNote] = useState<'counted' | 'already' | null>(null);
   const labels = useLabels();
   const stage = lifecycleStage(hazard);
   return (
@@ -138,7 +150,16 @@ export function HazardCard({
           <button
             type="button"
             className="btn btn-small"
-            onClick={() => onConfirm(hazard.id)}
+            onClick={() => {
+              void (async () => {
+                const counted = await onConfirm(hazard.id);
+                // Only an explicit boolean is a claim. `undefined` means the
+                // caller reported nothing, so inventing "counted" here would put
+                // a sentence in front of a rider that nothing verified.
+                if (counted === true) setConfirmNote('counted');
+                else if (counted === false) setConfirmNote('already');
+              })();
+            }}
           >
             <FormattedMessage id="hazard.card.confirm" defaultMessage="I saw this too" />
           </button>
@@ -153,6 +174,22 @@ export function HazardCard({
           </button>
         )}
       </div>
+
+      {confirmNote && (
+        <p className="hazard-confirm-note" role="status">
+          {confirmNote === 'counted' ? (
+            <FormattedMessage
+              id="hazard.card.confirmCounted"
+              defaultMessage="Thanks — your confirmation was counted."
+            />
+          ) : (
+            <FormattedMessage
+              id="hazard.card.confirmAlready"
+              defaultMessage="You already confirmed this one, so the count stays where it is. Confirmations are counted once per device so the number means riders, not taps."
+            />
+          )}
+        </p>
+      )}
     </li>
   );
 }

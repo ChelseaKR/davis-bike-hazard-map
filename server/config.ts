@@ -149,6 +149,14 @@ export const serverConfig = {
     max: int('RATE_LIMIT_MAX', 120), // requests
     windowMs: int('RATE_LIMIT_WINDOW_MS', 60_000),
     reportsPerHour: int('REPORTS_PER_HOUR', 30),
+    /**
+     * Per-IP ceiling on confirmations. #177's premise was that this already
+     * existed; it did not — the route had no per-route limiter and fell through
+     * to the global 120-per-60s bucket shared with every other call. Generous,
+     * because a whole campus behind one NAT is a normal Davis case and this is a
+     * crude backstop; the per-device cap is the mechanism that actually holds.
+     */
+    confirmationsPerHour: int('CONFIRMATIONS_PER_HOUR', 60),
   },
 
   /** Hazard time-to-live (days) before auto-expiry, by severity. */

@@ -434,6 +434,14 @@ textarea {
   font-style: italic;
   color: var(--ink-soft);
 }
+/* Outcome of this device's last confirmation (#177). Deliberately not italic and
+   not --ink-soft: it answers "did my tap do anything?", so it has to be readable
+   at the contrast the rest of the card is, not styled as a footnote. */
+.hazard-confirm-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
 .hazard-actions,
 .moderation-actions,
 .editor-actions,

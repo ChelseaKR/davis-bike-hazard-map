@@ -26,7 +26,7 @@ const testConfig = {
   isTest: true,
   corsOrigins: [],
   serveClient: false,
-  rateLimit: { max: 10_000, windowMs: 60_000, reportsPerHour: 10_000 },
+  rateLimit: { max: 10_000, windowMs: 60_000, reportsPerHour: 10_000, confirmationsPerHour: 10_000 },
 } as typeof serverConfig;
 
 describe('liveness + readiness probes', () => {

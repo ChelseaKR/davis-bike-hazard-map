@@ -141,28 +141,56 @@ export async function moderateHazard(
 }
 
 /**
- * Record an independent confirmation. Only approved, live hazards can be
- * confirmed; each confirmation also nudges the expiry out so actively-seen
- * hazards stay on the map.
+ * The outcome of a confirmation attempt.
+ *
+ * `counted` is separate from `hazard` because "we already have yours" and "that
+ * hazard is gone" are different answers and a rider is owed the difference. A
+ * single nullable return would collapse a suppressed duplicate into the 404 path
+ * and tell someone their confirmation failed when it had simply already landed.
+ */
+export interface ConfirmOutcome {
+  hazard: StoredHazard;
+  /** False when this device already confirmed this hazard inside the window. */
+  counted: boolean;
+}
+
+/**
+ * Record an independent confirmation — with `alreadyConfirmed` deciding whether
+ * it is *independent*, which nothing did before (#177).
+ *
+ * Only approved, live hazards can be confirmed. A counted confirmation also
+ * nudges the expiry out so actively-seen hazards stay on the map. A suppressed
+ * one changes NOTHING: not the count, and deliberately not `expiresAt` either,
+ * because extending a hazard's life is itself a published claim that someone saw
+ * it recently, and one device tapping ten times is one person seeing it once.
+ * `updatedAt` is left alone for the same reason.
  */
 export async function confirmHazard(
   repo: Repository,
   id: string,
   now: number,
   opts: CreateOptions,
-): Promise<StoredHazard | undefined> {
+  alreadyConfirmed = false,
+): Promise<ConfirmOutcome | undefined> {
   const hazard = await repo.findById(id);
   // Confirming is a status-preserving self-edge; the table only permits it on
   // approved hazards (never pending or terminal ones).
   if (!hazard || !canTransition(hazard.status, hazard.status, 'confirm') || hazard.expiresAt <= now) {
     return undefined;
   }
-  return repo.update(id, {
+  if (alreadyConfirmed) {
+    return { hazard, counted: false };
+  }
+  const updated = await repo.update(id, {
     confirmations: hazard.confirmations + 1,
     updatedAt: now,
     // Extend life by one severity-appropriate TTL from now.
     expiresAt: Math.max(hazard.expiresAt, expiryFor(hazard.severity, now, opts.ttlDays)),
   });
+  // A repository that lost the row between the read and the write reports the
+  // same "gone" the 404 path reports. Reporting `counted: true` with the stale
+  // pre-update hazard would publish an increment that is not in the store.
+  return updated ? { hazard: updated, counted: true } : undefined;
 }
 
 /**

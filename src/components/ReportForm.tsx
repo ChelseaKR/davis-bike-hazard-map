@@ -44,7 +44,7 @@ interface ReportFormProps {
   nearbyHazards?: Hazard[];
   /** Confirm an existing hazard ("I saw it too"); wired to the same endpoint
    *  the map/list use. */
-  onConfirmExisting?: (id: string) => void | Promise<void>;
+  onConfirmExisting?: (id: string) => void | Promise<boolean | void>;
 }
 
 type Status =
