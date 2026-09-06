@@ -188,7 +188,18 @@ export default function App() {
 
           {tab === 'map' && (
             <Suspense fallback={<SkeletonMap />}>
-              <MapView hazards={hazards} onConfirm={onConfirm} focusHazard={focusHazard} />
+              <MapView
+                hazards={hazards}
+                onConfirm={onConfirm}
+                focusHazard={focusHazard}
+                // Without this the map is the one view that cannot tell a
+                // failed load from an empty city: ListView already announces
+                // `error` and withholds its "nothing reported" wording, and
+                // CoverageView withholds its data-desert flags. The map used
+                // to keep asserting "empty areas mean no reports".
+                feedError={error}
+                onRetry={() => void refresh()}
+              />
             </Suspense>
           )}
 

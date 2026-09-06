@@ -93,6 +93,7 @@
   "map.aria": "Map of reported cycling hazards in Davis",
   "map.caption": "Markers show <strong>reported</strong> hazards. Empty areas mean no reports, not guaranteed safety. Prefer the <link>list view</link> if the map is hard to use.",
   "map.controls": "Map controls",
+  "map.feedError": "<strong>The hazard feed could not be loaded</strong>, so this map is incomplete or out of date. An empty map right now means the data did not arrive — <strong>not</strong> that nothing has been reported.",
   "map.marker.alt": "{category} hazard marker",
   "map.marker.title": "{category}, {severity} severity",
   "map.popup.meta": "Reported {when} · {count, plural, one {# confirmation} other {# confirmations}}",
