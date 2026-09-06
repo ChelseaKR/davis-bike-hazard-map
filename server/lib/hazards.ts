@@ -13,6 +13,7 @@ import { fuzzCoordinate } from '../../shared/geo.ts';
 import { tallyByArea, type AreaCount } from '../../shared/areas.ts';
 import { dataUrlToBytes } from '../../shared/exif.ts';
 import { processPhoto } from './image.ts';
+import { handoffDeliveryKind } from './handoffRetry.ts';
 import { newId } from './id.ts';
 import type { BBox, Repository } from './repository.ts';
 import type { PhotoStore } from './photoStore.ts';
@@ -238,7 +239,14 @@ export function toPublic(h: StoredHazard): Hazard {
     updatedAt: h.updatedAt,
     expiresAt: h.expiresAt,
     resolvedAt: h.resolvedAt ?? null,
-    handoff: h.handoff ?? null,
+    // The stored hand-off says `stage: 'submitted'` from the instant a forward
+    // is ATTEMPTED, dry-run or not, so on its own it publishes an accomplished
+    // civic action that may never have happened (issue #162). `delivery` is
+    // derived here from the internal receipt — the only record of what the
+    // transport actually did — so every public consumer can tell a real
+    // submission from a dry-run or a failed one. The receipt itself is still
+    // never projected: only this coarse three-way kind crosses the boundary.
+    handoff: h.handoff ? { ...h.handoff, delivery: handoffDeliveryKind(h.handoffDelivery) } : null,
     source: h.source ?? 'report',
   };
 }

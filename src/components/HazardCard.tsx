@@ -78,12 +78,10 @@ export function HazardCard({
       )}
 
       {hazard.handoff && (
-        <p className="hazard-handoff-note">
-          <FormattedMessage
-            id="hazard.card.handoff"
-            defaultMessage="City 311: {status}"
-            values={{ status: labels.handoff(hazard.handoff.stage) }}
-          />
+        <p
+          className={`hazard-handoff-note hazard-handoff-${hazard.handoff.delivery}`}
+        >
+          {labels.handoffNote(hazard.handoff)}
         </p>
       )}
 
