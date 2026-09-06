@@ -65,7 +65,13 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
   const [showMap, setShowMap] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
-  const [confirmedExisting, setConfirmedExisting] = useState(false);
+  // What the confirm-instead-of-duplicate nudge actually achieved. Three states,
+  // not a boolean: since confirmations are counted once per device (#177), "we
+  // counted it" and "you had already counted it" are different facts, and the
+  // second one is not something this form may assert on the first one's evidence.
+  const [confirmedExisting, setConfirmedExisting] = useState<'counted' | 'already' | null>(
+    null,
+  );
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
   const locationValid = location !== null && isWithinDavis(location);
@@ -78,8 +84,11 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
 
   const confirmExisting = async (id: string) => {
     try {
-      await onConfirmExisting?.(id);
-      setConfirmedExisting(true);
+      const counted = await onConfirmExisting?.(id);
+      // `undefined` means the caller did not report an outcome. Fall back to the
+      // weaker, still-true message rather than claiming a count moved: the rider
+      // is being told not to file a duplicate, and that advice holds either way.
+      setConfirmedExisting(counted === false ? 'already' : 'counted');
     } catch {
       // Best-effort: leave the nudge up so they can retry or file fresh.
     }
@@ -127,7 +136,7 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
     setShowEditor(false);
     setShowMap(false);
     setGeoError(null);
-    setConfirmedExisting(false);
+    setConfirmedExisting(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -454,10 +463,17 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
 
       {confirmedExisting && (
         <p className="dupe-confirmed" role="status">
-          <FormattedMessage
-            id="report.duplicates.confirmed"
-            defaultMessage={'Thanks — we counted your "I saw it too." You don\'t need to file a duplicate. If this is a different hazard, you can still submit it below.'}
-          />
+          {confirmedExisting === 'already' ? (
+            <FormattedMessage
+              id="report.duplicates.confirmedAlready"
+              defaultMessage={'You had already confirmed this one, so it stays counted once — confirmations count once per device. You don\'t need to file a duplicate. If this is a different hazard, you can still submit it below.'}
+            />
+          ) : (
+            <FormattedMessage
+              id="report.duplicates.confirmed"
+              defaultMessage={'Thanks — we counted your "I saw it too." You don\'t need to file a duplicate. If this is a different hazard, you can still submit it below.'}
+            />
+          )}
         </p>
       )}
 
