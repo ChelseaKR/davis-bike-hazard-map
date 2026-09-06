@@ -92,13 +92,38 @@ describe('submitReport', () => {
 
 describe('confirmHazard', () => {
   it('POSTs to the confirm endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ hazard: { id: 'h1' } }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ hazard: { id: 'h1' }, counted: true }));
     vi.stubGlobal('fetch', fetchMock);
     await confirmHazard('h1');
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/hazards/h1/confirm',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('sends the device id, and the SAME one on every call (#177)', async () => {
+    // Found by a negative control: swapping `getDeviceId()` for a fresh UUID per
+    // call left every other test green. The server would still see a valid id,
+    // the cap would see a new device each tap, and it would suppress nothing
+    // while reading as if it worked. Nothing else in the suite can catch that,
+    // because the value is only wrong in its *stability*.
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ hazard: { id: 'h1' }, counted: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    await confirmHazard('h1');
+    await confirmHazard('h2');
+    const bodies = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse((init as RequestInit).body as string) as { deviceId: string },
+    );
+    expect(bodies[0].deviceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(bodies[1].deviceId).toBe(bodies[0].deviceId);
+  });
+
+  it('returns whether the confirmation counted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ hazard: { id: 'h1' }, counted: false }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await confirmHazard('h1')).counted).toBe(false);
   });
 });
 

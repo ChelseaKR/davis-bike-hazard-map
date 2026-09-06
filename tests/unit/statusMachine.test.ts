@@ -190,7 +190,7 @@ describe('mutation paths respect the machine', () => {
     const h = await createHazard(repo, photos, report(), NOW, ttl);
     expect(await confirmHazard(repo, h.id, NOW, ttl)).toBeUndefined(); // pending
     await moderateHazard(repo, photos, h.id, 'approve', NOW);
-    expect((await confirmHazard(repo, h.id, NOW, ttl))?.confirmations).toBe(1);
+    expect((await confirmHazard(repo, h.id, NOW, ttl))?.hazard.confirmations).toBe(1);
     await moderateHazard(repo, photos, h.id, 'resolve', NOW);
     expect(await confirmHazard(repo, h.id, NOW, ttl)).toBeUndefined(); // terminal
   });

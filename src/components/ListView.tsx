@@ -11,7 +11,7 @@ interface ListViewProps {
   hazards: Hazard[];
   loading: boolean;
   error: string | null;
-  onConfirm?: (id: string) => void;
+  onConfirm?: (id: string) => void | Promise<boolean | void>;
   onFocusOnMap?: (hazard: Hazard) => void;
   onRetry?: () => void;
 }

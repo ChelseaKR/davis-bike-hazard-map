@@ -59,6 +59,8 @@
   "handoffFailures.lastTried": "",
   "handoffFailures.resend": "",
   "hazard.card.confirm": "",
+  "hazard.card.confirmAlready": "",
+  "hazard.card.confirmCounted": "",
   "hazard.card.confirmationsLabel": "",
   "hazard.card.demoBadge": "",
   "hazard.card.demoNote": "",

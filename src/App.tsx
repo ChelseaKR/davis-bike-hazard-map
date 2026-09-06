@@ -93,12 +93,20 @@ export default function App() {
   useRefreshOnReconnect(refresh);
 
   const onConfirm = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean | void> => {
       try {
-        await confirmHazard(id);
+        const { counted } = await confirmHazard(id);
         await refresh();
+        // Hand the outcome back so the card can say whether it counted. A
+        // suppressed confirmation is a SUCCESS with an unchanged number, and
+        // returning nothing would leave the rider unable to tell it apart from
+        // the failure path below.
+        return counted;
       } catch {
-        // Confirmation is best-effort; the next refresh will reconcile.
+        // Confirmation is best-effort; the next refresh will reconcile. Return
+        // nothing rather than `false`: `false` is the specific claim "you already
+        // confirmed this", and a network error is not evidence of that.
+        return undefined;
       }
     },
     [refresh],

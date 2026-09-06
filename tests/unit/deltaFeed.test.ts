@@ -33,7 +33,7 @@ const testConfig = {
   resolvedVisibleDays: 7,
   corsOrigins: [],
   serveClient: false,
-  rateLimit: { max: 10_000, windowMs: 60_000, reportsPerHour: 10_000 },
+  rateLimit: { max: 10_000, windowMs: 60_000, reportsPerHour: 10_000, confirmationsPerHour: 10_000 },
   ttlDays: { low: 14, moderate: 21, high: 30 },
 } as typeof serverConfig;
 

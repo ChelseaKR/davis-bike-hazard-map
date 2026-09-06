@@ -50,6 +50,35 @@ describe('HazardCard', () => {
     expect(onConfirm).toHaveBeenCalledWith('h1');
   });
 
+  it('says the confirmation counted when the caller reports true', async () => {
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    renderCard({ hazard: hazard(), onConfirm, now: NOW });
+    await userEvent.click(screen.getByRole('button', { name: /i saw this too/i }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/counted/i);
+  });
+
+  it('says the count stays put when this device already confirmed it (#177)', async () => {
+    // The point of surfacing it at all: a suppressed confirmation moves no
+    // number, and a button that appears to do nothing gets pressed again.
+    const onConfirm = vi.fn().mockResolvedValue(false);
+    renderCard({ hazard: hazard(), onConfirm, now: NOW });
+    await userEvent.click(screen.getByRole('button', { name: /i saw this too/i }));
+    const note = await screen.findByRole('status');
+    expect(note).toHaveTextContent(/already confirmed this one/i);
+    expect(note).toHaveTextContent(/riders, not taps/i);
+  });
+
+  it('claims NOTHING when the caller does not say whether it counted', async () => {
+    // `undefined` is what App returns on a network error, and what a plain
+    // `vi.fn()` returns. Rendering "counted" from it would put a sentence in
+    // front of a rider that nothing verified — the absence-as-a-value shape.
+    const onConfirm = vi.fn();
+    renderCard({ hazard: hazard(), onConfirm, now: NOW });
+    await userEvent.click(screen.getByRole('button', { name: /i saw this too/i }));
+    expect(onConfirm).toHaveBeenCalledWith('h1');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('calls onFocusOnMap when asked to show on map', async () => {
     const onFocusOnMap = vi.fn();
     const h = hazard();

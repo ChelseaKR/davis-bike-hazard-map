@@ -4,6 +4,7 @@
  * Keeps fetch details (base URL, error envelope, JSON parsing) in one place so
  * components and the sync loop stay declarative.
  */
+import { getDeviceId } from './deviceId.ts';
 import { config } from '../config.ts';
 import type {
   ApiError,
@@ -110,9 +111,19 @@ export async function submitReport(
   });
 }
 
-/** Add an independent confirmation to an existing hazard. */
-export async function confirmHazard(id: string): Promise<{ hazard: Hazard }> {
-  return request<{ hazard: Hazard }>(`/hazards/${id}/confirm`, { method: 'POST' });
+/**
+ * Add an independent confirmation to an existing hazard.
+ *
+ * `counted` is false when this device already confirmed this hazard inside the
+ * server's window (#177) — the request succeeded, and the count deliberately did
+ * not move. Callers must distinguish that from a failure; treating it as one
+ * would tell a rider their confirmation was lost when it had already landed.
+ */
+export async function confirmHazard(id: string): Promise<{ hazard: Hazard; counted: boolean }> {
+  return request<{ hazard: Hazard; counted: boolean }>(`/hazards/${id}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ deviceId: getDeviceId() }),
+  });
 }
 
 /**
