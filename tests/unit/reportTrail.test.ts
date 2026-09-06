@@ -1,6 +1,53 @@
 import { describe, it, expect } from 'vitest';
+import { createIntl, type IntlShape } from 'react-intl';
 import { reportTrail, reportStageLabel } from '../../src/lib/reportTrail.ts';
 import type { Hazard, HandoffDeliveryKind, PublicHandoffInfo } from '../../shared/types.ts';
+
+// English `defaultMessage`s — used where a test is about the trail's SHAPE and
+// the wording is incidental.
+const intl: IntlShape = createIntl({ locale: 'en', defaultLocale: 'en', messages: {} });
+
+/**
+ * A catalog of sentinels, one per message id this module should be using.
+ *
+ * Issue #164: these strings were bare English literals in `src/lib`, invisible
+ * to both halves of the G2 gate — `no-literal-string-in-jsx` because they are
+ * not in JSX, and `formatjs extract` because they were not behind a
+ * `defineMessages`/`formatMessage` node. A test that matched them by English
+ * regex could not tell the difference. Formatting under a catalog whose values
+ * are sentinels can: a literal that never reaches the catalog comes back as
+ * English and fails.
+ */
+const SENTINELS = {
+  'report.trail.reported.label': '⟦reported⟧',
+  'report.trail.reported.detail': '⟦reported.detail⟧',
+  'report.trail.reviewed.label': '⟦reviewed⟧',
+  'report.trail.inReview.label': '⟦inReview⟧',
+  'report.trail.inReview.detail': '⟦inReview.detail⟧',
+  'report.trail.rejected.label': '⟦rejected⟧',
+  'report.trail.rejected.detail': '⟦rejected.detail⟧',
+  'report.trail.onMap.label': '⟦onMap⟧',
+  'report.trail.onMap.detail': '⟦onMap.detail⟧',
+  'report.trail.city.sent.label': '⟦city.sent⟧',
+  'report.trail.city.notSent.label': '⟦city.notSent⟧',
+  'report.trail.city.notSent.detail': '⟦city.notSent.detail⟧',
+  'report.trail.city.sending.label': '⟦city.sending⟧',
+  'report.trail.city.sending.detail': '⟦city.sending.detail⟧',
+  'report.trail.city.unknown.detail': '⟦city.unknown.detail⟧',
+  'report.trail.fixed.label': '⟦fixed⟧',
+  'report.trail.fixed.detail': '⟦fixed.detail⟧',
+  'report.trail.expired.label': '⟦expired⟧',
+  'report.trail.expired.detail': '⟦expired.detail⟧',
+  'report.stage.confirmed': '⟦stage.confirmed⟧',
+  'hazard.handoff.in_progress': '⟦handoff.in_progress⟧',
+  'hazard.handoff.resolved': '⟦handoff.resolved⟧',
+} as const;
+const localized: IntlShape = createIntl({
+  locale: 'en',
+  defaultLocale: 'en',
+  messages: SENTINELS,
+  onError: () => {},
+});
 
 function hazard(over: Partial<Hazard> = {}): Hazard {
   return {
@@ -34,11 +81,11 @@ const handoff = (
   note: null,
 });
 
-const labelOf = (h: Hazard, key: string) => reportTrail(h).find((s) => s.key === key)?.label;
-const detailOf = (h: Hazard, key: string) => reportTrail(h).find((s) => s.key === key)?.detail;
+const labelOf = (h: Hazard, key: string) => reportTrail(h, intl).find((s) => s.key === key)?.label;
+const detailOf = (h: Hazard, key: string) => reportTrail(h, intl).find((s) => s.key === key)?.detail;
 
-const keys = (h: Hazard) => reportTrail(h).map((s) => s.key);
-const stateOf = (h: Hazard, key: string) => reportTrail(h).find((s) => s.key === key)?.state;
+const keys = (h: Hazard) => reportTrail(h, intl).map((s) => s.key);
+const stateOf = (h: Hazard, key: string) => reportTrail(h, intl).find((s) => s.key === key)?.state;
 
 describe('reportTrail', () => {
   it('a pending report is reported → in review → (on the map upcoming)', () => {
@@ -112,11 +159,55 @@ describe('reportTrail', () => {
   });
 });
 
+// Issue #164: these used to assert the English copy by regex, which passes
+// identically whether the string comes from the catalog or from a bare literal.
+// Asserting against a sentinel catalog tests the routing instead of the wording.
 describe('reportStageLabel', () => {
-  it('summarises the moderation/lifecycle state in a phrase', () => {
-    expect(reportStageLabel(hazard({ status: 'pending' }))).toMatch(/in review/i);
-    expect(reportStageLabel(hazard({ status: 'rejected' }))).toMatch(/not approved/i);
-    expect(reportStageLabel(hazard({ status: 'approved', confirmations: 0 }))).toMatch(/on the map/i);
-    expect(reportStageLabel(hazard({ status: 'approved', confirmations: 2 }))).toMatch(/confirmed/i);
+  it('picks the right message id for each moderation/lifecycle state', () => {
+    expect(reportStageLabel(hazard({ status: 'pending' }), localized)).toBe('⟦inReview⟧');
+    expect(reportStageLabel(hazard({ status: 'rejected' }), localized)).toBe('⟦rejected⟧');
+    expect(reportStageLabel(hazard({ status: 'approved', confirmations: 0 }), localized)).toBe(
+      '⟦onMap⟧',
+    );
+    expect(reportStageLabel(hazard({ status: 'approved', confirmations: 2 }), localized)).toBe(
+      '⟦stage.confirmed⟧',
+    );
+  });
+});
+
+describe('the trail is translatable end to end (issue #164)', () => {
+  const localizedTrail = (h: Hazard) =>
+    reportTrail(h, localized).flatMap((s) => [s.label, s.detail].filter(Boolean) as string[]);
+
+  it('renders no English literal for any state the trail can reach', () => {
+    const hazards: Hazard[] = [
+      hazard({ status: 'pending' }),
+      hazard({ status: 'rejected' }),
+      hazard({ status: 'approved', confirmations: 3 }),
+      hazard({ status: 'approved', handoff: handoff('submitted', 'dry_run') }),
+      hazard({ status: 'approved', handoff: handoff('submitted', 'undelivered') }),
+      hazard({ status: 'approved', handoff: handoff('submitted', 'unknown') }),
+      hazard({ status: 'approved', handoff: handoff('in_progress', 'delivered') }),
+      hazard({ status: 'resolved', handoff: handoff('resolved'), resolvedAt: 5 }),
+      hazard({ status: 'expired' }),
+    ];
+    const rendered = hazards.flatMap(localizedTrail);
+    expect(rendered.length).toBeGreaterThan(15);
+    const sentinels = new Set<string>(Object.values(SENTINELS));
+    // The plural detail interpolates a count, so match the sentinel loosely.
+    const escaped = rendered.filter(
+      (v) => !sentinels.has(v) && ![...sentinels].some((s) => v.includes(s)),
+    );
+    expect(escaped).toEqual([]);
+  });
+
+  it('routes the delivered hand-off detail through the shared handoff catalog, not the raw enum labels', () => {
+    const h = hazard({ status: 'approved', handoff: handoff('in_progress', 'delivered') });
+    // `hazard.handoff.in_progress` is the id `src/i18n/labels.ts` already
+    // defined; this module used to import the untranslatable
+    // `HANDOFF_STAGE_LABELS` from shared/types.ts instead.
+    expect(reportTrail(h, localized).find((s) => s.key === 'city')?.detail).toBe(
+      '⟦handoff.in_progress⟧',
+    );
   });
 });

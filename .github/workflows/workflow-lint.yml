@@ -138,6 +138,33 @@ jobs:
             exit 1
           fi
 
+          # Guard 4: trufflehog's `version:` input selects the BINARY the action
+          # downloads. Dependabot updates the `uses:` sha and its version
+          # comment but never a `with:` input, so the two drift apart and every
+          # subsequent bump becomes a no-op that reads like an upgrade. That
+          # already happened here: #105 re-synced them by hand, then #130, #144
+          # and #154 each moved the ref alone, leaving the scanner pinned at
+          # 3.96.0 while the changelog said 3.97.2. A version pin that no longer
+          # describes what runs is worse than none, so this is a build failure.
+          SECRET_AUDIT='.github/workflows/secret-audit.yml'
+          if [ -f "${SECRET_AUDIT}" ]; then
+            th_pinned="$(grep -Eo 'trufflesecurity/trufflehog@[0-9a-f]{40}[[:space:]]*#[[:space:]]*v[0-9]+(\.[0-9]+)*' "${SECRET_AUDIT}" \
+              | grep -Eo 'v[0-9]+(\.[0-9]+)*$' | tr -d v || true)"
+            th_selected="$(grep -Eo '^[[:space:]]+version:[[:space:]]*[0-9]+(\.[0-9]+)*[[:space:]]*$' "${SECRET_AUDIT}" \
+              | grep -Eo '[0-9]+(\.[0-9]+)*' || true)"
+            if [ -z "${th_pinned}" ] || [ -z "${th_selected}" ]; then
+              echo "::error::${SECRET_AUDIT}: could not read both the trufflehog action pin and its \`version:\` input."
+              echo "::error::If the step was restructured, update this guard rather than deleting it."
+              exit 1
+            fi
+            if [ "${th_pinned}" != "${th_selected}" ]; then
+              echo "::error::${SECRET_AUDIT}: the trufflehog action is pinned to v${th_pinned} but its \`version:\` input downloads ${th_selected}."
+              echo "::error::The scan would run ${th_selected}, so the bump to v${th_pinned} is a no-op. Set \`version: ${th_pinned}\`."
+              exit 1
+            fi
+            echo "trufflehog pin and \`version:\` input agree: ${th_pinned}"
+          fi
+
           full="$(printf '%s\n' "${collected}" | grep -vxF "${EXCEPTION}" | tr '\n' ' ')"
           full="${full% }"
           if [ -z "${full}" ]; then
