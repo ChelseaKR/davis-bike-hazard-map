@@ -5,7 +5,7 @@
  * logic with no dependency on layout/rendering, so it's exported specifically
  * to unit-test the "Demo data" marker (issue #111) without a real map.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createIntl, createIntlCache } from 'react-intl';
 import { buildPopup } from '../../src/components/MapView.tsx';
 import type { Hazard } from '../../shared/types.ts';
@@ -55,5 +55,49 @@ describe('MapView popup demo-data marker (issue #111)', () => {
   it('does NOT mark a popup as demo data when source is unset (legacy data)', () => {
     const el = buildPopup(hazard(), intl);
     expect(el.querySelector('.map-popup-demo')).toBeNull();
+  });
+});
+
+describe('MapView popup confirm button (#177)', () => {
+  function clickConfirm(el: HTMLElement): HTMLButtonElement {
+    const btn = el.querySelector('button') as HTMLButtonElement;
+    expect(btn.textContent).toMatch(/i saw this too/i);
+    btn.click();
+    return btn;
+  }
+
+  it('says the confirmation counted', async () => {
+    const el = buildPopup(hazard(), intl, vi.fn().mockResolvedValue(true), NOW);
+    clickConfirm(el);
+    await vi.waitFor(() => {
+      expect(el.querySelector('.hazard-confirm-note')?.textContent).toMatch(/counted/i);
+    });
+  });
+
+  it('says the count stays put when this device already confirmed it', async () => {
+    // The map popup is the primary confirm surface. Confirmations count once per
+    // device, so a repeat tap here moves no number — and a control that appears
+    // to do nothing is one a rider presses again.
+    const el = buildPopup(hazard(), intl, vi.fn().mockResolvedValue(false), NOW);
+    clickConfirm(el);
+    await vi.waitFor(() => {
+      const note = el.querySelector('.hazard-confirm-note');
+      expect(note?.textContent).toMatch(/already confirmed this one/i);
+      expect(note?.getAttribute('role')).toBe('status');
+    });
+    // The button is gone, so the dead control cannot be pressed again.
+    expect(el.querySelector('button')).toBeNull();
+  });
+
+  it('claims NOTHING and keeps the button when the caller reports no outcome', async () => {
+    // `undefined` is what App returns on a network error. Rendering "counted"
+    // from it would assert a result nothing verified, and removing the button
+    // would strand a rider whose request simply failed.
+    const onConfirm = vi.fn();
+    const el = buildPopup(hazard(), intl, onConfirm, NOW);
+    clickConfirm(el);
+    await vi.waitFor(() => expect(onConfirm).toHaveBeenCalledWith('h1'));
+    expect(el.querySelector('.hazard-confirm-note')).toBeNull();
+    expect(el.querySelector('button')).not.toBeNull();
   });
 });
