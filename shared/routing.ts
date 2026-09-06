@@ -238,6 +238,22 @@ export function rankRoutes(
 }
 
 /**
+ * Did any scored candidate carry no corridor hazard at all?
+ *
+ * The evidence behind `RoutePlan.hazardFreeCandidate`. Kept next to
+ * `rankRoutes` because it reads the per-candidate `nearby` arrays that
+ * `rankRoutes` produces and that the plan then throws away.
+ *
+ * Callers must only ask this when a real search happened: with a single
+ * straight-line fallback candidate the answer is arithmetically defined but
+ * means nothing, and reporting it would be the same unsupported claim in a
+ * different direction.
+ */
+export function hasHazardFreeCandidate(ranked: ScoredRoute[]): boolean {
+  return ranked.some((r) => r.nearby.length === 0);
+}
+
+/**
  * The fastest candidate route considered, by raw travel time — the "honest
  * cost" comparison (EXP-03, Route honesty panel): what the hazard-aware pick
  * costs versus simply taking the quickest option, and what riding that
@@ -374,6 +390,25 @@ export interface RoutePlan {
   nearby: NearbyHazard[];
   /** How many candidate routes were considered before picking this one. */
   alternativesConsidered: number;
+  /**
+   * Whether any candidate that was actually SCORED carried no corridor hazard
+   * at all — the only evidence that can support (or refute) a claim about a
+   * hazard-free route existing.
+   *
+   * `true`  — a hazard-free candidate was ranked and lost on cost. The planner
+   *           traded it away on purpose (see {@link rankRoutes}); the rider is
+   *           entitled to be told that rather than told none existed.
+   * `false` — every candidate scored had at least one corridor hazard.
+   * `null`  — NO SEARCH HAPPENED. `source === 'fallback'` returns one
+   *           degenerate straight line, so there is nothing to have found and
+   *           no claim of either kind is supportable.
+   *
+   * Issue #163: the UI previously derived "No hazard-free route was found" from
+   * `nearby.length > 0` on the CHOSEN route alone. The per-candidate `nearby`
+   * arrays are discarded when `plan.nearby` is assigned, so the client held no
+   * evidence at all — including in the fallback path.
+   */
+  hazardFreeCandidate: boolean | null;
   /**
    * The fastest candidate route, when it differs from the chosen one — see
    * {@link findFastestAlternative}. `null` when the hazard-aware pick already

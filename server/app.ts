@@ -33,6 +33,7 @@ import { SEVERITY_RANK, type Hazard, type Severity } from '../shared/types.ts';
 import type { ValidatedHazardFilters } from '../shared/validation.ts';
 import {
   rankRoutes,
+  hasHazardFreeCandidate,
   findFastestAlternative,
   isDarkAt,
   DAVIS_LAT,
@@ -613,6 +614,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       route: best.route,
       nearby: best.nearby,
       alternativesConsidered: routes.length,
+      // Evidence for the "hazard-free route" claim, which the client cannot
+      // reconstruct: `nearby` above is only `ranked[0].nearby`, so every other
+      // candidate's hazard list is discarded here (issue #163). `null` when the
+      // routing service was unreachable and `fetchRoutes` returned one
+      // straight-line stub — no search happened, so nothing was found or not
+      // found.
+      hazardFreeCandidate: source === 'fallback' ? null : hasHazardFreeCandidate(ranked),
       fastestAlternative: findFastestAlternative(ranked),
       ...(isDark ? { nightWeighting: true } : {}),
     };
