@@ -15,6 +15,7 @@
 import { forwardHandoff, type HandoffForwardOutcome, type HandoffProviderConfig } from './handoff.ts';
 import { initialHandoff } from './lifecycle.ts';
 import type { Repository } from './repository.ts';
+import type { HandoffDeliveryKind } from '../../shared/types.ts';
 import type { HandoffDelivery, StoredHazard } from './types.ts';
 
 /** First retry delay after a failed forward. */
@@ -65,6 +66,36 @@ export function receiptFor(
     nextRetryAt: exhausted ? null : now + retryDelayMs(attempts),
     lastError: outcome.error ?? 'hand-off failed',
   };
+}
+
+/**
+ * What a delivery receipt means for the PUBLIC record: did anything actually
+ * reach the city?
+ *
+ * This is the single derivation of `PublicHandoffInfo.delivery` (issue #162).
+ * It reads the receipt rather than the hand-off record, because the receipt is
+ * the only thing that tracks the transport: `handoff.stage` is set to
+ * `'submitted'` the moment a forward is ATTEMPTED, dry-run or not, so it can
+ * never answer this question. Deriving instead of storing also means a retry
+ * that later succeeds flips the public answer with no second write to keep in
+ * step.
+ *
+ * A missing receipt is `'unknown'`, never `'delivered'`: a record written
+ * before receipts existed is an absence of evidence, and this codebase does not
+ * publish an absence as a measurement.
+ */
+export function handoffDeliveryKind(
+  receipt: HandoffDelivery | null | undefined,
+): HandoffDeliveryKind {
+  if (!receipt) return 'unknown';
+  // A synced-back status is proof the city holds the report, and outranks a
+  // `dryRun` flag left over from an earlier attempt made before a provider was
+  // configured.
+  if (receipt.state === 'acked') return 'delivered';
+  if (receipt.dryRun) return 'dry_run';
+  if (receipt.state === 'submitted') return 'delivered';
+  // 'retrying' | 'failed' — a real transport attempt that did not land.
+  return 'undelivered';
 }
 
 export interface HandoffRetrySweepResult {

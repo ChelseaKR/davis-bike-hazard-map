@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { reportTrail, reportStageLabel } from '../../src/lib/reportTrail.ts';
-import type { Hazard, HandoffInfo } from '../../shared/types.ts';
+import type { Hazard, HandoffDeliveryKind, PublicHandoffInfo } from '../../shared/types.ts';
 
 function hazard(over: Partial<Hazard> = {}): Hazard {
   return {
@@ -20,15 +20,22 @@ function hazard(over: Partial<Hazard> = {}): Hazard {
   };
 }
 
-const handoff = (stage: HandoffInfo['stage']): HandoffInfo => ({
+const handoff = (
+  stage: PublicHandoffInfo['stage'],
+  delivery: HandoffDeliveryKind = 'delivered',
+): PublicHandoffInfo => ({
   provider: 'gogov',
   reference: 'h1',
   externalStatus: stage,
   stage,
+  delivery,
   submittedAt: 0,
   updatedAt: 0,
   note: null,
 });
+
+const labelOf = (h: Hazard, key: string) => reportTrail(h).find((s) => s.key === key)?.label;
+const detailOf = (h: Hazard, key: string) => reportTrail(h).find((s) => s.key === key)?.detail;
 
 const keys = (h: Hazard) => reportTrail(h).map((s) => s.key);
 const stateOf = (h: Hazard, key: string) => reportTrail(h).find((s) => s.key === key)?.state;
@@ -66,6 +73,36 @@ describe('reportTrail', () => {
     expect(keys(h)).toEqual(['reported', 'review', 'onmap', 'city', 'fixed']);
     expect(stateOf(h, 'city')).toBe('done');
     expect(stateOf(h, 'fixed')).toBe('done');
+  });
+
+  // Issue #162: `handoff.stage` reads 'submitted' from the moment a forward is
+  // ATTEMPTED, dry-run or not, so the trail used to tell a reporter their report
+  // had reached the city when nothing had left the server.
+  it('does not claim a dry-run hand-off reached the city', () => {
+    const h = hazard({ status: 'approved', handoff: handoff('submitted', 'dry_run') });
+    expect(labelOf(h, 'city')).not.toMatch(/^sent to city/i);
+    expect(labelOf(h, 'city')).toMatch(/not sent/i);
+    // Nothing has happened, so the step is not "in progress" either.
+    expect(stateOf(h, 'city')).toBe('upcoming');
+    expect(detailOf(h, 'city')).toMatch(/no 311 connection/i);
+  });
+
+  it('does not claim a failed hand-off reached the city', () => {
+    const h = hazard({ status: 'approved', handoff: handoff('submitted', 'undelivered') });
+    expect(labelOf(h, 'city')).not.toMatch(/^sent to city/i);
+    expect(stateOf(h, 'city')).toBe('current');
+    expect(detailOf(h, 'city')).toMatch(/hasn't succeeded/i);
+  });
+
+  it('does not present an unrecorded delivery as a completed one', () => {
+    const h = hazard({ status: 'approved', handoff: handoff('submitted', 'unknown') });
+    expect(detailOf(h, 'city')).toMatch(/not recorded/i);
+  });
+
+  it('a delivered hand-off still reads as sent, with the city stage as the detail', () => {
+    const h = hazard({ status: 'approved', handoff: handoff('in_progress', 'delivered') });
+    expect(labelOf(h, 'city')).toMatch(/^sent to city/i);
+    expect(detailOf(h, 'city')).toBe('City crew assigned');
   });
 
   it('shows an expired tail when the report ages off the map', () => {

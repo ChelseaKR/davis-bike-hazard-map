@@ -72,14 +72,44 @@ export function reportTrail(hazard: Pick<Hazard, 'status' | 'confirmations' | 'h
   });
 
   // 311 hand-off only appears once a moderator forwarded it to the city.
+  //
+  // `handoff.stage` is the CITY's view of the ticket and reads `submitted` from
+  // the instant a forward is ATTEMPTED, dry-run or not, so labelling this step
+  // from the stage alone told the reporter their report had reached the city
+  // when nothing had left the server (issue #162). `handoff.delivery` is the
+  // record of what the transport actually did, so it decides the wording — and,
+  // for a dry run, the step is `upcoming`, because nothing has happened yet.
   if (handoff) {
     const cityDone = resolved || handoff.stage === 'resolved' || handoff.stage === 'closed';
-    steps.push({
-      key: 'city',
-      label: 'Sent to city 311',
-      state: cityDone ? 'done' : 'current',
-      detail: HANDOFF_STAGE_LABELS[handoff.stage],
-    });
+    if (handoff.delivery === 'dry_run') {
+      steps.push({
+        key: 'city',
+        label: 'Not sent to city 311',
+        state: 'upcoming',
+        detail: 'This server has no 311 connection set up, so nothing was sent to the city.',
+      });
+    } else if (handoff.delivery === 'undelivered') {
+      steps.push({
+        key: 'city',
+        label: 'Sending to city 311',
+        state: 'current',
+        detail: "Sending it to the city hasn't succeeded yet — it will keep trying.",
+      });
+    } else if (handoff.delivery === 'unknown') {
+      steps.push({
+        key: 'city',
+        label: 'Sent to city 311',
+        state: cityDone ? 'done' : 'current',
+        detail: 'Delivery to the city was not recorded for this report.',
+      });
+    } else {
+      steps.push({
+        key: 'city',
+        label: 'Sent to city 311',
+        state: cityDone ? 'done' : 'current',
+        detail: HANDOFF_STAGE_LABELS[handoff.stage],
+      });
+    }
   }
 
   if (resolved) {

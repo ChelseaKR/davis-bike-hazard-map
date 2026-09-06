@@ -128,6 +128,26 @@ export const HANDOFF_STAGE_LABELS: Record<HandoffStage, string> = {
   rejected: 'Declined by city',
 };
 
+/**
+ * How far a hand-off actually got — orthogonal to `HandoffStage`, which is the
+ * CITY's view of the ticket and says nothing about whether anything ever
+ * reached the city.
+ *
+ * `stage: 'submitted'` is recorded the moment a hand-off is attempted, dry-run
+ * or not (see `initialHandoff`), so on its own it cannot distinguish "the city
+ * has this" from "no provider is configured and nothing left the process"
+ * (issue #162). This does.
+ *
+ * - `delivered`   — a provider accepted it, or the city has synced a status back.
+ * - `dry_run`     — no provider is configured. Intent recorded; nothing was sent.
+ * - `undelivered` — a real transport attempt failed. A retry is scheduled, or
+ *                   the attempt budget is spent and it is in the dead-letter queue.
+ * - `unknown`     — no delivery receipt exists at all (a record written before
+ *                   receipts existed). Never render this as success.
+ */
+export const HANDOFF_DELIVERY_KINDS = ['delivered', 'dry_run', 'undelivered', 'unknown'] as const;
+export type HandoffDeliveryKind = (typeof HANDOFF_DELIVERY_KINDS)[number];
+
 /** 311 hand-off record attached to a hazard once it is forwarded to the city. */
 export interface HandoffInfo {
   /** Integration provider, e.g. "gogov". */
@@ -141,6 +161,24 @@ export interface HandoffInfo {
   submittedAt: number;
   updatedAt: number;
   note?: string | null;
+}
+
+/**
+ * The hand-off as the PUBLIC API exposes it: the stored record plus how far it
+ * actually got.
+ *
+ * `delivery` is derived at projection time from the internal delivery receipt
+ * (`toPublic` in server/lib/hazards.ts), never stored alongside the hand-off,
+ * so it cannot drift from the receipt that is the source of truth — a retry
+ * that later succeeds flips it with no rewrite. It is REQUIRED here on purpose:
+ * every consumer of the public feed has to decide what to say about delivery,
+ * rather than defaulting silently to the success wording (issue #162).
+ *
+ * The receipt itself (`handoffDelivery`: attempt counts, `lastError`,
+ * `nextRetryAt`) stays internal and is still never projected.
+ */
+export interface PublicHandoffInfo extends HandoffInfo {
+  delivery: HandoffDeliveryKind;
 }
 
 /** A geographic point. Longitude/latitude in WGS84 decimal degrees. */
@@ -199,8 +237,12 @@ export interface Hazard {
   expiresAt: number;
   /** Epoch ms the hazard was marked resolved, or null. */
   resolvedAt?: number | null;
-  /** 311 hand-off + its synced-back status, or null if never forwarded. */
-  handoff?: HandoffInfo | null;
+  /**
+   * 311 hand-off + its synced-back status, or null if never forwarded. Carries
+   * `delivery` (see `PublicHandoffInfo`): `stage` alone cannot tell a real
+   * submission from a dry-run or a failed one.
+   */
+  handoff?: PublicHandoffInfo | null;
   /**
    * `'seed'` marks illustrative demo data from `scripts/seed.ts`; absent (or
    * `'report'`) means a real submitted report. Optional here only so existing

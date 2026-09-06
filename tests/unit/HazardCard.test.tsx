@@ -108,21 +108,44 @@ describe('HazardCard', () => {
     expect(screen.queryByText('Demo data')).toBeNull();
   });
 
+  const handoffAt = (
+    stage: 'in_progress' | 'submitted',
+    delivery: 'delivered' | 'dry_run' | 'undelivered' | 'unknown',
+  ) => ({
+    provider: 'gogov',
+    reference: 'h1',
+    externalStatus: stage,
+    stage,
+    delivery,
+    submittedAt: NOW - 5000,
+    updatedAt: NOW - 1000,
+    note: null,
+  });
+
   it('surfaces the synced-back 311 hand-off status', () => {
-    renderCard({
-      hazard: hazard({
-        handoff: {
-          provider: 'gogov',
-          reference: 'h1',
-          externalStatus: 'In Progress',
-          stage: 'in_progress',
-          submittedAt: NOW - 5000,
-          updatedAt: NOW - 1000,
-          note: null,
-        },
-      }),
-      now: NOW,
-    });
+    renderCard({ hazard: hazard({ handoff: handoffAt('in_progress', 'delivered') }), now: NOW });
     expect(screen.getByText(/city 311: city crew assigned/i)).toBeInTheDocument();
+  });
+
+  // Issue #162: `stage` is recorded as 'submitted' the moment a forward is
+  // ATTEMPTED, dry-run or not, so rendering it alone published a civic action
+  // that never happened.
+  it('does NOT render a dry-run hand-off as sent to the city', () => {
+    renderCard({ hazard: hazard({ handoff: handoffAt('submitted', 'dry_run') }), now: NOW });
+    expect(screen.queryByText(/city 311: sent to city 311/i)).toBeNull();
+    expect(screen.getByText(/not sent/i)).toBeInTheDocument();
+    expect(screen.getByText(/no 311 provider is configured/i)).toBeInTheDocument();
+  });
+
+  it('does NOT render a failed hand-off as sent to the city', () => {
+    renderCard({ hazard: hazard({ handoff: handoffAt('submitted', 'undelivered') }), now: NOW });
+    expect(screen.queryByText(/city 311: sent to city 311/i)).toBeNull();
+    expect(screen.getByText(/not delivered/i)).toBeInTheDocument();
+  });
+
+  it('does NOT render an unrecorded delivery as a completed one', () => {
+    renderCard({ hazard: hazard({ handoff: handoffAt('submitted', 'unknown') }), now: NOW });
+    expect(screen.queryByText(/city 311: sent to city 311/i)).toBeNull();
+    expect(screen.getByText(/delivery was not recorded/i)).toBeInTheDocument();
   });
 });
