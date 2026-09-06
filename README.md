@@ -60,7 +60,7 @@ docs/     ROADMAP, ARCHITECTURE (incl. ADRs), and committed responsible-tech aud
 | Gate | Enforces |
 |------|----------|
 | Lint + typecheck | TS strict, ESLint clean, stylelint logical-property rules |
-| i18n gates | G1 utf-8, G2 extract + no hardcoded strings, G3 BCP-47, G5/G6 catalog parity, G12 CLDR pin |
+| i18n gates | G1 utf-8, G2 extract + no hardcoded strings (JSX **and** the `src/lib` modules that build display text — six `src/lib` files are deferred with a stated reason, printed on every run and ledgered in [`docs/I18N.md`](./docs/I18N.md)), G3 BCP-47, G5/G6 catalog parity, G12 CLDR pin |
 | Unit + integration | the unit and component suite, coverage-gated (`vitest run --coverage`) |
 | Coverage floor | without a database: lines ≥ 87%, functions ≥ 84%, statements ≥ 86%, branches ≥ 78%. With `TEST_DATABASE_URL` set, the CI floor applies instead: lines ≥ 89%, functions ≥ 86%, statements ≥ 89%, branches ≥ 84% ([`vite.config.ts`](./vite.config.ts)). Two floors because two different amounts of code run — the Postgres adapter and migration runner are measured either way but only execute with a database |
 | EXIF / privacy | photos are EXIF-clean; precise location never public |

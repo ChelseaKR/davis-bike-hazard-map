@@ -7,7 +7,7 @@
  * the report's clientId (research roadmap R2), so a report is never a black box.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { FormattedMessage, useIntl } from 'react-intl';
+import { defineMessages, FormattedMessage, useIntl } from 'react-intl';
 import type { Hazard } from '../../shared/types.ts';
 import {
   deleteReport,
@@ -24,13 +24,20 @@ import { useNow } from '../lib/useNow.ts';
 import { useLabels } from '../i18n/labels.ts';
 import { reportTrail, type TrailStepState } from '../lib/reportTrail.ts';
 
-/** Screen-reader text for each trail step's state (the visual cue is colour). */
-const TRAIL_STATE_SR: Record<TrailStepState, string> = {
-  done: 'done',
-  current: 'in progress',
-  upcoming: 'not started yet',
-  rejected: 'not approved',
-};
+/**
+ * Screen-reader text for each trail step's state (the visual cue is colour).
+ *
+ * A plain object rather than JSX, so `formatjs/no-literal-string-in-jsx` never
+ * saw these four even though this file is in the G2 ratchet's scope — the same
+ * blind spot that let `src/lib/reportTrail.ts` ship 14 untranslated strings
+ * (issue #164). Behind `defineMessages` now, so `formatjs extract` does.
+ */
+const trailStateMessages = defineMessages<TrailStepState>({
+  done: { id: 'myReports.trail.state.done', defaultMessage: 'done' },
+  current: { id: 'myReports.trail.state.current', defaultMessage: 'in progress' },
+  upcoming: { id: 'myReports.trail.state.upcoming', defaultMessage: 'not started yet' },
+  rejected: { id: 'myReports.trail.state.rejected', defaultMessage: 'not approved' },
+});
 
 export function MyReports({ onChange }: { onChange?: () => void }) {
   const intl = useIntl();
@@ -151,7 +158,7 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
                     defaultMessage: 'Report progress',
                   })}
                 >
-                  {reportTrail(status).map((step) => (
+                  {reportTrail(status, intl).map((step) => (
                     <li
                       key={step.key}
                       className={`trail-step trail-${step.state}`}
@@ -159,7 +166,10 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
                     >
                       <span className="trail-label">
                         {step.label}
-                        <span className="visually-hidden"> — {TRAIL_STATE_SR[step.state]}</span>
+                        <span className="visually-hidden">
+                          {' — '}
+                          {intl.formatMessage(trailStateMessages[step.state])}
+                        </span>
                       </span>
                       {step.detail && <span className="trail-detail">{step.detail}</span>}
                     </li>

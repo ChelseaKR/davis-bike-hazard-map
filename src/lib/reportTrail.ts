@@ -7,8 +7,17 @@
  *
  * Pure and total so it is trivially unit-testable and runs on the client with
  * no network. It reads only the PUBLIC hazard projection (no moderation notes).
+ *
+ * Every user-visible string here is a `defineMessages` entry formatted through
+ * the caller's `intl`. That is not decoration: this module produces display
+ * text OUTSIDE JSX, which is invisible to `formatjs/no-literal-string-in-jsx`,
+ * so the 14 bare literals it used to build sailed past the G2 ratchet and
+ * shipped untranslated (issue #164). `scripts/i18n/check-no-hardcoded.mjs` now
+ * scans `src/lib/**` for exactly this shape.
  */
-import { HANDOFF_STAGE_LABELS, lifecycleStage, type Hazard } from '../../shared/types.ts';
+import { defineMessages, type IntlShape } from 'react-intl';
+import { lifecycleStage, type Hazard } from '../../shared/types.ts';
+import { handoffLabel } from '../i18n/labels.ts';
 
 /** Visual/semantic state of a single step in the trail. */
 export type TrailStepState = 'done' | 'current' | 'upcoming' | 'rejected';
@@ -21,6 +30,61 @@ export interface TrailStep {
   detail?: string;
 }
 
+const messages = defineMessages({
+  reportedLabel: { id: 'report.trail.reported.label', defaultMessage: 'Reported' },
+  reportedDetail: {
+    id: 'report.trail.reported.detail',
+    defaultMessage: 'Saved on your device and sent to the server.',
+  },
+  reviewedLabel: { id: 'report.trail.reviewed.label', defaultMessage: 'Reviewed' },
+  inReviewLabel: { id: 'report.trail.inReview.label', defaultMessage: 'In review' },
+  inReviewDetail: {
+    id: 'report.trail.inReview.detail',
+    defaultMessage: 'Waiting for a moderator to approve it before it appears publicly.',
+  },
+  rejectedLabel: { id: 'report.trail.rejected.label', defaultMessage: 'Not approved' },
+  rejectedDetail: {
+    id: 'report.trail.rejected.detail',
+    defaultMessage: "A moderator didn't approve this report, so it isn't on the public map.",
+  },
+  onMapLabel: { id: 'report.trail.onMap.label', defaultMessage: 'On the map' },
+  onMapDetail: {
+    id: 'report.trail.onMap.detail',
+    defaultMessage:
+      '{count, plural, =0 {Live for other cyclists.} other {Live for other cyclists — confirmed #×.}}',
+  },
+  citySentLabel: { id: 'report.trail.city.sent.label', defaultMessage: 'Sent to city 311' },
+  cityNotSentLabel: {
+    id: 'report.trail.city.notSent.label',
+    defaultMessage: 'Not sent to city 311',
+  },
+  cityNotSentDetail: {
+    id: 'report.trail.city.notSent.detail',
+    defaultMessage: 'This server has no 311 connection set up, so nothing was sent to the city.',
+  },
+  citySendingLabel: { id: 'report.trail.city.sending.label', defaultMessage: 'Sending to city 311' },
+  citySendingDetail: {
+    id: 'report.trail.city.sending.detail',
+    defaultMessage: "Sending it to the city hasn't succeeded yet — it will keep trying.",
+  },
+  cityUnknownDetail: {
+    id: 'report.trail.city.unknown.detail',
+    defaultMessage: 'Delivery to the city was not recorded for this report.',
+  },
+  fixedLabel: { id: 'report.trail.fixed.label', defaultMessage: 'Fixed' },
+  fixedDetail: {
+    id: 'report.trail.fixed.detail',
+    defaultMessage: 'Reported fixed — thanks for flagging it.',
+  },
+  expiredLabel: { id: 'report.trail.expired.label', defaultMessage: 'Aged off the map' },
+  expiredDetail: {
+    id: 'report.trail.expired.detail',
+    defaultMessage:
+      "No new confirmations, so it expired to keep the map current. Re-report if it's still there.",
+  },
+  stageConfirmed: { id: 'report.stage.confirmed', defaultMessage: 'Confirmed on the map' },
+});
+
 /**
  * Build the ordered trail for one of the reporter's own reports.
  *
@@ -30,19 +94,30 @@ export interface TrailStep {
  * (city, only if handed off) → fixed, with an "expired" tail when it has aged
  * off the map.
  */
-export function reportTrail(hazard: Pick<Hazard, 'status' | 'confirmations' | 'handoff' | 'resolvedAt'>): TrailStep[] {
+export function reportTrail(
+  hazard: Pick<Hazard, 'status' | 'confirmations' | 'handoff' | 'resolvedAt'>,
+  intl: IntlShape,
+): TrailStep[] {
+  const t = (m: (typeof messages)[keyof typeof messages], values?: Record<string, number>) =>
+    intl.formatMessage(m, values);
+
   const steps: TrailStep[] = [
-    { key: 'reported', label: 'Reported', state: 'done', detail: 'Saved on your device and sent to the server.' },
+    {
+      key: 'reported',
+      label: t(messages.reportedLabel),
+      state: 'done',
+      detail: t(messages.reportedDetail),
+    },
   ];
 
   // Rejected is terminal: a moderator looked at it and didn't approve it.
   if (hazard.status === 'rejected') {
-    steps.push({ key: 'review', label: 'Reviewed', state: 'done' });
+    steps.push({ key: 'review', label: t(messages.reviewedLabel), state: 'done' });
     steps.push({
       key: 'rejected',
-      label: 'Not approved',
+      label: t(messages.rejectedLabel),
       state: 'rejected',
-      detail: "A moderator didn't approve this report, so it isn't on the public map.",
+      detail: t(messages.rejectedDetail),
     });
     return steps;
   }
@@ -54,9 +129,9 @@ export function reportTrail(hazard: Pick<Hazard, 'status' | 'confirmations' | 'h
 
   steps.push({
     key: 'review',
-    label: pending ? 'In review' : 'Reviewed',
+    label: pending ? t(messages.inReviewLabel) : t(messages.reviewedLabel),
     state: pending ? 'current' : 'done',
-    detail: pending ? 'Waiting for a moderator to approve it before it appears publicly.' : undefined,
+    detail: pending ? t(messages.inReviewDetail) : undefined,
   });
 
   // "On the map" is the live, approved state. It's the *current* step only when
@@ -64,11 +139,9 @@ export function reportTrail(hazard: Pick<Hazard, 'status' | 'confirmations' | 'h
   const onMapCurrent = hazard.status === 'approved' && !handoff && !resolved;
   steps.push({
     key: 'onmap',
-    label: 'On the map',
+    label: t(messages.onMapLabel),
     state: pending ? 'upcoming' : onMapCurrent ? 'current' : 'done',
-    detail: onMapCurrent
-      ? `Live for other cyclists${hazard.confirmations > 0 ? ` — confirmed ${hazard.confirmations}×` : ''}.`
-      : undefined,
+    detail: onMapCurrent ? t(messages.onMapDetail, { count: hazard.confirmations }) : undefined,
   });
 
   // 311 hand-off only appears once a moderator forwarded it to the city.
@@ -84,30 +157,34 @@ export function reportTrail(hazard: Pick<Hazard, 'status' | 'confirmations' | 'h
     if (handoff.delivery === 'dry_run') {
       steps.push({
         key: 'city',
-        label: 'Not sent to city 311',
+        label: t(messages.cityNotSentLabel),
         state: 'upcoming',
-        detail: 'This server has no 311 connection set up, so nothing was sent to the city.',
+        detail: t(messages.cityNotSentDetail),
       });
     } else if (handoff.delivery === 'undelivered') {
       steps.push({
         key: 'city',
-        label: 'Sending to city 311',
+        label: t(messages.citySendingLabel),
         state: 'current',
-        detail: "Sending it to the city hasn't succeeded yet — it will keep trying.",
+        detail: t(messages.citySendingDetail),
       });
     } else if (handoff.delivery === 'unknown') {
       steps.push({
         key: 'city',
-        label: 'Sent to city 311',
+        label: t(messages.citySentLabel),
         state: cityDone ? 'done' : 'current',
-        detail: 'Delivery to the city was not recorded for this report.',
+        detail: t(messages.cityUnknownDetail),
       });
     } else {
       steps.push({
         key: 'city',
-        label: 'Sent to city 311',
+        label: t(messages.citySentLabel),
         state: cityDone ? 'done' : 'current',
-        detail: HANDOFF_STAGE_LABELS[handoff.stage],
+        // The catalogued hand-off stage labels (i18n/labels.ts), not the raw
+        // English `HANDOFF_STAGE_LABELS` from shared/types.ts — the same six
+        // phrases were already translatable and this file was routing round
+        // them (issue #164).
+        detail: handoffLabel(intl, handoff.stage),
       });
     }
   }
@@ -115,16 +192,16 @@ export function reportTrail(hazard: Pick<Hazard, 'status' | 'confirmations' | 'h
   if (resolved) {
     steps.push({
       key: 'fixed',
-      label: 'Fixed',
+      label: t(messages.fixedLabel),
       state: 'done',
-      detail: 'Reported fixed — thanks for flagging it.',
+      detail: t(messages.fixedDetail),
     });
   } else if (expired) {
     steps.push({
       key: 'expired',
-      label: 'Aged off the map',
+      label: t(messages.expiredLabel),
       state: 'done',
-      detail: 'No new confirmations, so it expired to keep the map current. Re-report if it’s still there.',
+      detail: t(messages.expiredDetail),
     });
   }
 
@@ -132,8 +209,13 @@ export function reportTrail(hazard: Pick<Hazard, 'status' | 'confirmations' | 'h
 }
 
 /** Convenience: the derived lifecycle stage, for a compact status label. */
-export function reportStageLabel(hazard: Pick<Hazard, 'status' | 'confirmations'>): string {
-  if (hazard.status === 'pending') return 'In review';
-  if (hazard.status === 'rejected') return 'Not approved';
-  return lifecycleStage(hazard) === 'confirmed' ? 'Confirmed on the map' : 'On the map';
+export function reportStageLabel(
+  hazard: Pick<Hazard, 'status' | 'confirmations'>,
+  intl: IntlShape,
+): string {
+  if (hazard.status === 'pending') return intl.formatMessage(messages.inReviewLabel);
+  if (hazard.status === 'rejected') return intl.formatMessage(messages.rejectedLabel);
+  return lifecycleStage(hazard) === 'confirmed'
+    ? intl.formatMessage(messages.stageConfirmed)
+    : intl.formatMessage(messages.onMapLabel);
 }
