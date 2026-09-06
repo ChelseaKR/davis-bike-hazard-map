@@ -24,6 +24,13 @@ interface MapViewProps {
   hazards: Hazard[];
   onConfirm?: (id: string) => void;
   focusHazard?: Hazard | null;
+  /**
+   * The feed's last load error, or null. The map MUST be told: without it an
+   * empty map after a failed fetch is indistinguishable from an empty map
+   * after a successful one, and the caption below asserts the second.
+   */
+  feedError?: string | null;
+  onRetry?: () => void;
 }
 
 /**
@@ -293,7 +300,64 @@ function FlyTo({ focusHazard }: { focusHazard?: Hazard | null }) {
   return null;
 }
 
-export function MapView({ hazards, onConfirm, focusHazard }: MapViewProps) {
+/**
+ * Everything the map says about its own data, in one place — and, crucially,
+ * outside `<MapContainer>` so it is plain DOM that a unit test can render
+ * without Leaflet (same reason `buildPopup` is exported).
+ *
+ * The caption exists because an empty patch of map reads as "safe here". It
+ * says the opposite: empty means *unreported*. But that sentence is only true
+ * when the feed actually loaded. When the fetch failed, the map is empty (or
+ * stale) because the DATA did not arrive, and repeating "empty areas mean no
+ * reports" would publish a failed read as a measurement — the same class of
+ * defect `CoverageView` and `ListView` already guard against, in the one
+ * surface a rider is most likely to act on.
+ *
+ * So on a feed error the caption is replaced, not merely accompanied: the
+ * "no reports" claim is withdrawn, the failure is announced (`role="alert"`,
+ * matching ListView's), and the rider is given the same retry the list has.
+ */
+export function MapDataNotice({
+  feedError,
+  onRetry,
+}: {
+  feedError: string | null;
+  onRetry?: () => void;
+}) {
+  if (feedError) {
+    return (
+      <div role="alert" className="feed-error map-feed-error">
+        <p className="error-text">
+          <FormattedMessage
+            id="map.feedError"
+            defaultMessage="<strong>The hazard feed could not be loaded</strong>, so this map is incomplete or out of date. An empty map right now means the data did not arrive — <strong>not</strong> that nothing has been reported."
+            values={{ strong: (chunks) => <strong>{chunks}</strong> }}
+          />
+        </p>
+        <p className="error-text error-detail">{feedError}</p>
+        {onRetry && (
+          <button type="button" className="btn btn-small" onClick={onRetry}>
+            <FormattedMessage id="common.retry" defaultMessage="Retry" />
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <p className="map-caption hint">
+      <FormattedMessage
+        id="map.caption"
+        defaultMessage="Markers show <strong>reported</strong> hazards. Empty areas mean no reports, not guaranteed safety. Prefer the <link>list view</link> if the map is hard to use."
+        values={{
+          strong: (chunks) => <strong>{chunks}</strong>,
+          link: (chunks) => <a href="#list-panel">{chunks}</a>,
+        }}
+      />
+    </p>
+  );
+}
+
+export function MapView({ hazards, onConfirm, focusHazard, feedError = null, onRetry }: MapViewProps) {
   const intl = useIntl();
   return (
     <div className="map-view">
@@ -317,16 +381,7 @@ export function MapView({ hazards, onConfirm, focusHazard }: MapViewProps) {
         <FlyTo focusHazard={focusHazard} />
         <MapA11y intl={intl} />
       </MapContainer>
-      <p className="map-caption hint">
-        <FormattedMessage
-          id="map.caption"
-          defaultMessage="Markers show <strong>reported</strong> hazards. Empty areas mean no reports, not guaranteed safety. Prefer the <link>list view</link> if the map is hard to use."
-          values={{
-            strong: (chunks) => <strong>{chunks}</strong>,
-            link: (chunks) => <a href="#list-panel">{chunks}</a>,
-          }}
-        />
-      </p>
+      <MapDataNotice feedError={feedError} onRetry={onRetry} />
     </div>
   );
 }

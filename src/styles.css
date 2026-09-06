@@ -731,6 +731,18 @@ textarea {
   flex-wrap: wrap;
 }
 
+/* The map's variant carries a sentence, then the raw failure, then retry, so
+   it stacks rather than sitting on one line like the list's. */
+.map-feed-error {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+.map-feed-error .error-detail {
+  font-weight: 400;
+}
+
 /* --- Coverage-by-area --- */
 .coverage-list {
   list-style: none;
