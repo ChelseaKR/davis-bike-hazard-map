@@ -22,7 +22,7 @@ import { categoryLabel, severityLabel, lifecycleLabel, handoffNote } from '../i1
 
 interface MapViewProps {
   hazards: Hazard[];
-  onConfirm?: (id: string) => void;
+  onConfirm?: (id: string) => void | Promise<boolean | void>;
   focusHazard?: Hazard | null;
   /**
    * The feed's last load error, or null. The map MUST be told: without it an
@@ -42,7 +42,7 @@ interface MapViewProps {
 export function buildPopup(
   hazard: Hazard,
   intl: IntlShape,
-  onConfirm?: (id: string) => void,
+  onConfirm?: (id: string) => void | Promise<boolean | void>,
   // Leaflet calls the `bindPopup` content function every time the popup opens
   // (see makeMarker), so the default reads the clock at open time and the line
   // is correct each time a rider taps a marker. It does not tick while the
@@ -145,7 +145,33 @@ export function buildPopup(
       id: 'hazard.card.confirm',
       defaultMessage: 'I saw this too',
     });
-    btn.addEventListener('click', () => onConfirm(hazard.id));
+    btn.addEventListener('click', () => {
+      void (async () => {
+        const counted = await onConfirm(hazard.id);
+        // `undefined` means the caller reported no outcome (a network error, or
+        // a test double that returns nothing). Say nothing rather than inventing
+        // a result — but leave the button in place so a retry is possible.
+        if (counted === undefined) return;
+        // Replace the button, rather than adding beside it. Confirmations count
+        // once per device per window (#177), so leaving a live button under
+        // "already counted" is an invitation to press a control that cannot do
+        // anything — which is how a rider concludes the app is broken.
+        const note = document.createElement('p');
+        note.className = 'hazard-confirm-note';
+        note.setAttribute('role', 'status');
+        note.textContent = counted
+          ? intl.formatMessage({
+              id: 'hazard.card.confirmCounted',
+              defaultMessage: 'Thanks — your confirmation was counted.',
+            })
+          : intl.formatMessage({
+              id: 'hazard.card.confirmAlready',
+              defaultMessage:
+                'You already confirmed this one, so the count stays where it is. Confirmations are counted once per device so the number means riders, not taps.',
+            });
+        btn.replaceWith(note);
+      })();
+    });
     el.appendChild(btn);
   }
 
@@ -158,7 +184,11 @@ interface MarkerEntry {
   updatedAt: number;
 }
 
-function makeMarker(hazard: Hazard, intl: IntlShape, onConfirm?: (id: string) => void): L.Marker {
+function makeMarker(
+  hazard: Hazard,
+  intl: IntlShape,
+  onConfirm?: (id: string) => void | Promise<boolean | void>,
+): L.Marker {
   const marker = L.marker([hazard.location.lat, hazard.location.lng], {
     icon: hazardIcon(hazard.severity),
     keyboard: true,
@@ -243,7 +273,7 @@ function FocusMarker({
   intl,
 }: {
   hazard?: Hazard | null;
-  onConfirm?: (id: string) => void;
+  onConfirm?: (id: string) => void | Promise<boolean | void>;
   intl: IntlShape;
 }) {
   const map = useMap();
