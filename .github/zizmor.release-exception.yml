@@ -21,25 +21,34 @@
 # That is an abort, not a finding. It audited six of the ten workflows and then
 # stopped, so the gate reported red while leaving four workflows unexamined.
 #
-# The two audits that abort
-# -------------------------
-#   * `impostor-commit` — since zizmor v1.x. Checks that a pinned SHA really
-#     belongs to the ref it claims.
-#   * `stale-action-refs` — NEW IN zizmor v1.30.0, which zizmor-action v0.6.3
-#     ships. Checks whether a pinned SHA still corresponds to a released tag.
-#     It fails in exactly the same way and for exactly the same reason:
+# The audits that abort
+# ---------------------
+# This is a CLASS of audit, not a fixed list: any audit that resolves a
+# cross-repository ref over the API aborts here. Three do today.
 #
-#         fatal: no audit was performed
-#         'stale-action-refs' audit failed on file://.github/workflows/release.yml
-#         Caused by:
-#             0: error in 'stale-action-refs' audit
-#             1: couldn't list tags for ChelseaKR/portfolio-standards
-#             2: can't access ChelseaKR/portfolio-standards: missing or you have no access
+#   * `impostor-commit`      (zizmor v1.x)  — "couldn't list tags"
+#     Checks that a pinned SHA really belongs to the ref it claims.
+#   * `stale-action-refs`    (NEW in v1.30.0) — "couldn't list tags"
+#     Checks whether a pinned SHA still corresponds to a released tag.
+#   * `ref-version-mismatch` (NEW in v1.30.0) — "couldn't list branches"
+#     Checks that a symbolic ref matches the version its comment claims.
 #
-#     Any future audit that resolves a cross-repository ref will land here too.
-#     The symptom is always `fatal: no audit was performed` naming release.yml
-#     and ChelseaKR/portfolio-standards; the fix is to add that audit's name
-#     below, never to disable it repo-wide.
+# v1.30.0 is what zizmor-action v0.6.3 ships, and it added TWO of these at
+# once, so expect more. They all fail identically:
+#
+#     fatal: no audit was performed
+#     '<audit>' audit failed on file://.github/workflows/release.yml
+#     Caused by:
+#         0: error in '<audit>' audit
+#         1: couldn't list tags|branches for ChelseaKR/portfolio-standards
+#         2: can't access ChelseaKR/portfolio-standards: missing or you have no access
+#
+# The symptom is always `fatal: no audit was performed` naming release.yml and
+# ChelseaKR/portfolio-standards. The fix is to add that audit's name below,
+# never to disable it repo-wide. Do NOT reach for the action's
+# `online-audits: false` instead: that is a bigger hammer than the problem, and
+# it would also switch off `known-vulnerable-actions` for the one workflow that
+# builds, signs and publishes a release.
 #
 # Why disabling the rules is the only lever
 # -----------------------------------------
@@ -57,10 +66,10 @@
 #
 # What it costs
 # -------------
-# Every `uses:` pin inside release.yml loses impostor-commit and
-# stale-action-refs verification, not just the portfolio-standards one. Every
-# other file in the repository keeps both. The portfolio-standards pin is
-# verified by hand instead, at the `uses:` line.
+# Every `uses:` pin inside release.yml loses these three audits, not just the
+# portfolio-standards one. Every other file in the repository keeps all three,
+# and release.yml keeps every offline audit plus `known-vulnerable-actions`.
+# The portfolio-standards pin is verified by hand instead, at the `uses:` line.
 #
 # What removes it
 # ---------------
@@ -71,8 +80,10 @@
 rules:
   impostor-commit:
     disable: true
-  # See "The two audits that abort" above. Added with the zizmor-action v0.6.3
-  # bump (zizmor v1.30.0), which introduced this audit; without it the exception
-  # pass aborts and the required `zizmor (workflow SAST)` check is red.
+  # Both added with the zizmor-action v0.6.3 bump (zizmor v1.30.0), which
+  # introduced them. Without these the exception pass aborts and the required
+  # `zizmor (workflow SAST)` check is red. See "The audits that abort" above.
   stale-action-refs:
+    disable: true
+  ref-version-mismatch:
     disable: true
