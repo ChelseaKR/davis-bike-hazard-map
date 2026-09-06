@@ -141,6 +141,19 @@ describe('RoutePlanner', () => {
     ).toBeInTheDocument();
   });
 
+  it('does not say "the 1 route" when a single candidate was scored and carried a hazard', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(
+      plan({ alternativesConsidered: 1, nearby: [hazardOnRoute], hazardFreeCandidate: false }),
+    );
+    render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() => expect(screen.getByText(/hazards still on this route/i)).toBeInTheDocument());
+    expect(
+      screen.getByText(/the only route considered was not clear of reported hazards/i),
+    ).toBeInTheDocument();
+  });
+
   // Issue #163: the warning used to be gated on `plan.nearby.length > 0` alone —
   // a claim about the whole search, made from the chosen route only. These three
   // pin each branch to the evidence the server actually supplies.

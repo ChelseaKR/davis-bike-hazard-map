@@ -36,7 +36,7 @@ Counts, not verdicts. A count cannot pass or fail; it can only be current, which
 | --- | ---: | --- |
 | Hand-authored docs | 46 | Markdown anywhere in the tree outside build and dependency directories, plus the root legal and template files |
 | Test files | 91 | every file under `tests/` |
-| Test declarations | 774 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
+| Test declarations | 775 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
 | Workflow files | 10 | `.github/workflows/*.yml` |
 | Architecture decision records | 10 | `docs/adr/*.md` |
 | Database migrations | 9 | `migrations/*.sql` |

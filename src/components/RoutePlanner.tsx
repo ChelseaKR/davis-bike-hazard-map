@@ -270,7 +270,7 @@ export function RoutePlanner() {
                 ) : (
                   <FormattedMessage
                     id="route.hazards.warning.noneClear"
-                    defaultMessage="{count, plural, one {The # route considered was not clear of reported hazards} other {None of the # routes considered was clear of reported hazards}} — ride these stretches with extra care."
+                    defaultMessage="{count, plural, one {The only route considered was not clear of reported hazards} other {None of the # routes considered was clear of reported hazards}} — ride these stretches with extra care."
                     values={{ count: plan.alternativesConsidered }}
                   />
                 )}
