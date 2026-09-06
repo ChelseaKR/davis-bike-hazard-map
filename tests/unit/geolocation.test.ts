@@ -49,10 +49,11 @@ describe('getCurrentLocation', () => {
     stubGeolocation((_s, error) =>
       error({ ...ERR, code: ERR.TIMEOUT, message: '' } as GeolocationPositionError),
     );
-    // Empty message falls back to the friendly default.
+    // Since #173 the message IS the code: there is no English default to fall
+    // back to, because this module has no catalog to write one in.
     await expect(getCurrentLocation()).rejects.toMatchObject({
       code: 'timeout',
-      message: 'Could not get location.',
+      message: 'timeout',
     });
   });
 
@@ -62,7 +63,24 @@ describe('getCurrentLocation', () => {
     );
     await expect(getCurrentLocation()).rejects.toMatchObject({
       code: 'unavailable',
-      message: 'no fix',
+      message: 'unavailable',
     });
+  });
+
+  it("keeps the browser's own message as `cause`, and out of the message (#173)", async () => {
+    // `GeolocationPositionError.message` is vendor-supplied English that varies
+    // by engine and is in no catalog. It used to become the error's message and
+    // was interpolated into a translated sentence in RoutePlanner. It must
+    // survive as a diagnostic and nowhere else.
+    const browserError = {
+      ...ERR,
+      code: ERR.POSITION_UNAVAILABLE,
+      message: 'User denied Geolocation',
+    } as GeolocationPositionError;
+    stubGeolocation((_s, error) => error(browserError));
+    const err = await getCurrentLocation().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GeolocationError);
+    expect((err as GeolocationError).message).toBe('unavailable');
+    expect((err as GeolocationError).cause).toBe(browserError);
   });
 });

@@ -76,18 +76,6 @@ const LIB_DEFERRED = new Map([
     'src/lib/api.ts',
     'HTTP scheme tokens ("Bearer ") and developer-facing request diagnostics, none of which is rendered to a rider as prose',
   ],
-  [
-    'src/lib/geolocation.ts',
-    'thrown Error text surfaced through the catalogued {reason} slot in route.error.location — tracked separately, see docs/I18N.md',
-  ],
-  [
-    'src/lib/photo.ts',
-    'thrown Error text — same follow-up as geolocation.ts, see docs/I18N.md',
-  ],
-  [
-    'src/lib/push.ts',
-    'thrown Error text — same follow-up as geolocation.ts, see docs/I18N.md',
-  ],
 ]);
 
 const HAS_LETTER = /\p{L}/u;

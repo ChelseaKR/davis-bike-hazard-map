@@ -14,6 +14,27 @@
 import type { Watch } from '../../shared/alerts.ts';
 import { subscribeAlert, unsubscribeAlert, type PushSubscriptionPayload } from './api.ts';
 
+/** Why push registration failed. A code, not prose — see below. */
+export type PushRegistrationFailure = 'unsupported' | 'permissionNotGranted';
+
+/**
+ * Registration failure as a catalogue-resolvable code (issue #173).
+ *
+ * This module has no `intl`, and a thrown `Error` carries a string rather than
+ * a message descriptor, so an English sentence here is text no catalog can
+ * reach. The UI control for watches has not landed yet, which is exactly why
+ * this is worth fixing now: the first component to render one of these must
+ * find a code to translate, not a sentence to print. Resolve it through
+ * `pushErrorLabel()` in `src/i18n/labels.ts`.
+ */
+export class PushRegistrationError extends Error {
+  constructor(readonly code: PushRegistrationFailure) {
+    // The machine code IS the message: it is a diagnostic, never display text.
+    super(code);
+    this.name = 'PushRegistrationError';
+  }
+}
+
 /** Is the Push API available in this browser + context (HTTPS / localhost)? */
 export function isPushSupported(): boolean {
   return (
@@ -60,9 +81,9 @@ export async function registerHazardAlert(
   vapidPublicKey: string,
   label?: string,
 ): Promise<string> {
-  if (!isPushSupported()) throw new Error('Push notifications are not supported here.');
+  if (!isPushSupported()) throw new PushRegistrationError('unsupported');
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('Notification permission was not granted.');
+  if (permission !== 'granted') throw new PushRegistrationError('permissionNotGranted');
 
   const reg = await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
