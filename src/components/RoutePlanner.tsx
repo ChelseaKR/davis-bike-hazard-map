@@ -247,11 +247,33 @@ export function RoutePlanner() {
                   </li>
                 ))}
               </ul>
+              {/*
+                Issue #163: this used to read "No hazard-free route was found"
+                off `nearby.length > 0` on the CHOSEN route alone — a claim about
+                the whole search made from one candidate. `plan.nearby` is only
+                `ranked[0].nearby`; every other candidate's hazard list is
+                discarded server-side, so the client had no evidence either way,
+                and the claim rendered even in the straight-line fallback where
+                nothing was searched. It now says only what the server measured.
+              */}
               <p className="hint">
-                <FormattedMessage
-                  id="route.hazards.warning"
-                  defaultMessage="No hazard-free route was found — ride these stretches with extra care."
-                />
+                {plan.hazardFreeCandidate === null ? (
+                  <FormattedMessage
+                    id="route.hazards.warning.noSearch"
+                    defaultMessage="This is a direct line, not a route search, so no hazard-free alternative was looked for — ride these stretches with extra care."
+                  />
+                ) : plan.hazardFreeCandidate ? (
+                  <FormattedMessage
+                    id="route.hazards.warning.tradedAway"
+                    defaultMessage="A route clear of reported hazards was considered, but it was longer — this one scored better on distance and hazards together. Ride these stretches with extra care."
+                  />
+                ) : (
+                  <FormattedMessage
+                    id="route.hazards.warning.noneClear"
+                    defaultMessage="{count, plural, one {The # route considered was not clear of reported hazards} other {None of the # routes considered was clear of reported hazards}} — ride these stretches with extra care."
+                    values={{ count: plan.alternativesConsidered }}
+                  />
+                )}
               </p>
             </>
           )}

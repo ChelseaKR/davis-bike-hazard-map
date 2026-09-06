@@ -8,6 +8,7 @@ import {
   hazardPenalty,
   scoreRoute,
   rankRoutes,
+  hasHazardFreeCandidate,
   findFastestAlternative,
   conditionWeight,
   NIGHT_MULTIPLIERS,
@@ -313,5 +314,45 @@ describe('rankRoutes diverges by time of day', () => {
     // planner diverges and takes the longer, safer route.
     const byNight = rankRoutes([shorter, longer], hazards, opts({ conditions: { isDark: true } }));
     expect(byNight[0].route).toBe(longer);
+
+    // Issue #163: by day a hazard-free candidate exists and LOSES on cost. The
+    // chosen route's own `nearby` cannot show that — the evidence is per
+    // candidate, which is why the plan has to carry it.
+    expect(byDay[0].nearby.length).toBeGreaterThan(0);
+    expect(hasHazardFreeCandidate(byDay)).toBe(true);
+  });
+});
+
+describe('hasHazardFreeCandidate', () => {
+  const clear: Route = {
+    geometry: [
+      { lat: 38.6, lng: -121.9 },
+      { lat: 38.6, lng: -121.88 },
+    ],
+    distanceMeters: 1000,
+    durationSeconds: 240,
+    steps: [],
+  };
+  const through: Route = {
+    geometry: [
+      { lat: 38.545, lng: -121.75 },
+      { lat: 38.545, lng: -121.73 },
+    ],
+    distanceMeters: 900,
+    durationSeconds: 220,
+    steps: [],
+  };
+  const onThrough = [hazard({ location: { lat: 38.545, lng: -121.74 } })];
+
+  it('is true when some candidate carries no corridor hazard', () => {
+    expect(hasHazardFreeCandidate(rankRoutes([through, clear], onThrough, opts()))).toBe(true);
+  });
+
+  it('is false when every candidate carries at least one', () => {
+    expect(hasHazardFreeCandidate(rankRoutes([through], onThrough, opts()))).toBe(false);
+  });
+
+  it('is true when there are no hazards at all', () => {
+    expect(hasHazardFreeCandidate(rankRoutes([through, clear], [], opts()))).toBe(true);
   });
 });

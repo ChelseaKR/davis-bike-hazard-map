@@ -43,6 +43,7 @@ const plan: RoutePlan = {
     },
   ],
   alternativesConsidered: 2,
+  hazardFreeCandidate: false,
   fastestAlternative: {
     distanceMeters: 1300,
     durationSeconds: 320,

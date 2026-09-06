@@ -1208,6 +1208,9 @@ describe('hazard-aware route planner', () => {
     expect(plan.route.geometry).toHaveLength(2);
     expect(plan.route.steps.length).toBeGreaterThan(0);
     expect(plan.alternativesConsidered).toBe(1);
+    // Issue #163: no search happened here — one degenerate straight line — so
+    // the plan must claim nothing about whether a hazard-free route existed.
+    expect(plan.hazardFreeCandidate).toBeNull();
     expect(plan.nearby.map((n: { hazard: { id: string } }) => n.hazard.id)).toContain(id);
     // Only one candidate existed — nothing was traded off, so no comparison.
     expect(plan.fastestAlternative).toBeNull();
@@ -1320,6 +1323,8 @@ describe('hazard-aware route planner', () => {
     // hazard penalty (~800 equivalent metres) dwarfs the detour's extra 200 m.
     expect(plan.route.distanceMeters).toBe(1400);
     expect(plan.nearby).toHaveLength(0);
+    // A real search over two candidates, one of them clear (issue #163).
+    expect(plan.hazardFreeCandidate).toBe(true);
     // The fastest candidate by raw duration was the direct route, through the hazard.
     expect(plan.fastestAlternative).not.toBeNull();
     expect(plan.fastestAlternative.distanceMeters).toBe(1200);
