@@ -3,12 +3,37 @@
  * browser-only); the pure, testable maths lives here.
  */
 
+/** Why reading a chosen photo failed. A code, not prose — see below. */
+export type PhotoReadFailure = 'unreadable';
+
+/**
+ * Photo-read failure as a catalogue-resolvable code (issue #173).
+ *
+ * `PhotoEditor` currently discards this error and renders its own catalogued
+ * message, so nothing English leaks today — but the literal was one `catch (e)`
+ * away from doing so, and the same reasoning applies as in `geolocation.ts`:
+ * this module has no `intl`, so a sentence here is untranslatable by
+ * construction. `FileReader`'s own `DOMException` is kept as `cause` because it
+ * is a diagnostic, and vendor English, not display text.
+ */
+export class PhotoReadError extends Error {
+  constructor(
+    readonly code: PhotoReadFailure,
+    options?: ErrorOptions,
+  ) {
+    // The machine code IS the message: it is a diagnostic, never display text.
+    super(code, options);
+    this.name = 'PhotoReadError';
+  }
+}
+
 /** Read a File into a base64 data URL. */
 export function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read file'));
+    reader.onerror = () =>
+      reject(new PhotoReadError('unreadable', { cause: reader.error ?? undefined }));
     reader.readAsDataURL(file);
   });
 }

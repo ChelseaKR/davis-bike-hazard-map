@@ -16,6 +16,7 @@ import type { RoutePlan } from '../../shared/routing.ts';
 import { fetchRoute } from '../lib/api.ts';
 import { DAVIS_LANDMARKS, landmarkByName } from '../lib/landmarks.ts';
 import { getCurrentLocation, GeolocationError } from '../lib/geolocation.ts';
+import { geolocationErrorLabel } from '../i18n/labels.ts';
 import { formatDistance, formatDuration, formatLatLng } from '../lib/format.ts';
 import { useLabels } from '../i18n/labels.ts';
 
@@ -84,7 +85,10 @@ export function RoutePlanner() {
                 id: 'route.error.location',
                 defaultMessage: "Couldn't use your location: {reason}",
               },
-              { reason: err.message },
+              // NOT `err.message` (issue #173): that was the browser's own
+              // English, interpolated into a translated wrapper, so the
+              // sentence came out half-translated under a live catalog.
+              { reason: geolocationErrorLabel(intl, err.code) },
             )
           : intl.formatMessage({
               id: 'route.error.locationUnavailable',

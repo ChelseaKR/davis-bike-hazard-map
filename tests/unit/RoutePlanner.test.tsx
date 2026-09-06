@@ -12,12 +12,12 @@ vi.mock('../../src/components/RouteMap.tsx', () => ({
 vi.mock('../../src/lib/api.ts', () => ({ fetchRoute: vi.fn() }));
 
 vi.mock('../../src/lib/geolocation.ts', () => {
+  // Mirrors the real contract since #173: the error carries a failure CODE,
+  // not display prose. A mock that still took a message would let this suite
+  // keep passing against an error shape the module no longer throws.
   class GeolocationError extends Error {
-    constructor(
-      message: string,
-      readonly code: string,
-    ) {
-      super(message);
+    constructor(readonly code: string) {
+      super(code);
     }
   }
   return { getCurrentLocation: vi.fn(), GeolocationError };
@@ -301,7 +301,7 @@ describe('RoutePlanner', () => {
   it('shows an error when location permission is denied', async () => {
     fetchRoute.mockReset();
     getCurrentLocation.mockReset();
-    getCurrentLocation.mockRejectedValue(new GeolocationError('permission denied', 'denied'));
+    getCurrentLocation.mockRejectedValue(new GeolocationError('denied'));
     render(<RoutePlanner />);
     await userEvent.click(screen.getAllByRole('button', { name: /use my location/i })[0]);
     expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't use your location/i);

@@ -18,6 +18,9 @@ import type {
   PublicHandoffInfo,
 } from '../../shared/types.ts';
 import type { QueueState } from '../lib/db.ts';
+import type { GeolocationFailure } from '../lib/geolocation.ts';
+import type { PushRegistrationFailure } from '../lib/push.ts';
+import type { PhotoReadFailure } from '../lib/photo.ts';
 
 const categoryMessages = defineMessages({
   pothole: { id: 'hazard.category.pothole', defaultMessage: 'Pothole' },
@@ -86,6 +89,66 @@ const queueStateMessages = defineMessages({
   synced: { id: 'queue.state.synced', defaultMessage: 'On the map (pending moderation)' },
   error: { id: 'queue.state.error', defaultMessage: "Couldn't sync" },
 });
+
+/**
+ * Failure codes thrown out of `src/lib`, as catalogued messages (issue #173).
+ *
+ * `geolocation.ts`, `push.ts` and `photo.ts` are framework-free and have no
+ * `intl`, so a thrown `Error` can only carry a machine code. These are where
+ * that code becomes a sentence, in the catalog, once — which is what lets the
+ * G2 no-hardcoded gate scan all three files instead of deferring them.
+ */
+const geolocationErrorMessages = defineMessages({
+  unsupported: {
+    id: 'error.geolocation.unsupported',
+    defaultMessage: "this browser can't share your location",
+  },
+  denied: {
+    id: 'error.geolocation.denied',
+    defaultMessage: 'location permission was denied',
+  },
+  unavailable: {
+    id: 'error.geolocation.unavailable',
+    defaultMessage: 'your location is unavailable right now',
+  },
+  timeout: {
+    id: 'error.geolocation.timeout',
+    defaultMessage: 'getting your location took too long',
+  },
+});
+
+const pushErrorMessages = defineMessages({
+  unsupported: {
+    id: 'error.push.unsupported',
+    defaultMessage: "This browser can't receive hazard alerts.",
+  },
+  permissionNotGranted: {
+    id: 'error.push.permissionNotGranted',
+    defaultMessage: 'Notification permission was not granted.',
+  },
+});
+
+const photoErrorMessages = defineMessages({
+  unreadable: {
+    id: 'error.photo.unreadable',
+    defaultMessage: 'That file could not be read.',
+  },
+});
+
+/**
+ * The reason half of `route.error.location` ("Couldn't use your location:
+ * {reason}"), which is why all four read as sentence fragments rather than
+ * standalone sentences.
+ */
+export function geolocationErrorLabel(intl: IntlShape, code: GeolocationFailure): string {
+  return intl.formatMessage(geolocationErrorMessages[code]);
+}
+export function pushErrorLabel(intl: IntlShape, code: PushRegistrationFailure): string {
+  return intl.formatMessage(pushErrorMessages[code]);
+}
+export function photoErrorLabel(intl: IntlShape, code: PhotoReadFailure): string {
+  return intl.formatMessage(photoErrorMessages[code]);
+}
 
 export function categoryLabel(intl: IntlShape, category: HazardCategory): string {
   return intl.formatMessage(categoryMessages[category]);
