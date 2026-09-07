@@ -24,15 +24,22 @@
  *    four kinds it was, so a blank is legible rather than merely empty.
  *
  * 3. **An area with no exposure weight gets no normalised score — not a
- *    zero.** `DAVIS_AREAS` carries an `exposureWeight` for each of the six
- *    named areas. `ELSEWHERE_AREA` ("Elsewhere in Davis") is the fallback
- *    bucket for points inside the Davis bounding box but outside every named
- *    box, and it has no weight, because nobody has estimated the riding that
- *    happens there. Dividing by a default of 1 would publish an estimate
- *    nobody made, and ranking such an area as if it scored 0 would sort it
- *    below every real measurement while looking like a measurement. Those
- *    rows carry blank weight, blank per-exposure figure and blank area rank,
- *    and sort after every ranked row — never interleaved with them.
+ *    zero.** `PLACE_AREAS` is the served place pack's named areas, and the
+ *    pack schema requires a positive `exposureWeight` on every one of them
+ *    (`shared/place.ts`), so a named area can never reach here weightless.
+ *    `ELSEWHERE_AREA` — "Elsewhere in Davis" under `place/davis.json` — is the
+ *    fallback bucket for points inside the pack's bounding box but outside
+ *    every named box. It is not an entry in `PLACE_AREAS` at all, so it has no
+ *    weight, because nobody has estimated the riding that happens there.
+ *    Dividing by a default of 1 would publish an estimate nobody made, and
+ *    ranking such an area as if it scored 0 would sort it below every real
+ *    measurement while looking like a measurement. Those rows carry blank
+ *    weight, blank per-exposure figure and blank area rank, and sort after
+ *    every ranked row — never interleaved with them.
+ *
+ *    Both names are read from the pack rather than hard-coded, so a second
+ *    town deployed from its own pack gets its own areas and its own
+ *    "elsewhere" label instead of Davis's.
  *
  * The normalisation is deliberately COARSE and says so in the export preamble,
  * reproducing the limits note from `docs/audits/coverage-equity.md` and the
@@ -43,7 +50,7 @@
  */
 
 import {
-  DAVIS_AREAS,
+  PLACE_AREAS,
   ELSEWHERE_AREA,
   areaNameFor,
   type Area,
@@ -68,7 +75,7 @@ export const EQUITY_LIMITS_NOTE =
  * gate as `EQUITY_LIMITS_NOTE`.
  */
 export const EXPOSURE_CAVEAT =
-  'It is NOT a measured ridership/population figure';
+  'It is NOT a measured ridership or population figure';
 
 /** Column order of the CSV, and the property order of the GeoJSON. */
 export const PRIORITY_COLUMNS = [
@@ -154,7 +161,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function weightFor(areaName: string): number | null {
   if (areaName === ELSEWHERE_AREA) return null;
-  const area: Area | undefined = DAVIS_AREAS.find((a) => a.name === areaName);
+  const area: Area | undefined = PLACE_AREAS.find((a) => a.name === areaName);
   return area ? area.exposureWeight : null;
 }
 
