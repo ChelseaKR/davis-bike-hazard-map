@@ -26,7 +26,7 @@ vi.mock('../../src/lib/geolocation.ts', () => {
 import { RoutePlanner } from '../../src/components/RoutePlanner.tsx';
 import { fetchRoute as fetchRouteImport } from '../../src/lib/api.ts';
 import { getCurrentLocation as getLocImport, GeolocationError } from '../../src/lib/geolocation.ts';
-import { DAVIS_LANDMARKS } from '../../src/lib/landmarks.ts';
+import { PLACE_LANDMARKS } from '../../src/lib/landmarks.ts';
 
 const fetchRoute = vi.mocked(fetchRouteImport);
 const getCurrentLocation = vi.mocked(getLocImport);
@@ -34,15 +34,15 @@ const getCurrentLocation = vi.mocked(getLocImport);
 function plan(over: Partial<RoutePlan> = {}): RoutePlan {
   return {
     source: 'osrm',
-    from: DAVIS_LANDMARKS[0].point,
-    to: DAVIS_LANDMARKS[1].point,
+    from: PLACE_LANDMARKS[0].point,
+    to: PLACE_LANDMARKS[1].point,
     route: {
-      geometry: [DAVIS_LANDMARKS[0].point, DAVIS_LANDMARKS[1].point],
+      geometry: [PLACE_LANDMARKS[0].point, PLACE_LANDMARKS[1].point],
       distanceMeters: 1500,
       durationSeconds: 360,
       steps: [
-        { instruction: 'Head out on A St', distanceMeters: 800, location: DAVIS_LANDMARKS[0].point },
-        { instruction: 'Turn left onto B St', distanceMeters: 700, location: DAVIS_LANDMARKS[1].point },
+        { instruction: 'Head out on A St', distanceMeters: 800, location: PLACE_LANDMARKS[0].point },
+        { instruction: 'Turn left onto B St', distanceMeters: 700, location: PLACE_LANDMARKS[1].point },
       ],
     },
     nearby: [],
@@ -91,7 +91,7 @@ describe('RoutePlanner', () => {
       category: 'pothole' as const,
       severity: 'high' as const,
       description: null,
-      location: DAVIS_LANDMARKS[0].point,
+      location: PLACE_LANDMARKS[0].point,
       photoUrl: null,
       status: 'approved' as const,
       confirmations: 0,
@@ -114,7 +114,7 @@ describe('RoutePlanner', () => {
               category: 'pothole',
               severity: 'high',
               description: null,
-              location: DAVIS_LANDMARKS[0].point,
+              location: PLACE_LANDMARKS[0].point,
               photoUrl: null,
               status: 'approved',
               confirmations: 0,
@@ -216,7 +216,7 @@ describe('RoutePlanner', () => {
     fetchRoute.mockResolvedValue(
       plan({
         route: {
-          geometry: [DAVIS_LANDMARKS[0].point, DAVIS_LANDMARKS[1].point],
+          geometry: [PLACE_LANDMARKS[0].point, PLACE_LANDMARKS[1].point],
           distanceMeters: 1700,
           durationSeconds: 400,
           steps: [],
@@ -231,7 +231,7 @@ describe('RoutePlanner', () => {
                 category: 'pothole',
                 severity: 'high',
                 description: null,
-                location: DAVIS_LANDMARKS[0].point,
+                location: PLACE_LANDMARKS[0].point,
                 photoUrl: null,
                 status: 'approved',
                 confirmations: 0,
@@ -283,7 +283,7 @@ describe('RoutePlanner', () => {
   it('updates an endpoint when a landmark is selected', async () => {
     fetchRoute.mockReset();
     render(<RoutePlanner />);
-    const coop = DAVIS_LANDMARKS.find((l) => /co-op/i.test(l.name))!;
+    const coop = PLACE_LANDMARKS.find((l) => /co-op/i.test(l.name))!;
     await userEvent.selectOptions(screen.getByLabelText('Destination'), coop.name);
     const expected = `${coop.point.lat.toFixed(4)}, ${coop.point.lng.toFixed(4)}`;
     expect(screen.getByText(expected)).toBeInTheDocument();

@@ -3,18 +3,19 @@
  * (authoritative input validation — Responsible-Tech Framework §3).
  */
 import { z } from 'zod';
+import { PLACE, type PlacePack } from './place.ts';
 import { HAZARD_CATEGORIES, SEVERITIES } from './types.ts';
 
-/** Davis, CA bounding box (a generous rectangle around the city + campus). */
-export const DAVIS_BOUNDS = {
-  minLat: 38.52,
-  maxLat: 38.59,
-  minLng: -121.82,
-  maxLng: -121.68,
-} as const;
+/**
+ * The served town's bounding box (a generous rectangle around the city + campus).
+ *
+ * Read off the place pack rather than written here, so a second town is a pack and
+ * not a patch. See `shared/place.ts`.
+ */
+export const PLACE_BOUNDS = PLACE.bounds;
 
-/** Centre of Davis — used as the default map view. */
-export const DAVIS_CENTER = { lat: 38.5449, lng: -121.7405 } as const;
+/** Centre of the served town — used as the default map view. */
+export const PLACE_CENTER = PLACE.center;
 
 /** Max size of an uploaded (already-compressed) photo data URL, in bytes. */
 export const MAX_PHOTO_BYTES = 3_000_000; // ~3 MB keeps mobile-data uploads sane.
@@ -27,17 +28,26 @@ export const geoPointSchema = z.object({
 });
 
 /**
- * A point must be inside the Davis bounding box. Reports elsewhere are almost
+ * A point must be inside a pack's bounding box. Reports elsewhere are almost
  * always GPS errors or spam, and accepting them would pollute a local map.
+ *
+ * Parameterised over the pack so a second town's bounds can be exercised by the
+ * same tests that exercise Davis's — proof that the rule is pack-driven, not a
+ * claim that it is.
  */
-export const davisPointSchema = geoPointSchema.refine(
-  (p) =>
-    p.lat >= DAVIS_BOUNDS.minLat &&
-    p.lat <= DAVIS_BOUNDS.maxLat &&
-    p.lng >= DAVIS_BOUNDS.minLng &&
-    p.lng <= DAVIS_BOUNDS.maxLng,
-  { message: 'Location must be within Davis, CA.' },
-);
+export function placePointSchemaFor(pack: PlacePack) {
+  return geoPointSchema.refine(
+    (p) =>
+      p.lat >= pack.bounds.minLat &&
+      p.lat <= pack.bounds.maxLat &&
+      p.lng >= pack.bounds.minLng &&
+      p.lng <= pack.bounds.maxLng,
+    { message: pack.outOfBoundsMessage },
+  );
+}
+
+/** The served town's point schema. */
+export const placePointSchema = placePointSchemaFor(PLACE);
 
 /** A data URL for a supported raster image type. */
 const photoDataUrlSchema = z
@@ -55,7 +65,7 @@ export const reportSubmissionSchema = z.object({
   category: z.enum(HAZARD_CATEGORIES),
   severity: z.enum(SEVERITIES),
   description: z.string().trim().max(MAX_DESCRIPTION_LEN).optional(),
-  location: davisPointSchema,
+  location: placePointSchema,
   photo: photoDataUrlSchema.nullable(),
   clientId: z.string().uuid(),
   capturedAt: z.number().int().positive(),
@@ -124,8 +134,8 @@ export const moderationQueueQuerySchema = z.object({
  * planner only routes within the mapped area (and refuses GPS-error inputs).
  */
 export const routeRequestSchema = z.object({
-  from: davisPointSchema,
-  to: davisPointSchema,
+  from: placePointSchema,
+  to: placePointSchema,
 });
 
 export type ValidatedRouteRequest = z.infer<typeof routeRequestSchema>;

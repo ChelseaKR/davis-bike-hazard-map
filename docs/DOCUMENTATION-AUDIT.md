@@ -26,7 +26,7 @@ These are real predicates, so they can pass or fail.
 | Root process docs | pass | `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` |
 | Root legal, citation, and conduct docs | pass | `LICENSE`, `NOTICE`, `CITATION.cff`, `CODE_OF_CONDUCT.md` |
 | Root-adjacent GitHub templates | pass | `.github/PULL_REQUEST_TEMPLATE.md`, `.github/CODEOWNERS` |
-| Local doc links resolve | pass | 98 in-repo relative links checked in 42 Markdown files; 0 unresolved; 1 outside the repository (counted, not checked) |
+| Local doc links resolve | pass | 99 in-repo relative links checked in 44 Markdown files; 0 unresolved; 1 outside the repository (counted, not checked) |
 
 ## Inventory
 
@@ -34,9 +34,9 @@ Counts, not verdicts. A count cannot pass or fail; it can only be current, which
 
 | Surface | Count | Evidence |
 | --- | ---: | --- |
-| Hand-authored docs | 46 | Markdown anywhere in the tree outside build and dependency directories, plus the root legal and template files |
-| Test files | 96 | every file under `tests/` |
-| Test declarations | 831 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
+| Hand-authored docs | 48 | Markdown anywhere in the tree outside build and dependency directories, plus the root legal and template files |
+| Test files | 99 | every file under `tests/` |
+| Test declarations | 855 | `it(`/`test(` in `tests/**/*.ts` and `*.tsx` |
 | Workflow files | 10 | `.github/workflows/*.yml` |
 | Architecture decision records | 10 | `docs/adr/*.md` |
 | Database migrations | 9 | `migrations/*.sql` |
@@ -51,7 +51,7 @@ Up to 5 representative files per category; the complete list follows below.
 | entry points and repo process | 13 | `.github/CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md`, `CHANGELOG.md`, `CITATION.cff`, `CLAUDE.md`, plus 8 more |
 | internationalization | 2 | `docs/I18N.md`, `i18n/README.md` |
 | operations | 1 | `BETA.md` |
-| other docs | 1 | `docs/PR-TRIAGE.md` |
+| other docs | 3 | `docs/ADAPTING-A-TOWN.md`, `docs/PR-TRIAGE.md`, `tests/fixtures/place/README.md` |
 | planning and research | 9 | `docs/PROJECT-SCOPE.md`, `docs/RESEARCH-ROADMAP.md`, `docs/ROADMAP.md`, `docs/USER-RESEARCH.md`, `docs/ideation/01-deep-dive.md`, plus 4 more |
 | safety, privacy, accessibility, and audits | 9 | `docs/DOCUMENTATION-AUDIT.md`, `docs/RESPONSIBLE-TECH-AUDITS.md`, `docs/audits/accessibility-2026-05-31.md`, `docs/audits/coverage-equity.md`, `docs/audits/moderation-policy.md`, plus 4 more |
 
@@ -89,6 +89,7 @@ Up to 5 representative files per category; the complete list follows below.
 - `NOTICE`
 - `README.md`
 - `SECURITY.md`
+- `docs/ADAPTING-A-TOWN.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DOCUMENTATION-AUDIT.md`
 - `docs/I18N.md`
@@ -122,6 +123,7 @@ Up to 5 representative files per category; the complete list follows below.
 - `docs/ideation/04-impact-and-sequencing.md`
 - `docs/ideation/README.md`
 - `i18n/README.md`
+- `tests/fixtures/place/README.md`
 
 <!-- END GENERATED: doc-audit -->
 

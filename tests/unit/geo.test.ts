@@ -3,20 +3,20 @@ import fc from 'fast-check';
 import {
   haversineMeters,
   fuzzCoordinate,
-  isWithinDavis,
+  isWithinPlace,
   DEFAULT_FUZZ_METERS,
 } from '../../shared/geo.ts';
-import { DAVIS_CENTER, DAVIS_BOUNDS } from '../../shared/validation.ts';
+import { PLACE_CENTER, PLACE_BOUNDS } from '../../shared/validation.ts';
 
 const METERS_PER_DEG_LAT = 111_320;
 const davisPoint = fc.record({
-  lat: fc.double({ min: DAVIS_BOUNDS.minLat, max: DAVIS_BOUNDS.maxLat, noNaN: true }),
-  lng: fc.double({ min: DAVIS_BOUNDS.minLng, max: DAVIS_BOUNDS.maxLng, noNaN: true }),
+  lat: fc.double({ min: PLACE_BOUNDS.minLat, max: PLACE_BOUNDS.maxLat, noNaN: true }),
+  lng: fc.double({ min: PLACE_BOUNDS.minLng, max: PLACE_BOUNDS.maxLng, noNaN: true }),
 });
 
 describe('haversineMeters', () => {
   it('is zero for identical points', () => {
-    expect(haversineMeters(DAVIS_CENTER, DAVIS_CENTER)).toBe(0);
+    expect(haversineMeters(PLACE_CENTER, PLACE_CENTER)).toBe(0);
   });
 
   it('approximates a known short distance', () => {
@@ -104,12 +104,12 @@ describe('fuzzCoordinate (privacy properties over the Davis bbox)', () => {
   });
 });
 
-describe('isWithinDavis', () => {
+describe('isWithinPlace', () => {
   it('accepts the city centre', () => {
-    expect(isWithinDavis(DAVIS_CENTER)).toBe(true);
+    expect(isWithinPlace(PLACE_CENTER)).toBe(true);
   });
 
   it('rejects a point far outside (e.g. Sacramento)', () => {
-    expect(isWithinDavis({ lat: 38.5816, lng: -121.4944 })).toBe(false);
+    expect(isWithinPlace({ lat: 38.5816, lng: -121.4944 })).toBe(false);
   });
 });

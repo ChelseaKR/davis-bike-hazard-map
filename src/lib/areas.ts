@@ -11,9 +11,9 @@
  * data-desert call-out.
  */
 import type { Hazard } from '../../shared/types.ts';
-import { DAVIS_AREAS, ELSEWHERE_AREA, tallyByArea, type AreaCount } from '../../shared/areas.ts';
+import { PLACE_AREAS, ELSEWHERE_AREA, tallyByArea, type AreaCount } from '../../shared/areas.ts';
 
-export { DAVIS_AREAS, ELSEWHERE_AREA, type AreaCount };
+export { PLACE_AREAS, ELSEWHERE_AREA, type AreaCount };
 export type { Area } from '../../shared/areas.ts';
 
 /**
@@ -77,9 +77,9 @@ const OVER_RATIO = 1.5;
 export function normalizeCoverage(counts: AreaCount[]): AreaCoverage[] {
   const byName = new Map(counts.map((c) => [c.name, c.count]));
   const total = counts.reduce((sum, c) => sum + c.count, 0);
-  const totalWeight = DAVIS_AREAS.reduce((sum, a) => sum + a.exposureWeight, 0);
+  const totalWeight = PLACE_AREAS.reduce((sum, a) => sum + a.exposureWeight, 0);
 
-  const named: AreaCoverage[] = DAVIS_AREAS.map((a) => {
+  const named: AreaCoverage[] = PLACE_AREAS.map((a) => {
     const count = byName.get(a.name) ?? 0;
     const expectedShare = totalWeight > 0 ? a.exposureWeight / totalWeight : null;
     const observedShare = total > 0 ? count / total : 0;

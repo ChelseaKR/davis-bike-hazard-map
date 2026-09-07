@@ -20,7 +20,7 @@ import {
   MAX_DESCRIPTION_LEN,
   reportSubmissionSchema,
 } from '../../shared/validation.ts';
-import { isWithinDavis } from '../../shared/geo.ts';
+import { isWithinPlace } from '../../shared/geo.ts';
 import { enqueueReport } from '../lib/db.ts';
 import { syncOnce, isOnline } from '../lib/sync.ts';
 import { getCurrentLocation, GeolocationError } from '../lib/geolocation.ts';
@@ -74,7 +74,7 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
   );
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
-  const locationValid = location !== null && isWithinDavis(location);
+  const locationValid = location !== null && isWithinPlace(location);
 
   // Likely duplicates of the same kind near the chosen spot (R1 dedupe nudge).
   const duplicates =
@@ -100,7 +100,7 @@ export function ReportForm({ onSubmitted, nearbyHazards, onConfirmExisting }: Re
     try {
       const point = await getCurrentLocation();
       setLocation(point);
-      if (!isWithinDavis(point)) {
+      if (!isWithinPlace(point)) {
         setGeoError(
           intl.formatMessage({
             id: 'report.geo.outside',

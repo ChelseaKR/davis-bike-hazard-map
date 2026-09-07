@@ -14,7 +14,7 @@ import { FormattedMessage, useIntl } from 'react-intl';
 import type { GeoPoint } from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import { fetchRoute } from '../lib/api.ts';
-import { DAVIS_LANDMARKS, landmarkByName } from '../lib/landmarks.ts';
+import { PLACE_LANDMARKS, landmarkByName } from '../lib/landmarks.ts';
 import { getCurrentLocation, GeolocationError } from '../lib/geolocation.ts';
 import { geolocationErrorLabel } from '../i18n/labels.ts';
 import { formatDistance, formatDuration, formatLatLng } from '../lib/format.ts';
@@ -27,8 +27,8 @@ interface Endpoint {
   point: GeoPoint;
 }
 
-const DEFAULT_START: Endpoint = { label: DAVIS_LANDMARKS[0].name, point: DAVIS_LANDMARKS[0].point };
-const DEFAULT_END: Endpoint = { label: DAVIS_LANDMARKS[1].name, point: DAVIS_LANDMARKS[1].point };
+const DEFAULT_START: Endpoint = { label: PLACE_LANDMARKS[0].name, point: PLACE_LANDMARKS[0].point };
+const DEFAULT_END: Endpoint = { label: PLACE_LANDMARKS[1].name, point: PLACE_LANDMARKS[1].point };
 
 export function RoutePlanner() {
   const intl = useIntl();
@@ -125,7 +125,7 @@ export function RoutePlanner() {
                 onChange={(e) => onSelect(which, e.target.value)}
               >
                 {!landmarkByName(ep.label) && <option value="">{ep.label}</option>}
-                {DAVIS_LANDMARKS.map((l) => (
+                {PLACE_LANDMARKS.map((l) => (
                   <option key={l.name} value={l.name}>
                     {l.name}
                   </option>

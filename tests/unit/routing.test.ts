@@ -14,8 +14,6 @@ import {
   NIGHT_MULTIPLIERS,
   isDarkAt,
   solarAltitudeDeg,
-  DAVIS_LAT,
-  DAVIS_LNG,
   DEFAULT_SCORING,
   type Route,
   type RouteScoringOptions,
@@ -235,6 +233,14 @@ describe('findFastestAlternative', () => {
 });
 
 // A fixed winter date so the twilight math is fully deterministic. Davis is on
+// Davis's latitude/longitude, written out here rather than imported. These tests
+// exercise the solar-position math, not the place pack: pinning the coordinates
+// locally keeps the day/night assertions meaningful if the shipped pack ever
+// changes, and `tests/unit/place.test.ts` separately pins that the pack's centre
+// still holds these same two literals.
+const DAVIS_LAT = 38.5449;
+const DAVIS_LNG = -121.7405;
+
 // PST (UTC−8) in January, so local clock time = UTC − 8h.
 const NOON_LOCAL = Date.UTC(2026, 0, 15, 20, 0, 0); // 12:00 PST
 const NIGHT_LOCAL = Date.UTC(2026, 0, 16, 7, 0, 0); // 23:00 PST

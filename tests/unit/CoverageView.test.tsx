@@ -13,7 +13,7 @@ import { render, screen, waitFor } from '../i18n-render.tsx';
 import { CoverageView } from '../../src/components/CoverageView.tsx';
 import { checkA11y } from '../axe.ts';
 import type { Hazard } from '../../shared/types.ts';
-import { DAVIS_AREAS, ELSEWHERE_AREA } from '../../shared/areas.ts';
+import { PLACE_AREAS, ELSEWHERE_AREA } from '../../shared/areas.ts';
 
 function resp(body: unknown, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
@@ -37,7 +37,7 @@ const feedHazard: Hazard = {
 /** Every named area at zero except North Davis, which has been reported. */
 function coverageWithNorthReported() {
   return {
-    areas: DAVIS_AREAS.map((a) => ({ name: a.name, count: a.name === 'North Davis' ? 4 : 0 })),
+    areas: PLACE_AREAS.map((a) => ({ name: a.name, count: a.name === 'North Davis' ? 4 : 0 })),
   };
 }
 
@@ -114,7 +114,7 @@ describe('CoverageView', () => {
     fetchMock.mockResolvedValue(
       resp({
         areas: [
-          ...DAVIS_AREAS.map((a) => ({ name: a.name, count: 1 })),
+          ...PLACE_AREAS.map((a) => ({ name: a.name, count: 1 })),
           { name: ELSEWHERE_AREA, count: 2 },
         ],
       }),
