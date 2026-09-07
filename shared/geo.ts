@@ -7,7 +7,7 @@
  * is ever returned — see server/lib/repository.
  */
 import type { GeoPoint } from './types.ts';
-import { DAVIS_BOUNDS } from './validation.ts';
+import { PLACE_BOUNDS } from './validation.ts';
 
 const EARTH_RADIUS_M = 6_371_000;
 const METERS_PER_DEG_LAT = 111_320;
@@ -66,12 +66,12 @@ function round6(n: number): number {
   return Math.round(n * 1e6) / 1e6;
 }
 
-/** True if the point falls within the Davis bounding box. */
-export function isWithinDavis(point: GeoPoint): boolean {
+/** True if the point falls within the served place's bounding box. */
+export function isWithinPlace(point: GeoPoint): boolean {
   return (
-    point.lat >= DAVIS_BOUNDS.minLat &&
-    point.lat <= DAVIS_BOUNDS.maxLat &&
-    point.lng >= DAVIS_BOUNDS.minLng &&
-    point.lng <= DAVIS_BOUNDS.maxLng
+    point.lat >= PLACE_BOUNDS.minLat &&
+    point.lat <= PLACE_BOUNDS.maxLat &&
+    point.lng >= PLACE_BOUNDS.minLng &&
+    point.lng <= PLACE_BOUNDS.maxLng
   );
 }

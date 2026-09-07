@@ -16,7 +16,7 @@ import { MemoryRepository } from '../../server/lib/repository.ts';
 import { MemoryModeratorStore } from '../../server/lib/moderators.ts';
 import { hashPassword } from '../../server/lib/password.ts';
 import { serverConfig } from '../../server/config.ts';
-import { areaNameFor, DAVIS_AREAS } from '../../shared/areas.ts';
+import { areaNameFor, PLACE_AREAS } from '../../shared/areas.ts';
 
 const MOD_USER = 'mod';
 const MOD_PASS = 'correct horse battery staple';
@@ -126,7 +126,7 @@ describe('GET /api/coverage', () => {
     const res = await app.inject({ method: 'GET', url: '/api/coverage' });
     expect(res.statusCode).toBe(200);
     const names = (res.json().areas as { name: string }[]).map((a) => a.name);
-    for (const area of DAVIS_AREAS) expect(names).toContain(area.name);
+    for (const area of PLACE_AREAS) expect(names).toContain(area.name);
   });
 
   it('counts a report that is still awaiting moderation — the feed does not', async () => {

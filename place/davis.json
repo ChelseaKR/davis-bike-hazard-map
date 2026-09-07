@@ -1,0 +1,34 @@
+{
+  "packVersion": 1,
+  "id": "davis",
+  "displayName": "Davis, CA",
+  "bounds": {
+    "minLat": 38.52,
+    "maxLat": 38.59,
+    "minLng": -121.82,
+    "maxLng": -121.68
+  },
+  "center": { "lat": 38.5449, "lng": -121.7405 },
+  "outOfBoundsMessage": "Location must be within Davis, CA.",
+  "elsewhereAreaName": "Elsewhere in Davis",
+  "areas": [
+    { "name": "UC Davis campus", "minLat": 38.53, "maxLat": 38.545, "minLng": -121.77, "maxLng": -121.745, "exposureWeight": 5 },
+    { "name": "North Davis", "minLat": 38.56, "maxLat": 38.6, "minLng": -121.8, "maxLng": -121.7, "exposureWeight": 3 },
+    { "name": "South Davis", "minLat": 38.5, "maxLat": 38.535, "minLng": -121.8, "maxLng": -121.7, "exposureWeight": 2 },
+    { "name": "West Davis", "minLat": 38.535, "maxLat": 38.56, "minLng": -121.8, "maxLng": -121.755, "exposureWeight": 3 },
+    { "name": "East Davis", "minLat": 38.535, "maxLat": 38.56, "minLng": -121.73, "maxLng": -121.7, "exposureWeight": 3 },
+    { "name": "Central Davis", "minLat": 38.535, "maxLat": 38.56, "minLng": -121.755, "maxLng": -121.73, "exposureWeight": 4 }
+  ],
+  "landmarks": [
+    { "name": "UC Davis Memorial Union", "point": { "lat": 38.5421, "lng": -121.7494 } },
+    { "name": "Downtown Davis (E St Plaza)", "point": { "lat": 38.5447, "lng": -121.7405 } },
+    { "name": "Davis Amtrak Station", "point": { "lat": 38.5419, "lng": -121.7376 } },
+    { "name": "Davis Food Co-op", "point": { "lat": 38.5462, "lng": -121.7385 } },
+    { "name": "North Davis (Covell & F)", "point": { "lat": 38.5611, "lng": -121.7385 } },
+    { "name": "South Davis (Montgomery Elementary)", "point": { "lat": 38.5318, "lng": -121.7546 } },
+    { "name": "West Davis (Lake Blvd & Arlington)", "point": { "lat": 38.5556, "lng": -121.7745 } },
+    { "name": "East Davis (Mace & 2nd)", "point": { "lat": 38.5435, "lng": -121.7126 } },
+    { "name": "Davis Community Park", "point": { "lat": 38.5519, "lng": -121.7503 } },
+    { "name": "Sutter Davis Hospital", "point": { "lat": 38.5571, "lng": -121.7745 } }
+  ]
+}

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '../i18n-render.tsx';
 import { CoverageView } from '../../src/components/CoverageView.tsx';
 import { checkA11y } from '../axe.ts';
-import { DAVIS_AREAS } from '../../shared/areas.ts';
+import { PLACE_AREAS } from '../../shared/areas.ts';
 import type { Hazard } from '../../shared/types.ts';
 
 function at(lat: number, lng: number, id: string): Hazard {
@@ -28,7 +28,7 @@ function at(lat: number, lng: number, id: string): Hazard {
  */
 function coverage(counts: Record<string, number>) {
   const body = {
-    areas: DAVIS_AREAS.map((a) => ({ name: a.name, count: counts[a.name] ?? 0 })),
+    areas: PLACE_AREAS.map((a) => ({ name: a.name, count: counts[a.name] ?? 0 })),
   };
   return { ok: true, status: 200, json: async () => body } as Response;
 }

@@ -10,7 +10,7 @@ import { useIntl } from 'react-intl';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoPoint } from '../../shared/types.ts';
-import { DAVIS_CENTER } from '../../shared/validation.ts';
+import { PLACE_CENTER } from '../../shared/validation.ts';
 import { config } from '../config.ts';
 import { hazardIcon } from './mapIcons.ts';
 
@@ -30,7 +30,7 @@ function ClickToPlace({ onChange }: { onChange: (p: GeoPoint) => void }) {
 
 export default function LocationPicker({ value, onChange }: LocationPickerProps) {
   const intl = useIntl();
-  const center = value ?? DAVIS_CENTER;
+  const center = value ?? PLACE_CENTER;
   return (
     <div className="location-picker">
       <MapContainer

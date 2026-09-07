@@ -4,13 +4,13 @@ import {
   hazardFiltersSchema,
   moderationDecisionSchema,
 } from '../../shared/validation.ts';
-import { DAVIS_CENTER } from '../../shared/validation.ts';
+import { PLACE_CENTER } from '../../shared/validation.ts';
 
 const valid = {
   category: 'pothole' as const,
   severity: 'high' as const,
   description: 'Deep pothole',
-  location: DAVIS_CENTER,
+  location: PLACE_CENTER,
   photo: null,
   clientId: '11111111-1111-4111-8111-111111111111',
   capturedAt: 1_700_000_000_000,

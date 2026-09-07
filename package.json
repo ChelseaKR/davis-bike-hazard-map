@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Crowdsourced, offline-first cycling-hazard map for Davis, CA — an installable PWA.",
+  "description": "Crowdsourced, offline-first cycling-hazard map for Davis, CA \u2014 an installable PWA.",
   "license": "MIT",
   "engines": {
     "node": ">=20.19 <23"
@@ -40,7 +40,8 @@
     "docs:audit": "python3 scripts/doc_audit.py",
     "docs:audit:check": "python3 scripts/doc_audit.py --check",
     "ruleset:check": "node scripts/check-branch-ruleset.mjs",
-    "verify": "npm run lint && npm run lint:css && npm run i18n:gates && npm run typecheck && npm run docs:audit:check && npm run test:coverage && npm run build"
+    "place:validate": "tsx scripts/place-validate.ts",
+    "verify": "npm run lint && npm run lint:css && npm run i18n:gates && npm run typecheck && npm run place:validate && npm run docs:audit:check && npm run test:coverage && npm run build"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs}": "eslint --fix"

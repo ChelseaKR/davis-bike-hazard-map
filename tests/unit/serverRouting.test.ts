@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { describeStep, fallbackRoute, fetchRoutes } from '../../server/lib/routing.ts';
-import { isDarkAt, rankRoutes, DAVIS_LAT, DAVIS_LNG, type Route } from '../../shared/routing.ts';
+import { isDarkAt, rankRoutes, type Route } from '../../shared/routing.ts';
 import type { Hazard } from '../../shared/types.ts';
+
+// Davis's latitude/longitude, local to this file for the same reason as in
+// routing.test.ts: the assertions are about the solar math, not the pack.
+const DAVIS_LAT = 38.5449;
+const DAVIS_LNG = -121.7405;
 
 const FROM = { lat: 38.5449, lng: -121.7405 };
 const TO = { lat: 38.5462, lng: -121.7361 };

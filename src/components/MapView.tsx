@@ -14,7 +14,7 @@ import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { lifecycleStage, type Hazard } from '../../shared/types.ts';
-import { DAVIS_CENTER } from '../../shared/validation.ts';
+import { PLACE_CENTER } from '../../shared/validation.ts';
 import { config } from '../config.ts';
 import { hazardIcon } from './mapIcons.ts';
 import { timeAgo } from '../lib/format.ts';
@@ -392,7 +392,7 @@ export function MapView({ hazards, onConfirm, focusHazard, feedError = null, onR
   return (
     <div className="map-view">
       <MapContainer
-        center={[DAVIS_CENTER.lat, DAVIS_CENTER.lng]}
+        center={[PLACE_CENTER.lat, PLACE_CENTER.lng]}
         zoom={14}
         className="map-canvas"
         aria-label={intl.formatMessage({

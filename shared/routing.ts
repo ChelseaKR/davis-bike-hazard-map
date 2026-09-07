@@ -290,13 +290,14 @@ export function findFastestAlternative(ranked: ScoredRoute[]): FastestAlternativ
   };
 }
 
-// Davis reference lat/lng for solar-position math. Kept local (rather than
-// importing DAVIS_CENTER from validation.ts) so this scoring module stays
-// dependency-free — validation.ts pulls in zod. Value matches DAVIS_CENTER.
-/** Davis, CA reference latitude for civil-twilight math. */
-export const DAVIS_LAT = 38.5449;
-/** Davis, CA reference longitude for civil-twilight math. */
-export const DAVIS_LNG = -121.7405;
+// The reference latitude/longitude for solar-position math used to live here, as a
+// hand-copied second pair of literals with a comment promising they matched
+// `DAVIS_CENTER` — a promise nothing checked, in the module the place-pack issue
+// (#181) forgot to list. They are gone rather than re-homed: every function below
+// already takes `lat`/`lng` as arguments, so this module needs no place data at all,
+// and callers read the centre off the place pack (`PLACE.center`). That keeps this
+// scoring module dependency-free — `shared/place.ts` pulls in zod — while removing
+// the possibility of the two values drifting apart.
 
 /** Civil-twilight threshold: the sun sits below this altitude when it's "dark". */
 const CIVIL_TWILIGHT_ALTITUDE_DEG = -6;

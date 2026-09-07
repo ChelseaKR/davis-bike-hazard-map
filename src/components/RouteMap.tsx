@@ -14,7 +14,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GeoPoint } from '../../shared/types.ts';
 import type { NearbyHazard, Route } from '../../shared/routing.ts';
-import { DAVIS_CENTER } from '../../shared/validation.ts';
+import { PLACE_CENTER } from '../../shared/validation.ts';
 import { config } from '../config.ts';
 import { hazardIcon } from './mapIcons.ts';
 import { categoryLabel, severityLabel } from '../i18n/labels.ts';
@@ -93,7 +93,7 @@ export function RouteMap(props: RouteMapProps) {
   return (
     <div className="route-map">
       <MapContainer
-        center={[DAVIS_CENTER.lat, DAVIS_CENTER.lng]}
+        center={[PLACE_CENTER.lat, PLACE_CENTER.lng]}
         zoom={14}
         className="map-canvas"
         aria-label={intl.formatMessage({

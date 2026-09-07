@@ -1,0 +1,22 @@
+{
+  "packVersion": 1,
+  "id": "synthetic-town",
+  "displayName": "Synthetic Town (test fixture)",
+  "bounds": {
+    "minLat": 10.0,
+    "maxLat": 10.4,
+    "minLng": 20.0,
+    "maxLng": 20.4
+  },
+  "center": { "lat": 10.2, "lng": 20.2 },
+  "outOfBoundsMessage": "Location must be within Synthetic Town.",
+  "elsewhereAreaName": "Elsewhere in Synthetic Town",
+  "areas": [
+    { "name": "Old Quarter", "minLat": 10.0, "maxLat": 10.2, "minLng": 20.0, "maxLng": 20.2, "exposureWeight": 4 },
+    { "name": "Riverside", "minLat": 10.1, "maxLat": 10.3, "minLng": 20.1, "maxLng": 20.3, "exposureWeight": 1 }
+  ],
+  "landmarks": [
+    { "name": "Synthetic Station", "point": { "lat": 10.05, "lng": 20.05 } },
+    { "name": "Synthetic Library", "point": { "lat": 10.35, "lng": 20.35 } }
+  ]
+}

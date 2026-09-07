@@ -9,19 +9,19 @@ vi.mock('../../src/lib/api.ts', () => ({ fetchRoute: vi.fn() }));
 
 import { RoutePlanner } from '../../src/components/RoutePlanner.tsx';
 import { fetchRoute as fetchRouteImport } from '../../src/lib/api.ts';
-import { DAVIS_LANDMARKS } from '../../src/lib/landmarks.ts';
+import { PLACE_LANDMARKS } from '../../src/lib/landmarks.ts';
 
 const fetchRoute = vi.mocked(fetchRouteImport);
 
 const plan: RoutePlan = {
   source: 'osrm',
-  from: DAVIS_LANDMARKS[0].point,
-  to: DAVIS_LANDMARKS[1].point,
+  from: PLACE_LANDMARKS[0].point,
+  to: PLACE_LANDMARKS[1].point,
   route: {
-    geometry: [DAVIS_LANDMARKS[0].point, DAVIS_LANDMARKS[1].point],
+    geometry: [PLACE_LANDMARKS[0].point, PLACE_LANDMARKS[1].point],
     distanceMeters: 1500,
     durationSeconds: 360,
-    steps: [{ instruction: 'Head out on A St', distanceMeters: 1500, location: DAVIS_LANDMARKS[0].point }],
+    steps: [{ instruction: 'Head out on A St', distanceMeters: 1500, location: PLACE_LANDMARKS[0].point }],
   },
   nearby: [
     {
@@ -30,7 +30,7 @@ const plan: RoutePlan = {
         category: 'pothole',
         severity: 'high',
         description: null,
-        location: DAVIS_LANDMARKS[0].point,
+        location: PLACE_LANDMARKS[0].point,
         photoUrl: null,
         status: 'approved',
         confirmations: 0,
