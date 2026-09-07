@@ -33,8 +33,16 @@ shipping without them. That is what this section is for.
 ## The pack
 
 A pack is validated by `shared/place.ts` at import time. An unusable pack fails the
-import: the server refuses to boot and `vite build` refuses to emit. It does not
-start with a partly-filled map.
+import, so the server refuses to boot and every test that touches the map fails at
+import rather than running against a partly-filled map.
+
+**Import-time validation alone does not stop a release, and that was measured rather
+than assumed.** `npm run build` is `tsc --noEmit && vite build`; neither half executes
+the module's top-level code, so a pack with a zero `exposureWeight` planted in it
+produced `✓ built in 439ms`, exit code 0, and a `dist/` shipping the broken pack —
+while the same sabotage turned 22 test files red. That is why `npm run place:validate`
+(`scripts/place-validate.ts`) exists and runs inside `npm run verify` ahead of the
+build: it runs the loader for its own sake and exits non-zero.
 
 ```jsonc
 {
@@ -118,8 +126,10 @@ to the map's data, and that is a decision about the town, not about the schema.
 3. **Point the build at it.** `shared/place.ts` imports `place/davis.json`
    directly today; a second pack means changing that import. Build-time pack
    *selection* (`VITE_PLACE` / `PLACE_PATH`) is not built yet — see issue #181.
-4. **Run the gate.** `make verify`. The pack is validated at import, so a bad pack
-   fails the typecheck, the tests, and the build.
+4. **Run the gate.** `make verify`. `npm run place:validate` checks every listed pack
+   directly and fails the run; the import-time validation additionally fails the
+   tests and the server's boot. Note that `tsc` will *not* catch a bad value — it
+   checks types, not the numbers in the pack.
 5. **Re-check the copy.** The pack carries `displayName`, `outOfBoundsMessage` and
    `elsewhereAreaName`. Everything else the interface says about Davis by name is
    still in the translation catalogues (`src/i18n/locales/`), not in the pack.

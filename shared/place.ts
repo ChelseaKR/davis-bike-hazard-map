@@ -186,7 +186,12 @@ export function parsePlacePack(raw: unknown, source: string): PlacePack {
  * The pack this build serves.
  *
  * Validated at module load, which means an unusable pack fails the import — the
- * server refuses to boot and `vite build` refuses to emit — rather than producing a
- * map whose bounds are `undefined`.
+ * server refuses to boot, and every test touching the map fails at import — rather
+ * than producing a map whose bounds are `undefined`.
+ *
+ * Import-time validation does NOT by itself stop a release: `vite build` bundles the
+ * client without evaluating it, and a planted zero `exposureWeight` built cleanly to
+ * `dist/` while turning 22 test files red. `scripts/place-validate.ts`, wired into
+ * `npm run verify`, is the check that actually fails the build.
  */
 export const PLACE: PlacePack = parsePlacePack(davisPackJson, 'place/davis.json');
