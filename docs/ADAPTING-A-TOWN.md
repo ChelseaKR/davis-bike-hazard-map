@@ -19,11 +19,16 @@ project, by design — moderation exists before launch, and it is a person, not 
 setting. A second town without named moderators is a second town without
 moderation. See `docs/RESPONSIBLE-TECH-AUDITS.md`.
 
-**2. A privacy review for that town.** Every public coordinate is snapped to a fuzz
+**2. A privacy review for that town.** Every public coordinate is snapped to a ~70 m
 grid before it leaves the server, because a hazard reported outside somebody's house
-is a fact about where they live. The grid was sized against Davis's density. A denser
-or sparser town changes what the same grid discloses, and that has to be looked at
-rather than assumed to transfer.
+is a fact about where they live. That grid is not a settled safe value: this project
+records it as a **tunable trade-off** whose residual risk is owned by a *privacy
+reviewer*, not by the code (`docs/audits/residual-risk.md`, R3). How much a 70 m cell
+actually discloses depends on how densely a place is built, so the reviewer's reading
+is about the town — and a reading made for Davis is not a reading made for anywhere
+else. `DEFAULT_FUZZ_METERS` is per-deployment for that reason, and the place pack
+deliberately does **not** carry it: a privacy parameter that travels silently inside a
+geography file is a privacy parameter nobody reviews.
 
 Neither prerequisite is checkable by CI, so nothing in this repository will stop you
 shipping without them. That is what this section is for.
