@@ -80,6 +80,7 @@ import {
   type HandoffRetrySweepResult,
 } from './lib/handoffRetry.ts';
 import { postOsmNote, isOsmEligible } from './lib/osmNotes.ts';
+import { buildPriorityRows, toPriorityCsv, toPriorityGeoJson } from './lib/priority.ts';
 import { fetchRoutes } from './lib/routing.ts';
 import { applyHandoffStatus, initialHandoff } from './lib/lifecycle.ts';
 import {
@@ -911,6 +912,49 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       failures: failed.map((h) => ({ hazard: toPublic(h), delivery: h.handoffDelivery ?? null })),
     };
   });
+
+  // --- City prioritisation export (E6, issue #179) ---
+  // The one projection in this codebase that carries PRECISE reporter
+  // coordinates, because a work order cannot be dispatched to a fuzzed point.
+  // Moderator session required; the public export at /api/hazards/export stays
+  // fuzzed and unchanged. Both formats are built from the same rows, so the CSV
+  // and the GeoJSON cannot disagree.
+  //
+  // Downloading it is an audit event: it moves personal data out of the system
+  // towards the city, which is exactly the action the moderation audit trail
+  // exists to record. Logged with the moderator's username and the row count,
+  // never with any hazard's coordinates.
+  const priorityExport = async (req: FastifyRequest, format: 'csv' | 'geojson') => {
+    const rows = buildPriorityRows(await repo.all(), now());
+    const by = (req as AuthedRequest).moderatorUsername;
+    app.log.info(
+      { event: 'priority_export', by, format, rows: rows.length, at: now() },
+      'Moderator downloaded the city prioritisation export',
+    );
+    return rows;
+  };
+
+  app.get('/api/moderation/priority.csv', { preHandler: requireModerator }, async (req, reply) => {
+    const rows = await priorityExport(req, 'csv');
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', 'attachment; filename="davis-hazard-priority.csv"')
+      // Precise locations: never cached by a shared proxy.
+      .header('cache-control', 'no-store')
+      .send(toPriorityCsv(rows, now()));
+  });
+
+  app.get(
+    '/api/moderation/priority.geojson',
+    { preHandler: requireModerator },
+    async (req, reply) => {
+      const rows = await priorityExport(req, 'geojson');
+      return reply
+        .header('content-type', 'application/geo+json')
+        .header('cache-control', 'no-store')
+        .send(JSON.stringify(toPriorityGeoJson(rows, now())));
+    },
+  );
 
   // Retry sweep runner (R3): re-forwards every hand-off whose scheduled retry
   // is due. Decorated onto the instance so the ops entrypoint (server/index.ts)

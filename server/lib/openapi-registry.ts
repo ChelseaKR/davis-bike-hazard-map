@@ -596,6 +596,58 @@ registry.registerPath({
   },
 });
 
+// --- City prioritisation export (E6, issue #179) ---
+// Documented as `text/csv` and `application/geo+json` rather than through a zod
+// response schema: neither body is JSON that `hazardSchema` could describe, and
+// inventing a schema the route does not validate against would be the drift the
+// generated spec exists to prevent.
+const PRIORITY_DESCRIPTION =
+  'The moderator-only work list Public Works asks for: confirmed hazards ' +
+  '(approved and corroborated by at least one other rider), each with its ' +
+  'area, that area exposure-normalised rank, category, severity, ' +
+  'confirmations, days open and 311 hand-off state. This is the only ' +
+  'projection in the API that carries PRECISE reporter coordinates — the ' +
+  'public export at /hazards/export stays fuzzed and is unaffected — so it ' +
+  'requires a moderator session and is never cached. The 311 reference is ' +
+  'printed only where the delivery receipt says the hand-off was delivered; ' +
+  'a dry-run or failed hand-off records intent only, so its reference cell is ' +
+  'blank and handoff_delivery says which. Areas with no exposure weight ' +
+  '(Elsewhere in Davis) carry a blank weight, per-exposure figure and rank ' +
+  'rather than a zero, and sort after every ranked row. The normalisation ' +
+  'basis and both limits notes are printed in the export preamble.';
+
+registry.registerPath({
+  method: 'get',
+  path: '/moderation/priority.csv',
+  tags: ['moderation'],
+  security: bearerAuth,
+  summary: 'City prioritisation work list as CSV (precise coordinates, moderator-only)',
+  description: PRIORITY_DESCRIPTION,
+  responses: {
+    200: {
+      description: 'CSV: a `#`-commented preamble, a header row, then one row per hazard',
+      content: { 'text/csv': { schema: z.string() } },
+    },
+    401: { description: 'unauthorized', content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/moderation/priority.geojson',
+  tags: ['moderation'],
+  security: bearerAuth,
+  summary: 'City prioritisation work list as GeoJSON (precise coordinates, moderator-only)',
+  description: PRIORITY_DESCRIPTION,
+  responses: {
+    200: {
+      description: 'FeatureCollection; the CSV preamble is carried as `notes`',
+      content: { 'application/geo+json': { schema: z.unknown() } },
+    },
+    401: { description: 'unauthorized', content: errorContent },
+  },
+});
+
 registry.registerPath({
   method: 'post',
   path: '/moderation/{id}/handoff/sync',
