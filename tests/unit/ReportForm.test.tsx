@@ -51,6 +51,27 @@ describe('ReportForm', () => {
     await checkA11y(container);
   });
 
+  /**
+   * States the limit of the check above, so nobody has to rediscover it.
+   *
+   * The map picker is rendered behind `{showMap && <Suspense>…}`, so in the
+   * form's default state it is not merely hidden — it is not in the document.
+   * The scan above therefore says nothing whatever about it, and a green run
+   * must not be read as covering it. That surface is scanned open, in a real
+   * browser, by `tests/e2e/a11y.spec.ts`.
+   *
+   * If this ever fails because the picker mounts eagerly, the right response is
+   * to extend the scan above to the open state, not to delete this test.
+   */
+  it('does not mount the map picker until it is asked for, so the scan above cannot see it', () => {
+    const { container } = render(<ReportForm />);
+    expect(container.querySelector('.location-picker')).toBeNull();
+    expect(screen.getByRole('button', { name: /set on map/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
   it('keeps submit disabled until a valid Davis location is set', () => {
     render(<ReportForm />);
     expect(screen.getByRole('button', { name: /submit report/i })).toBeDisabled();
