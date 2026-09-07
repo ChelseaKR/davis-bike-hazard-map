@@ -152,12 +152,38 @@ Extracting the geography did not extract everything, and claiming otherwise woul
 the same kind of overstatement this document exists to avoid. Still hard-coded, and
 tracked on issue #181:
 
-- **Interface copy** naming Davis, in `src/i18n/locales/`.
-- **311 provider configuration** and its defaults, in `server/config.ts`.
-- **Tile and routing service URLs**, in `src/config.ts` and `server/config.ts`.
-- **Licence and attribution text** for the tile layer.
+- **Interface copy** naming Davis, in `src/i18n/locales/en.json` — the app title, the
+  coverage hint, the map's `aria-label`, and the two out-of-bounds messages.
+- **Server-side text that names Davis and leaves this system.** This is the one to
+  read twice, because it is not interface copy and it is not reversible:
+  `server/lib/osmNotes.ts` writes *"reported by cyclists via the Davis Bike Hazard
+  Map"* and *"Davis Bike Hazard Map reference &lt;id&gt;"* into the body of a note
+  **posted to OpenStreetMap**, which is public and permanent. A second town running
+  its own pack would publish that town's hazards into OSM under Davis's name.
+  `server/openapi.ts`'s API title and several `server/lib/openapi-registry.ts`
+  descriptions say Davis too; those are only served, not published outward.
+  What a second deployment should call itself is a naming decision, not a
+  substitution, which is why this is listed rather than parameterised.
+- **Licence and attribution text** for the tile layer — `config.tileAttribution` in
+  `src/config.ts` is a literal with no environment override. It is OpenStreetMap's
+  required attribution, so it is correct for any town using OSM tiles and wrong only
+  for a deployment that changes tile provider.
+- **The default 311 provider and service code.** Every 311 endpoint, key and secret
+  in `server/config.ts` is already read from the environment and defaults to empty,
+  which means dry-run — none of them is a Davis constant. What is a Davis-shaped
+  default is `HANDOFF_PROVIDER` falling back to `gogov` (the vendor Davis uses) and
+  `OPEN311_SERVICE_CODE` falling back to `bike-hazard`. Both are one environment
+  variable away.
 - **Serving two towns from one deployment.** Selection picks one pack per build and
   per process; there is no per-request town.
+
+**Not on this list, and previously on it in error:** the **tile and routing service
+URLs**. `VITE_TILE_URL` (`src/config.ts`), `ROUTING_URL` and `OSM_NOTES_API_URL`
+(`server/config.ts`) are all read from the environment, and their defaults are
+OpenStreetMap-project services that behave identically for any town. They are
+deployment configuration, and they were never Davis constants.
+`tests/unit/adaptingATown.test.ts` holds that correction against the tree so it
+cannot quietly become wrong again.
 
 ## Selecting a pack
 
