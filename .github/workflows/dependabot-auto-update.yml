@@ -71,9 +71,20 @@
 #
 # The skip is a stopgap, not a resolution: while it holds, Dependabot PRs stay
 # unmergeable and the warning is the only signal that they are. The underlying
-# cause — `ChelseaKR/portfolio-standards` being private, which is also what
-# makes zizmor abort on release.yml — is tracked in issue #131; resolving that
-# retires this workflow rather than merely un-blocking it.
+# cause is `ChelseaKR/portfolio-standards` being private.
+#
+# That repository being private used ALSO to abort zizmor on release.yml, and
+# this comment used to say so. It no longer does: on 2026-09-07 release.yml was
+# re-pinned to the public `ChelseaKR/.github` copy of the authorizer, because a
+# public repository cannot call a reusable workflow in a private one and that
+# release workflow had therefore never parsed. Issue #131 covered the zizmor
+# half, and that half is settled.
+#
+# NONE OF WHICH HELPS HERE. `standards.yml` does not `uses:` the private repo --
+# it CHECKS IT OUT with `ssh-key: ${{ secrets.STANDARDS_DEPLOY_KEY }}`, an
+# Actions secret, and Dependabot-actored runs read a different secret store. That
+# is a separate mechanism with a separate fix, and this workflow stands until one
+# of the two below is applied.
 #
 # THE TWO SIMPLER FIXES THIS WORKFLOW IS STANDING IN FOR
 #   (a) Mirror the deploy key into the Dependabot secret store:

@@ -17,25 +17,27 @@ name: workflow-lint
 # flip the 2026-07-05 remediation note deferred until the repo went public -
 # P0-3/P0-2).
 #
-# Two passes, not one (issue #131)
-# --------------------------------
-# release.yml pins a reusable workflow in the PRIVATE sibling repo
+# One pass again, over every input (issue #131)
+# ---------------------------------------------
+# From 2026-08-21 until 2026-09-07 this ran TWO passes, because release.yml
+# pinned a reusable workflow in the PRIVATE sibling repo
 # ChelseaKR/portfolio-standards. Any zizmor audit that resolves a
-# cross-repository ref cannot list that repo's refs with this repo's
-# GITHUB_TOKEN, and ABORTS THE WHOLE RUN ("fatal: no audit was performed")
-# instead of emitting a finding - which is why this gate was red on main from
-# 2026-08-21, and why the run that failed had audited only six of the ten
-# workflows before it stopped. Three audits behave this way today:
-# `impostor-commit`, plus `stale-action-refs` and `ref-version-mismatch` as of
-# zizmor v1.30.0.
+# cross-repository ref could not list that repo's refs with this repo's
+# GITHUB_TOKEN, and ABORTED THE WHOLE RUN ("fatal: no audit was performed")
+# instead of emitting a finding - so release.yml was audited alone with those
+# audits disabled, and everything else kept the full set.
 #
-# So release.yml is audited in a pass of its own, with those three audits and
-# nothing else disabled (.github/zizmor.release-exception.yml). Every other
-# input keeps the full audit set. Disabling them repo-wide is the only other
-# thing that avoids the abort, and it would drop pin verification for every
-# third-party action in every workflow. See the config file for the suppression
-# attempts that were tested and did not work, and for what to do when a future
-# zizmor release adds a fourth audit of this shape.
+# That pin now points at ChelseaKR/.github, which is public. The default
+# GITHUB_TOKEN can list its refs, so `impostor-commit`, `stale-action-refs` and
+# `ref-version-mismatch` all resolve it like any other pin. The exception has no
+# subject left: `.github/zizmor.release-exception.yml` is deleted and the second
+# pass is gone, which means every input in this repository is audited under the
+# full rule set again, with nothing suppressed anywhere.
+#
+# The private pin was never the only reason to keep this workflow honest, so the
+# guards that survived the simplification are below: the input set is still
+# enumerated from the tree rather than hardcoded, an empty collection is still a
+# build failure, and the trufflehog pin/version check is untouched.
 on:
   push:
     branches: [main]
@@ -43,7 +45,6 @@ on:
       - '.github/workflows/**'
       - '.github/actions/**'
       - '.github/dependabot.yml'
-      - '.github/zizmor.release-exception.yml'
       - '.pre-commit-config.yaml'
   pull_request:
     # No path filter: "zizmor (workflow SAST)" is a required status check in
@@ -87,11 +88,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Enumerate audit inputs and re-prove the release.yml exception
-        id: split
-        env:
-          EXCEPTION: .github/workflows/release.yml
-          PRIVATE_PIN: 'ChelseaKR/portfolio-standards/'
+      - name: Enumerate audit inputs
+        id: collect
         run: |
           set -euo pipefail
 
@@ -109,36 +107,22 @@ jobs:
           echo "Collected $(printf '%s\n' "${collected}" | wc -l | tr -d ' ') input(s):"
           printf '%s\n' "${collected}" | sed 's/^/  /'
 
-          # Guard 1: the excepted file must still be one of the collected inputs.
-          if ! printf '%s\n' "${collected}" | grep -qxF "${EXCEPTION}"; then
-            echo "::error::${EXCEPTION} is no longer an audit input."
-            echo "::error::Delete .github/zizmor.release-exception.yml and audit every input in one pass."
-            exit 1
-          fi
-
-          # Guard 2: the exception exists only because release.yml pins a
-          # reusable workflow in a private repo this token cannot read. If that
-          # pin is gone, the exception is obsolete and must not be left to rot.
-          if ! grep -Eq "^[[:space:]]*uses:[[:space:]]*${PRIVATE_PIN}" "${EXCEPTION}"; then
-            echo "::error::${EXCEPTION} no longer pins ${PRIVATE_PIN%/}."
-            echo "::error::The impostor-commit exception is obsolete: delete"
-            echo "::error::.github/zizmor.release-exception.yml, drop the second pass, and close #131."
-            exit 1
-          fi
-
-          # Guard 3: any OTHER collected input pinning that private repo would
-          # abort the full-audit pass exactly the way release.yml does. Say so
-          # here, with the file names, instead of failing as an opaque abort.
-          strays="$(printf '%s\n' "${collected}" | grep -vxF "${EXCEPTION}" \
-            | xargs -r grep -lE "^[[:space:]]*uses:[[:space:]]*${PRIVATE_PIN}" || true)"
+          # A cross-repository `uses:` pointing at a PRIVATE repository aborts the
+          # whole audit rather than producing a finding, which is what forced the
+          # two-pass arrangement this workflow used to carry. Nothing in the tree
+          # should reintroduce one: name the file rather than letting the run die
+          # as an opaque "fatal: no audit was performed".
+          strays="$(printf '%s\n' "${collected}" \
+            | xargs -r grep -lE "^[[:space:]]*uses:[[:space:]]*ChelseaKR/portfolio-standards/" || true)"
           if [ -n "${strays}" ]; then
-            echo "::error::these inputs also pin the private ${PRIVATE_PIN%/} and would abort the full audit:"
+            echo "::error::these inputs pin the private ChelseaKR/portfolio-standards by \`uses:\`,"
+            echo "::error::which aborts the audit instead of reporting a finding:"
             printf '%s\n' "${strays}" | sed 's/^/::error::  /'
-            echo "::error::Extend the exception pass to cover them, or make the repo public (#131)."
+            echo "::error::Point them at the public ChelseaKR/.github copy, as release.yml does."
             exit 1
           fi
 
-          # Guard 4: trufflehog's `version:` input selects the BINARY the action
+          # trufflehog's `version:` input selects the BINARY the action
           # downloads. Dependabot updates the `uses:` sha and its version
           # comment but never a `with:` input, so the two drift apart and every
           # subsequent bump becomes a no-op that reads like an upgrade. That
@@ -165,38 +149,13 @@ jobs:
             echo "trufflehog pin and \`version:\` input agree: ${th_pinned}"
           fi
 
-          full="$(printf '%s\n' "${collected}" | grep -vxF "${EXCEPTION}" | tr '\n' ' ')"
-          full="${full% }"
-          if [ -z "${full}" ]; then
-            echo "::error::the full-audit pass would receive no inputs"
-            exit 1
-          fi
-          echo "full-audit-inputs=${full}" >> "${GITHUB_OUTPUT}"
-          echo "Full-audit pass : ${full}"
-          echo "Exception pass  : ${EXCEPTION}"
+          inputs="$(printf '%s\n' "${collected}" | tr '\n' ' ')"
+          echo "audit-inputs=${inputs% }" >> "${GITHUB_OUTPUT}"
 
-      - name: zizmor - full audit set, every input except release.yml
+      - name: zizmor - the full audit set, over every input
         uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99  # v0.6.3
         with:
-          inputs: ${{ steps.split.outputs.full-audit-inputs }}
+          inputs: ${{ steps.collect.outputs.audit-inputs }}
           min-severity: high
           advanced-security: true
           annotations: false
-
-      - name: zizmor - release.yml, cross-repo audits excepted (#131)
-        # Runs even when the pass above fails, so one run reports every finding
-        # in the repository rather than only those in the first pass.
-        if: ${{ !cancelled() }}
-        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99  # v0.6.3
-        with:
-          inputs: .github/workflows/release.yml
-          config: .github/zizmor.release-exception.yml
-          min-severity: high
-          # This pass reports through workflow annotations rather than code
-          # scanning: zizmor-action writes its SARIF to a fixed path and uploads
-          # it under the fixed category "zizmor", so a second advanced-security
-          # upload in the same job would supersede the first pass's analysis and
-          # quietly drop those findings from the Security tab. Failing findings
-          # still fail this step, so the gate is unchanged.
-          advanced-security: false
-          annotations: true

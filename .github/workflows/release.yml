@@ -28,24 +28,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The trust boundary lives in portfolio-standards, pinned to the exact commit
-  # the v2.0.0 tag points at, so this repo cannot drift from the reviewed
-  # authorizer. It resolves the dispatched tag, verifies the annotated tag's SSH
-  # signature against .github/allowed_signers, proves the tagged commit is an
-  # ancestor of main, and returns immutable identifiers. The old
+  # The trust boundary. It resolves the dispatched tag, verifies the annotated
+  # tag's SSH signature against .github/allowed_signers, proves the tagged commit
+  # is an ancestor of main, and returns immutable identifiers. The old
   # `version-check` job it replaces read `GITHUB_REF_NAME` from a tag push,
   # which authorized nothing: any tag on any commit could start a release.
   authorize:
-    # zizmor's impostor-commit audit cannot verify this pin: portfolio-standards is a private
-    # sibling repo, and CI's default GITHUB_TOKEN (scoped to this repo only) gets "missing or
-    # you have no access" listing its tags, which the audit treats as a hard error rather than
-    # a checkable finding — an inline `zizmor: ignore` comment does NOT suppress this (tested:
-    # the crash happens before any finding exists to filter), and `rules.impostor-commit.disable`
-    # would silence the audit for every third-party action in every workflow, not just this line.
-    # Tracked as a real CI gap in issue #131. The pin is manually verified instead: e9cddff...bcebf3
-    # is the exact commit the signed v2.0.0 tag points at (checked directly against
-    # portfolio-standards before this line was written). Re-verify by hand on every re-pin.
-    uses: ChelseaKR/portfolio-standards/.github/workflows/release-authorize.yml@e9cddffff4e9f685642f4ac2c90ddbca12bcebf3  # v2.0.0
+    # Read from ChelseaKR/.github, not from ChelseaKR/portfolio-standards, and that
+    # is the difference between this workflow running and this workflow never having
+    # run at all.
+    #
+    # A PUBLIC repository cannot call a reusable workflow that lives in a PRIVATE
+    # one. GitHub reports that as a parse error naming the callee -- `failed to
+    # parse workflow: error parsing called workflow ... workflow was not found` --
+    # so it reads like a missing file rather than a permissions decision, and it
+    # happens before a single job is dispatched. A release path that cannot parse
+    # produces no run, and no run produces no failure for anyone to read. This
+    # repository is public and pinned the private copy, so `release.yml` could never
+    # have executed.
+    #
+    # `ChelseaKR/.github` is public, so the audits that resolve a cross-repository
+    # ref can now actually resolve this one: `impostor-commit`, `stale-action-refs`
+    # and `ref-version-mismatch` all list its tags with the default GITHUB_TOKEN.
+    # That is what retires `.github/zizmor.release-exception.yml` and the second
+    # zizmor pass in `workflow-lint.yml` -- both existed only because the callee
+    # could not be read, and both are deleted in the same change.
+    #
+    # The move is not quite byte-identical, and the difference is a tightening
+    # rather than a drift. Measured against the private file at the commit this
+    # line used to pin (e9cddff), the public copy at 7be4c3e is the same file plus
+    # `timeout-minutes: 30` on this job. Without it the job holding the trust
+    # boundary inherits the six-hour default, so migrating without that line would
+    # have traded a bounded verification for an unbounded one.
+    uses: ChelseaKR/.github/.github/workflows/release-authorize.yml@7be4c3e44e2acf20e8a98eeea4351c1e5d2789bc
     permissions:
       contents: read
     with:
