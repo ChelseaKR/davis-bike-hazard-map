@@ -22,6 +22,8 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { BUILT_IN_PACKS } from '../../shared/place.ts';
+
 const ROOT = process.cwd();
 
 /** Every `*.json` under a directory, as repo-relative paths. */
@@ -55,9 +57,19 @@ describe('the place-pack gate', () => {
     // The script lists its packs explicitly rather than globbing, because a glob over a
     // renamed directory validates nothing and reports success while doing it. The cost
     // of an explicit list is that it can go stale; this is the check that stops it.
+    //
+    // Half the list is no longer typed into the script at all: the shippable packs come
+    // from `BUILT_IN_PACKS` in `shared/place.ts`, so a pack made selectable by
+    // `VITE_PLACE` is validated by construction. Only the test fixtures are literals
+    // there, and only those are scraped here.
     const source = readFileSync(join(ROOT, 'scripts/place-validate.ts'), 'utf8');
-    const matches = Array.from(source.matchAll(/^\s*'([^']+\.json)',$/gm));
-    const declared = matches.map((m) => m[1]).sort();
+    const fixtureLiterals = Array.from(source.matchAll(/^\s*'([^']+\.json)',?$/gm)).map(
+      (m) => m[1],
+    );
+    const declared = [
+      ...Object.values(BUILT_IN_PACKS).map((entry) => entry.source),
+      ...fixtureLiterals,
+    ].sort();
 
     const onDisk = [...packFilesIn('place'), ...packFilesIn('tests/fixtures/place')].sort();
 

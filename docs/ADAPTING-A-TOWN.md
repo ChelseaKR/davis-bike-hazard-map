@@ -128,9 +128,14 @@ to the map's data, and that is a decision about the town, not about the schema.
    view always shows them next to a limits note. Guessing is expected; guessing and
    then presenting the result as data is not. See
    `docs/audits/coverage-equity.md`.
-3. **Point the build at it.** `shared/place.ts` imports `place/davis.json`
-   directly today; a second pack means changing that import. Build-time pack
-   *selection* (`VITE_PLACE` / `PLACE_PATH`) is not built yet — see issue #181.
+3. **Register it, then select it.** Add one line to `BUILT_IN_PACKS` in
+   `shared/place.ts` giving the pack's id and its file. That makes it *selectable*
+   and, because `scripts/place-validate.ts` derives its list from the same registry,
+   *validated on every `make verify`* — a pack cannot become selectable while going
+   unchecked. Then select it at deploy time: `VITE_PLACE=<id>` for the client build
+   and `PLACE=<id>` for the API. Both default to `davis`, and an id that is not in
+   the registry is refused with the available ids named — never quietly replaced by
+   the default.
 4. **Run the gate.** `make verify`. `npm run place:validate` checks every listed pack
    directly and fails the run; the import-time validation additionally fails the
    tests and the server's boot. Note that `tsc` will *not* catch a bad value — it
@@ -151,8 +156,48 @@ tracked on issue #181:
 - **311 provider configuration** and its defaults, in `server/config.ts`.
 - **Tile and routing service URLs**, in `src/config.ts` and `server/config.ts`.
 - **Licence and attribution text** for the tile layer.
-- **Build-time pack selection** — one pack is compiled in; there is no `VITE_PLACE`
-  switch, and no support for serving two towns from one deployment.
+- **Serving two towns from one deployment.** Selection picks one pack per build and
+  per process; there is no per-request town.
+
+## Selecting a pack
+
+Two variables, one meaning:
+
+| Variable | Read by | When |
+| --- | --- | --- |
+| `VITE_PLACE` | the client bundle | `vite build` — Vite substitutes the value into the bundle, so it is fixed at build time |
+| `PLACE` | the API server | process start |
+
+Unset, both fall back to `davis`.
+
+**They must not disagree.** `npm start` serves the API and the built SPA from one
+process and one environment, so `PLACE=woodland` with `VITE_PLACE` left on `davis`
+would draw a Davis map in front of a Woodland validator: the client would show one
+town's bounds while the server refused every report outside another's. Selection
+refuses that combination at boot rather than applying a precedence rule, because the
+symptom — reports rejected at coordinates the map says are in range — reads as a
+validation bug and not as a misconfiguration.
+
+A **split** deployment (SPA on a CDN, API elsewhere) has two environments and no
+process that can compare them, so nothing can refuse it for you. `GET /api/health`
+reports the pack id the API is validating against, which is what makes that case
+checkable at all — compare it against the id the client was built with.
+
+### Why there is no `PLACE_PATH`
+
+Issue #181 asked for `VITE_PLACE` **and** `PLACE_PATH`, a filesystem path the server
+would read at boot. That half is deliberately not built. A path the *server* reads
+cannot reach the *client* bundle, which is compiled ahead of time from a static
+import, so `PLACE_PATH` would let the two halves serve different towns by
+construction — the same divergence the rule above exists to refuse, with no way to
+detect it, since a pack loaded from an arbitrary path has no id to compare.
+
+Packs are also not a plugin surface: an arbitrary file path is one more thing a
+deployment can point at something unreviewed. A registry entry is a code change that
+goes through review, and the same review that adds a town is where the moderator
+roster and the privacy reading belong.
+
+---
 
 ## Checking your work
 

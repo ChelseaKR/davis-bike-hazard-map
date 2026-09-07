@@ -292,7 +292,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // --- Health (liveness) + readiness ---
   // Liveness: the process is up. Readiness: dependencies (the DB) are reachable,
   // so a load balancer can stop routing to an instance with a dead database.
-  app.get('/api/health', async () => ({ status: 'ok', time: now() }));
+  // `place` is here so a client/server town mismatch is observable from outside.
+  // `selectedPlaceId()` refuses to boot when VITE_PLACE and PLACE disagree in one
+  // environment, but a split deployment — SPA on a CDN, API elsewhere — has two
+  // environments and no single process that can compare them. Reporting the id the
+  // API is actually validating against is what makes that case checkable at all.
+  app.get('/api/health', async () => ({ status: 'ok', time: now(), place: PLACE.id }));
 
   app.get('/api/ready', async (_req, reply) => {
     try {

@@ -129,6 +129,14 @@ describe('health', () => {
     expect(res.json().status).toBe('ok');
   });
 
+  it('names the place pack it validates against', async () => {
+    // A split deployment (SPA on a CDN, API elsewhere) has two environments, so no
+    // single process can compare VITE_PLACE against PLACE. This is what makes a
+    // client/server town mismatch checkable from outside at all.
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.json().place).toBe('davis');
+  });
+
   it('readiness reports ready when the store pings', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/ready' });
     expect(res.statusCode).toBe(200);
