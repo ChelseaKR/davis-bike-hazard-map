@@ -60,6 +60,14 @@ jobs:
     # `timeout-minutes: 30` on this job. Without it the job holding the trust
     # boundary inherits the six-hour default, so migrating without that line would
     # have traded a bounded verification for an unbounded one.
+    #
+    # Verified by dispatch rather than by reading, because "it parses" is exactly
+    # the thing that had never been checked. Run 34164161392, on the branch that
+    # made this change: the dispatch was ACCEPTED (the 422 that `main` returns for
+    # the same call is gone), `authorize` ran, refused `v0.0.0-parse-probe` as not
+    # being an annotated stable-SemVer tag, and every downstream job was skipped.
+    # Both halves matter -- the workflow reaches its trust boundary, and the trust
+    # boundary still says no.
     uses: ChelseaKR/.github/.github/workflows/release-authorize.yml@7be4c3e44e2acf20e8a98eeea4351c1e5d2789bc
     permissions:
       contents: read
