@@ -129,7 +129,12 @@ const errorSchema = registry.register(
 
 // --- Response shapes (exported so the contract test can parse live bodies) ---
 
-export const healthResponseSchema = z.object({ status: z.literal('ok'), time: z.number().int() });
+export const healthResponseSchema = z.object({
+  status: z.literal('ok'),
+  time: z.number().int(),
+  /** The place pack this API validates against — see `docs/ADAPTING-A-TOWN.md`. */
+  place: z.string().min(1),
+});
 
 export const readyResponseSchema = z.object({ status: z.literal('ready'), time: z.number().int() });
 

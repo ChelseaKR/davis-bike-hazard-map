@@ -26,21 +26,31 @@ import { readFileSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PlacePackError, parsePlacePack } from '../shared/place.ts';
+import { BUILT_IN_PACKS, PlacePackError, parsePlacePack } from '../shared/place.ts';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 
 /**
- * Every pack this repository ships or tests, listed explicitly.
+ * Packs that are checked here but are not selectable in a build: test fixtures.
  *
  * Explicitly, not by glob: a glob over `place/**` would silently validate nothing at
- * all if the directory were renamed, and report success while doing it. If you add a
- * pack, add it here — and the empty-list guard below fails if this list is ever
- * emptied.
+ * all if the directory were renamed, and report success while doing it.
+ */
+const FIXTURE_PACKS: readonly string[] = [
+  'tests/fixtures/place/synthetic-town.json',
+];
+
+/**
+ * Every pack this repository ships or tests.
+ *
+ * The shippable half is derived from `BUILT_IN_PACKS` rather than retyped, because a
+ * hand-kept second list is a list that goes stale: a pack added to the registry and
+ * forgotten here would be selectable by `VITE_PLACE` and never validated by the gate,
+ * which is exactly the hole this script exists to close.
  */
 const PACKS: readonly string[] = [
-  'place/davis.json',
-  'tests/fixtures/place/synthetic-town.json',
+  ...Object.values(BUILT_IN_PACKS).map((entry) => entry.source),
+  ...FIXTURE_PACKS,
 ];
 
 function main(): number {

@@ -183,6 +183,82 @@ export function parsePlacePack(raw: unknown, source: string): PlacePack {
 }
 
 /**
+ * Every pack compiled into this build, by id, with the file it came from.
+ *
+ * **Listed explicitly, never globbed.** A glob over `place/**` would silently
+ * register nothing at all if the directory were renamed, and a build with no packs
+ * would then fall back to the default id and fail with "unknown pack" rather than
+ * with "the pack directory is gone" — a wrong diagnosis for a real outage.
+ * `scripts/place-validate.ts` reads this same registry, so a pack cannot be
+ * selectable without also being validated on every `npm run verify`.
+ *
+ * A second town is one JSON file and one line here.
+ */
+export const BUILT_IN_PACKS: Readonly<Record<string, { source: string; raw: unknown }>> = {
+  davis: { source: 'place/davis.json', raw: davisPackJson },
+};
+
+/** The pack served when nothing selects one. */
+export const DEFAULT_PLACE_ID = 'davis';
+
+/**
+ * Resolve a pack id against a registry, or throw naming what was available.
+ *
+ * Fails closed on an unknown id. The alternative — quietly falling back to the
+ * default — is the defect this whole module is written against: a deployment that
+ * asked for Woodland and silently served Davis would validate Woodland reports
+ * against Davis bounds and tally them into Davis areas, and nothing in the output
+ * would say so.
+ */
+export function resolvePlacePack(
+  id: string,
+  registry: Readonly<Record<string, { source: string; raw: unknown }>> = BUILT_IN_PACKS,
+): PlacePack {
+  const entry = registry[id];
+  if (entry === undefined) {
+    const available = Object.keys(registry).sort();
+    throw new PlacePackError(`selection ${JSON.stringify(id)}`, [
+      available.length === 0
+        ? 'no packs are compiled into this build'
+        : `no such pack in this build — available: ${available.join(', ')}`,
+    ]);
+  }
+  return parsePlacePack(entry.raw, entry.source);
+}
+
+/**
+ * The pack id this process was asked for: `VITE_PLACE` in the browser bundle,
+ * `PLACE` on the server, `DEFAULT_PLACE_ID` when neither is set.
+ *
+ * Both are read here rather than at each edge because `PLACE` below has to be a
+ * module-level constant — the whole codebase imports it — and there is exactly one
+ * of it per process.
+ *
+ * **They must not disagree.** `npm start` serves the API and the built SPA from one
+ * process and one environment, so a deployment that set `PLACE=woodland` and left
+ * `VITE_PLACE` on `davis` would run a Davis map against a Woodland validator: the
+ * client would draw one town's bounds while the server refused reports outside
+ * another's. That is a silent, coordinate-level divergence, so it is refused rather
+ * than resolved by precedence.
+ */
+export function selectedPlaceId(): string {
+  // Vite substitutes `import.meta.env` for a literal object at build time. Under
+  // Node -- the API server, `place-validate`, and vitest's node environment -- there
+  // is no such object at all, so this must not assume one exists.
+  const fromBundle = import.meta.env?.VITE_PLACE;
+  const fromServer = typeof process === 'undefined' ? undefined : process.env?.PLACE;
+  const bundle = fromBundle === undefined || fromBundle === '' ? undefined : fromBundle;
+  const server = fromServer === undefined || fromServer === '' ? undefined : fromServer;
+  if (bundle !== undefined && server !== undefined && bundle !== server) {
+    throw new PlacePackError('place selection', [
+      `VITE_PLACE=${JSON.stringify(bundle)} and PLACE=${JSON.stringify(server)} disagree — ` +
+        `the client would draw one town and the server would validate against another`,
+    ]);
+  }
+  return bundle ?? server ?? DEFAULT_PLACE_ID;
+}
+
+/**
  * The pack this build serves.
  *
  * Validated at module load, which means an unusable pack fails the import — the
@@ -194,4 +270,4 @@ export function parsePlacePack(raw: unknown, source: string): PlacePack {
  * `dist/` while turning 22 test files red. `scripts/place-validate.ts`, wired into
  * `npm run verify`, is the check that actually fails the build.
  */
-export const PLACE: PlacePack = parsePlacePack(davisPackJson, 'place/davis.json');
+export const PLACE: PlacePack = resolvePlacePack(selectedPlaceId());
