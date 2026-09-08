@@ -941,6 +941,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       {
         enabled: config.osmNotesEnabled,
         apiUrl: config.osmNotesApiUrl,
+        // From the pack, not from a literal here: this string is written into a
+        // note posted to OpenStreetMap, which is public and permanent, so it has
+        // to be the name of the town actually running this build (see #181).
+        deploymentName: PLACE.deploymentName,
       },
       fetchImpl,
     );

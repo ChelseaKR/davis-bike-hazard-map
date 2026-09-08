@@ -95,6 +95,14 @@ export const placePackSchema = z
       .string()
       .regex(/^[a-z0-9][a-z0-9-]*$/, 'pack id must be lowercase kebab-case'),
     displayName: z.string().min(1),
+    // What this deployment calls itself, in the one place a second town can state
+    // it. `displayName` names the *place* ("Davis, CA") and is used in copy about
+    // the town; this names the *service*, and it is the string that leaves the
+    // system: `server/lib/osmNotes.ts` writes it into notes posted to
+    // OpenStreetMap, which are public and permanent. Required, like everything
+    // else here, because a default would publish one town's name over another's
+    // hazards and nothing in the output would say so.
+    deploymentName: z.string().min(1),
     bounds: boundsSchema,
     center: pointSchema,
     outOfBoundsMessage: z.string().min(1),

@@ -14,6 +14,12 @@
  * or any reporter data. OSM data is ODbL-licensed and the note text becomes part
  * of the public record, so nothing user-authored is forwarded; a human moderator
  * must trigger each note and enabling live posting needs a license/consent review.
+ *
+ * The note also names the deployment, and that name is the one string in this
+ * system that becomes somebody else's permanent public data. It therefore comes
+ * from the place pack (`deploymentName`) and has no default here: a second town
+ * running its own pack must state its own name, and a pack that does not state one
+ * fails to load rather than posting hazards to OpenStreetMap under Davis's name.
  */
 import type { StoredHazard } from './types.ts';
 import {
@@ -39,6 +45,14 @@ export interface OsmNotesConfig {
   apiUrl?: string;
   /** Master switch. Off => the adapter only ever returns a dry-run draft. */
   enabled: boolean;
+  /**
+   * What this deployment calls itself, from the place pack's `deploymentName`.
+   *
+   * Required, and required even for a dry run, because a dry run is the draft a
+   * moderator reads before deciding to post it. Optional-with-a-default is the
+   * shape that put "Davis Bike Hazard Map" into every deployment's notes.
+   */
+  deploymentName: string;
   /** Public base URL of this deployment, used to build the back-link. Optional. */
   publicBaseUrl?: string;
 }
@@ -61,10 +75,14 @@ export interface OsmNoteResult {
 /**
  * Build the note body. Restricted to category/severity labels, the fuzzed
  * public coordinate, and a back-link — no description, photo, or reporter data.
+ *
+ * There is no default `config`. The name in the body is the deployment's own, and
+ * a signature that let a caller omit it would have to invent one; inventing it is
+ * how the previous version published Davis's name from any town's pack.
  */
 export function buildOsmNotePayload(
   hazard: StoredHazard,
-  config: OsmNotesConfig = { enabled: false },
+  config: OsmNotesConfig,
 ): OsmNotePayload {
   // FUZZED public location only (never hazard.preciseLocation). OSM notes are
   // public and permanent, so we deliberately post the grid-snapped point.
@@ -72,17 +90,28 @@ export function buildOsmNotePayload(
   const category = CATEGORY_LABELS[hazard.category];
   const severity = SEVERITY_LABELS[hazard.severity];
 
+  // A blank name cannot be papered over with a fallback: the note would then be
+  // posted to a public, permanent map by an unnamed sender. `deploymentName` is
+  // `z.string().min(1)` in the pack schema, so this is unreachable from a loaded
+  // pack — it refuses a caller that assembles the config by hand.
+  const deploymentName = config.deploymentName.trim();
+  if (deploymentName === '') {
+    throw new Error(
+      'osmNotes: deploymentName is blank; an OSM note must name the deployment that sent it',
+    );
+  }
+
   // Back-link to the public record so an OSM mapper can cross-reference. Prefer a
   // full URL when a base URL is configured; otherwise reference the id alone.
   const base = config.publicBaseUrl?.replace(/\/$/, '');
   const backLink = base
     ? `${base}/#hazard=${hazard.id}`
-    : `Davis Bike Hazard Map reference ${hazard.id}`;
+    : `${deploymentName} reference ${hazard.id}`;
 
   const text =
-    `${category} (severity: ${severity}) reported by cyclists via the Davis Bike ` +
-    `Hazard Map as a possible permanent infrastructure issue. Please verify on ` +
-    `the ground before editing OpenStreetMap. Details: ${backLink}`;
+    `${category} (severity: ${severity}) reported by cyclists via the ` +
+    `${deploymentName} as a possible permanent infrastructure issue. Please verify ` +
+    `on the ground before editing OpenStreetMap. Details: ${backLink}`;
 
   return { lat: point.lat, lon: point.lng, text };
 }
@@ -90,8 +119,18 @@ export function buildOsmNotePayload(
 /**
  * Draft (and, when enabled, post) an anonymous OSM Note for a hazard. With the
  * feature disabled or no API URL configured, returns a dry-run result describing
- * the note. Never throws — a failed suggestion must not break moderation
- * (graceful degradation, same contract as forwardToGogov).
+ * the note. Never throws on a *delivery* failure — a dead endpoint, a non-2xx, a
+ * network error and a rejected request all come back as a result, because a
+ * failed suggestion must not break moderation (graceful degradation, same
+ * contract as forwardToGogov).
+ *
+ * One thing is refused rather than degraded: a config that cannot name the sender.
+ * `buildOsmNotePayload` throws on a blank `deploymentName`, and that propagates
+ * here on purpose. A dry-run draft with no sender in it is not a safer output than
+ * an error — it is an unattributable note offered to a moderator for posting to a
+ * public, permanent map. Unreachable from a loaded place pack, where the field is
+ * `z.string().min(1)`; reachable from a hand-assembled config, which is why it is
+ * a runtime check and not only a type.
  */
 export async function postOsmNote(
   hazard: StoredHazard,

@@ -70,6 +70,18 @@ describe('the shipped Davis pack pins the values it replaced', () => {
     expect(PLACE.outOfBoundsMessage).toBe('Location must be within Davis, CA.');
     expect(ELSEWHERE_AREA).toBe('Elsewhere in Davis');
   });
+
+  it('keeps the deployment name that the OSM note body used to hard-code', () => {
+    // A literal, for the same reason as every figure above: this string is
+    // written into notes posted to OpenStreetMap, which are public and
+    // permanent, so a silent change to it is a change to published data. The
+    // value is exactly the wording `server/lib/osmNotes.ts` used to carry.
+    expect(PLACE.deploymentName).toBe('Davis Bike Hazard Map');
+    // And it is not the same field as `displayName`: one names the town, the
+    // other names the service. Collapsing them would put "Davis, CA" into a
+    // sentence that reads "via the Davis, CA".
+    expect(PLACE.displayName).toBe('Davis, CA');
+  });
 });
 
 describe('the loader refuses rather than defaulting', () => {
@@ -95,6 +107,7 @@ describe('the loader refuses rather than defaulting', () => {
     'packVersion',
     'id',
     'displayName',
+    'deploymentName',
     'bounds',
     'center',
     'outOfBoundsMessage',
