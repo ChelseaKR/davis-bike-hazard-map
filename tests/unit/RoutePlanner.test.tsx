@@ -47,6 +47,8 @@ function plan(over: Partial<RoutePlan> = {}): RoutePlan {
     },
     nearby: [],
     alternativesConsidered: 2,
+    profile: 'default',
+    profileApplied: true,
     // Default: a real search that found no clear candidate. Tests that care
     // about the "hazard-free route" claim override this explicitly (issue #163).
     hazardFreeCandidate: false,

@@ -9,6 +9,56 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- Named rider routing profiles on the planner (issue #178, E2): `default`,
+  `family-safest` and `e-bike`, requested as `GET /api/route?profile=`. A
+  profile is a stated preference over **reported** hazards and nothing more --
+  it cannot invent a hazard, cannot suppress one, and never changes what the
+  rider is told is on the route (`nearby` is the same list under every profile).
+  No profile makes a route safe, and the copy that names one must not say it
+  does.
+
+  **The weights, stated here because a weight change is a behaviour change.**
+  `default` carries no overrides and no multipliers at all, so it is
+  byte-identical to the pre-profile ranking rather than merely close to it --
+  asserted, not assumed. `family-safest` triples the high-severity base penalty
+  (800 -> 2400 equivalent detour metres) and multiplies `dangerous_intersection`
+  by 2.5 and `blocked_lane`, `poor_visibility` and `near_miss` by 1.5. `e-bike`
+  raises the base penalty to 1200 (a detour costs a faster bike less time) and
+  multiplies `pothole` and `surface_damage` by 1.5 and `glass_debris` by 1.3.
+  Reviewed against `docs/audits/residual-risk.md`: these move how much a
+  *reported* hazard costs, and none of them changes what is collected, what is
+  published, or the residual risk that reports are a biased sample of the road.
+
+  **"`family-safest` never routes through a high-severity hazard when any
+  alternative exists" is enforced lexicographically, not by a large weight.** A
+  candidate carrying a high-severity corridor hazard ranks below every candidate
+  carrying none, whatever the distance; cost decides only inside each group. Any
+  finite penalty, however large, is beaten by a long enough detour, and the
+  endpoints nobody tried are exactly where that would have surfaced. With no
+  clear alternative the profile still returns the least-bad route.
+
+  **An unknown profile is a 400 naming the ones that exist, never a silent
+  default.** A rider who asked for `family-safest` and was quietly given the
+  default route would be told the map had avoided things it had not.
+
+  **The plan reports `profileApplied` in three states**, the same discipline
+  `hazardFreeCandidate` uses since #163: `null` on the straight-line fallback
+  (no road graph was searched, so no profile routed anything), `false` when the
+  graph returned a single candidate (the weights applied but chose nothing), and
+  `true` only when more than one candidate was ranked. An echo of the requested
+  profile is not evidence that it did anything.
+
+  Two defects in the new code were found by its own tests before it shipped:
+  `resolveRouteProfile` used an index-and-check, so `constructor` and
+  `toString` resolved to inherited members instead of being refused; and
+  `hazardPenalty` -- exported and called directly -- read the scoring options
+  straight through while `scoreRoute` merged the profile's overrides, so one
+  profile produced a 3x penalty through one entry point and 1x through the
+  other. Both readers now go through `resolveScoringOptions`.
+
+  The profile picker in `RoutePlanner` is not built yet; this is the engine and
+  the API.
+
 - The moderator "resolve" decision has an entry point (issue #140). It was
   fully built server-side and completely unreachable from the app:
   `shared/statusMachine.ts` makes `pending → resolved` and `approved →

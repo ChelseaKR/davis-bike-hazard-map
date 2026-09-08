@@ -12,8 +12,10 @@
  * Everything here is deterministic and dependency-free so it can be unit-tested
  * without a network, a map, or a clock.
  */
-import type { GeoPoint, Hazard, HazardCategory, Severity } from './types.ts';
-import { SEVERITY_RANK } from './types.ts';
+import type { GeoPoint, Hazard, HazardCategory, RouteProfileId, Severity } from './types.ts';
+import { SEVERITY_RANK, ROUTE_PROFILE_IDS } from './types.ts';
+export { ROUTE_PROFILE_IDS, DEFAULT_ROUTE_PROFILE_ID } from './types.ts';
+export type { RouteProfileId } from './types.ts';
 import { haversineMeters } from './geo.ts';
 
 const METERS_PER_DEG_LAT = 111_320;
@@ -78,6 +80,12 @@ export interface RouteScoringOptions {
   now: number;
   /** Time/environment conditions; absent means "assume neutral daytime". */
   conditions?: RouteConditions;
+  /**
+   * The rider profile whose weights apply. Absent means {@link ROUTE_PROFILES}'s
+   * `default`, whose multipliers are all exactly 1 -- so an omitted profile is
+   * byte-identical to the pre-profile behaviour, not merely close to it.
+   */
+  profile?: RouteProfile;
 }
 
 export const DEFAULT_SCORING: Omit<RouteScoringOptions, 'now'> = {
@@ -96,6 +104,112 @@ export const DEFAULT_SCORING: Omit<RouteScoringOptions, 'now'> = {
 export const NIGHT_MULTIPLIERS: Partial<Record<HazardCategory, number>> = {
   poor_visibility: 2,
 };
+
+/**
+ * Named routing profiles (E2 / EXP-03).
+ *
+ * A profile is a *stated preference over reported hazards*, and nothing more. It
+ * is not a claim about injury risk, it is not evidence, and **no profile makes a
+ * route safe** — the hazards it weighs are reports the map received, not a survey
+ * of the road. `family-safest` is an id for "avoids what a parent told us they
+ * want avoided", and the copy that names it must not promise more than that.
+ *
+ * The weights are deliberately few and deliberately blunt. Every one of them is a
+ * multiplier on the existing penalty, so a profile can only change *how much* a
+ * reported hazard costs, never invent a hazard, never suppress one, and never
+ * touch what the rider is told is on the route: `nearby` is the same list for
+ * every profile.
+ */
+export interface RouteProfile {
+  id: RouteProfileId;
+  /** Scoring overrides applied on top of {@link DEFAULT_SCORING}. */
+  scoring: Partial<Omit<RouteScoringOptions, 'now' | 'conditions' | 'profile'>>;
+  /**
+   * Per-category multipliers on a hazard's penalty. A category absent here is
+   * multiplied by exactly 1, which is why `default` is byte-identical to the
+   * pre-profile behaviour rather than merely close to it.
+   */
+  categoryMultipliers: Partial<Record<HazardCategory, number>>;
+  /**
+   * When true, a candidate carrying a high-severity corridor hazard ranks below
+   * every candidate carrying none, whatever the distance.
+   *
+   * This is a **lexicographic** rule, not a large weight, and that is the point:
+   * "never routes through a high-severity hazard when any alternative exists" is
+   * an absolute statement, and a finite penalty — however large — is beaten by a
+   * long enough detour. A weight that is *nearly* absolute would make the claim
+   * true on the fixture and false on some real pair of endpoints nobody tried.
+   */
+  refuseHighSeverityWhenAlternativeExists: boolean;
+}
+
+export const ROUTE_PROFILES: Readonly<Record<RouteProfileId, RouteProfile>> = {
+  // Unchanged behaviour, stated as a profile so there is no un-named path.
+  default: {
+    id: 'default',
+    scoring: {},
+    categoryMultipliers: {},
+    refuseHighSeverityWhenAlternativeExists: false,
+  },
+  // P2 (parent / cargo bike): accept a large detour to avoid what was reported,
+  // and refuse a high-severity hazard outright while any alternative exists.
+  'family-safest': {
+    id: 'family-safest',
+    scoring: { highPenaltyMeters: 2400 },
+    categoryMultipliers: {
+      dangerous_intersection: 2.5,
+      blocked_lane: 1.5,
+      poor_visibility: 1.5,
+      near_miss: 1.5,
+    },
+    refuseHighSeverityWhenAlternativeExists: true,
+  },
+  // P3 (e-bike): faster and heavier, so a detour costs less time and surface
+  // hazards are hit harder. Not "safer" and not "riskier" — differently weighted.
+  'e-bike': {
+    id: 'e-bike',
+    scoring: { highPenaltyMeters: 1200 },
+    categoryMultipliers: {
+      pothole: 1.5,
+      surface_damage: 1.5,
+      glass_debris: 1.3,
+    },
+    refuseHighSeverityWhenAlternativeExists: false,
+  },
+};
+
+/** Thrown when a caller names a profile this build does not have. */
+export class UnknownRouteProfileError extends Error {
+  constructor(requested: string) {
+    super(
+      `unknown routing profile ${JSON.stringify(requested)}; expected one of: ` +
+        `${[...ROUTE_PROFILE_IDS].sort().join(', ')}`,
+    );
+    this.name = 'UnknownRouteProfileError';
+  }
+}
+
+/**
+ * Resolve a profile id, refusing an unknown one.
+ *
+ * Fails closed rather than falling back to `default`: a rider who asked for
+ * `family-safest` and was quietly given the default route would be told the map
+ * had avoided things it had not. That is this project's own defect class — an
+ * absence rendered as a value — sitting in the planner.
+ */
+export function resolveRouteProfile(id: string): RouteProfile {
+  // `Object.hasOwn`, not an index-and-check. A plain object literal inherits
+  // `constructor`, `toString`, `hasOwnProperty` and friends, so `ROUTE_PROFILES[id]`
+  // is truthy for every one of those names and `resolveRouteProfile('constructor')`
+  // returned a function rather than refusing. Found by the test that asks for them.
+  if (!Object.hasOwn(ROUTE_PROFILES, id)) throw new UnknownRouteProfileError(id);
+  return ROUTE_PROFILES[id as RouteProfileId];
+}
+
+/** Multiplier a profile puts on this category's penalty. 1 when it names none. */
+export function profileWeight(category: HazardCategory, profile: RouteProfile): number {
+  return profile.categoryMultipliers[category] ?? 1;
+}
 
 /**
  * Condition multiplier for a hazard category. Returns 1 (no effect) unless it's
@@ -174,8 +288,39 @@ export function confirmationWeight(confirmations: number): number {
 }
 
 /**
+ * Fill in a partial scoring request: defaults, then the profile's overrides, then
+ * whatever the caller stated explicitly.
+ *
+ * The order is load-bearing. A caller that sets `corridorMeters` wins over a
+ * profile that sets it, because the server's corridor is a fact about the privacy
+ * fuzz grid rather than a rider preference.
+ *
+ * Public, and used by every reader of `profile.scoring`, because there was very
+ * nearly more than one. `scoreRoute` merged the overrides itself while
+ * `hazardPenalty` -- exported, and called directly -- read `opts.highPenaltyMeters`
+ * straight through, so the same profile produced a 3x penalty through one entry
+ * point and a 1x penalty through the other. The test that compares the two found it.
+ */
+export function resolveScoringOptions(
+  options?: Partial<RouteScoringOptions>,
+): RouteScoringOptions {
+  const profile = options?.profile ?? ROUTE_PROFILES.default;
+  return {
+    ...DEFAULT_SCORING,
+    ...profile.scoring,
+    now: options?.now ?? Date.now(),
+    ...options,
+  };
+}
+
+/**
  * Penalty (equivalent detour metres) a single hazard adds to a route, given its
- * closest distance to the line. Falls off linearly across the corridor so a
+ * closest distance to the line.
+ *
+ * `opts` must already be RESOLVED -- see {@link resolveScoringOptions}, which is
+ * what `scoreRoute` calls. This function reads `opts.highPenaltyMeters` as given
+ * and does not re-apply a profile's overrides on top of it, because doing so would
+ * let the profile beat a value the caller stated explicitly. Falls off linearly across the corridor so a
  * hazard right on the route costs the most and one at the corridor edge ~0.
  */
 export function hazardPenalty(
@@ -192,6 +337,7 @@ export function hazardPenalty(
     recencyWeight(hazard.updatedAt, opts.now, opts.recencyHalfLifeDays) *
     confirmationWeight(hazard.confirmations) *
     conditionWeight(hazard.category, opts.conditions) *
+    profileWeight(hazard.category, opts.profile ?? ROUTE_PROFILES.default) *
     proximity
   );
 }
@@ -202,11 +348,7 @@ export function scoreRoute(
   hazards: Hazard[],
   options?: Partial<RouteScoringOptions>,
 ): ScoredRoute {
-  const opts: RouteScoringOptions = {
-    ...DEFAULT_SCORING,
-    now: options?.now ?? Date.now(),
-    ...options,
-  };
+  const opts = resolveScoringOptions(options);
   const nearby: NearbyHazard[] = [];
   let penalty = 0;
   for (const hazard of hazards) {
@@ -232,9 +374,27 @@ export function rankRoutes(
   hazards: Hazard[],
   options?: Partial<RouteScoringOptions>,
 ): ScoredRoute[] {
-  return routes
-    .map((r) => scoreRoute(r, hazards, options))
-    .sort((a, b) => a.cost - b.cost);
+  const profile = options?.profile ?? ROUTE_PROFILES.default;
+  const scored = routes.map((r) => scoreRoute(r, hazards, options));
+  if (!profile.refuseHighSeverityWhenAlternativeExists) {
+    return scored.sort((a, b) => a.cost - b.cost);
+  }
+  // Lexicographic, not a large weight: candidates with no high-severity corridor
+  // hazard come first as a group, and cost decides only inside each group. See
+  // RouteProfile.refuseHighSeverityWhenAlternativeExists for why this is not a
+  // number. `hasHighSeverityNearby` reads the corridor list scoreRoute built, so
+  // the two can never disagree about what is on the route.
+  return scored.sort((a, b) => {
+    const aHigh = hasHighSeverityNearby(a);
+    const bHigh = hasHighSeverityNearby(b);
+    if (aHigh !== bHigh) return aHigh ? 1 : -1;
+    return a.cost - b.cost;
+  });
+}
+
+/** Does this scored candidate carry a high-severity hazard inside its corridor? */
+export function hasHighSeverityNearby(scored: ScoredRoute): boolean {
+  return scored.nearby.some((n) => n.hazard.severity === 'high');
 }
 
 /**
@@ -423,4 +583,22 @@ export interface RoutePlan {
    * honestly — the ranking changed *because* it's night.
    */
   nightWeighting?: boolean;
+  /** The rider profile this plan was asked for. Always the id the caller sent. */
+  profile: RouteProfileId;
+  /**
+   * Whether the profile's weighting actually chose the route you were given.
+   *
+   * Three states, for the reason {@link RoutePlan.hazardFreeCandidate} has three:
+   * an echo of the requested profile is not evidence that it did anything.
+   *
+   * `true`  -- more than one candidate was scored, so the weighting picked among
+   *            them and a different profile could have produced a different route.
+   * `false` -- exactly one candidate came back from the road graph. The weights
+   *            were applied to it, but there was nothing to choose between, so the
+   *            route is not one the profile selected.
+   * `null`  -- NO SEARCH HAPPENED. `source === 'fallback'` is one straight line
+   *            drawn between the endpoints; no road graph was consulted and no
+   *            profile can be said to have routed anything.
+   */
+  profileApplied: boolean | null;
 }

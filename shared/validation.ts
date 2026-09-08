@@ -4,7 +4,12 @@
  */
 import { z } from 'zod';
 import { PLACE, type PlacePack } from './place.ts';
-import { HAZARD_CATEGORIES, SEVERITIES } from './types.ts';
+import {
+  HAZARD_CATEGORIES,
+  SEVERITIES,
+  ROUTE_PROFILE_IDS,
+  DEFAULT_ROUTE_PROFILE_ID,
+} from './types.ts';
 
 /**
  * The served town's bounding box (a generous rectangle around the city + campus).
@@ -136,6 +141,23 @@ export const moderationQueueQuerySchema = z.object({
 export const routeRequestSchema = z.object({
   from: placePointSchema,
   to: placePointSchema,
+  /**
+   * The rider profile (E2). Omitted means `default`, and an unknown value is a
+   * 400 rather than a silent fall back to `default`: a rider who asked for
+   * `family-safest` and was quietly given the default route would be told the
+   * map had avoided things it had not.
+   *
+   * The message names the value that was sent and the ones that exist, because
+   * the API's error envelope is a stable `validation_error` and the message is
+   * the only place a caller learns which profile they got wrong.
+   */
+  profile: z
+    .enum(ROUTE_PROFILE_IDS, {
+      message:
+        'unknown routing profile; expected one of: ' +
+        [...ROUTE_PROFILE_IDS].sort().join(', '),
+    })
+    .default(DEFAULT_ROUTE_PROFILE_ID),
 });
 
 export type ValidatedRouteRequest = z.infer<typeof routeRequestSchema>;

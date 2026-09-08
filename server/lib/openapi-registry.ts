@@ -21,6 +21,7 @@ import {
   HANDOFF_DELIVERY_KINDS,
   HANDOFF_STAGES,
   type Hazard,
+  ROUTE_PROFILE_IDS,
 } from '../../shared/types.ts';
 import {
   geoPointSchema,
@@ -341,11 +342,30 @@ registry.registerPath({
     query: z.object({
       from: z.string().openapi({ description: 'lat,lng (within Davis)' }),
       to: z.string().openapi({ description: 'lat,lng (within Davis)' }),
+      profile: z
+        .enum(ROUTE_PROFILE_IDS)
+        .optional()
+        .openapi({
+          description:
+            'Rider weighting profile (E2). Omitted means `default`. A profile is a ' +
+            'stated preference over REPORTED hazards, not a claim about risk: no ' +
+            'profile makes a route safe. `family-safest` weights intersections and ' +
+            'blocked lanes higher and will not choose a route carrying a ' +
+            'high-severity reported hazard while any alternative exists; `e-bike` ' +
+            'weights surface hazards higher and accepts a longer detour. The plan ' +
+            'reports `profileApplied` — `null` on the straight-line fallback, where ' +
+            'no road graph was searched, and `false` when only one candidate came ' +
+            'back, so an echo of the requested profile is never mistaken for the ' +
+            'weighting having chosen anything.',
+        }),
     }),
   },
   responses: {
     200: { description: 'a RoutePlan (chosen route geometry + turn-by-turn steps + hazards on route)' },
-    400: { description: 'endpoints missing or outside Davis', content: errorContent },
+    400: {
+      description: 'endpoints missing or outside Davis, or an unknown routing profile',
+      content: errorContent,
+    },
   },
 });
 

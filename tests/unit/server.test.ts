@@ -1341,6 +1341,44 @@ describe('hazard-aware route planner', () => {
     expect(plan.fastestAlternative).toBeNull();
   });
 
+  it('reports the requested profile, and does not claim it routed anything (#178)', async () => {
+    // The fallback is one straight line between the endpoints: no road graph was
+    // consulted, so `profileApplied` is null. An echo of `family-safest` here
+    // would tell a rider the map had avoided things it never looked for.
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/route?from=38.5449,-121.745&to=38.5449,-121.736&profile=family-safest',
+    });
+    expect(res.statusCode).toBe(200);
+    const plan = res.json().plan;
+    expect(plan.source).toBe('fallback');
+    expect(plan.profile).toBe('family-safest');
+    expect(plan.profileApplied).toBeNull();
+  });
+
+  it('defaults the profile when none is asked for, and says which it used', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/route?from=38.5449,-121.745&to=38.5449,-121.736',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().plan.profile).toBe('default');
+  });
+
+  it('refuses an unknown profile (400) rather than quietly serving the default', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/route?from=38.5449,-121.745&to=38.5449,-121.736&profile=cargo-trike',
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error).toBe('validation_error');
+    // The envelope is generic, so the message is the only place a caller learns
+    // which profiles exist. Assert it names them.
+    expect(body.message).toMatch(/routing profile/);
+    expect(body.message).toMatch(/family-safest/);
+  });
+
   it('rejects a route outside Davis (400)', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/route?from=40.0,-120.0&to=40.1,-119.9' });
     expect(res.statusCode).toBe(400);
@@ -1374,6 +1412,9 @@ describe('hazard-aware route planner', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().plan.source).toBe('osrm');
     expect(res.json().plan.fastestAlternative).toBeNull(); // OSRM returned a single candidate here too
+    // A real search, but one candidate: the weights were applied and had nothing
+    // to choose between, so the route is not one the profile selected (#178).
+    expect(res.json().plan.profileApplied).toBe(false);
     await a.close();
   });
 
@@ -1450,6 +1491,10 @@ describe('hazard-aware route planner', () => {
     expect(plan.nearby).toHaveLength(0);
     // A real search over two candidates, one of them clear (issue #163).
     expect(plan.hazardFreeCandidate).toBe(true);
+    // Two candidates from the road graph, so the weighting genuinely chose
+    // between them: this is the only shape in which `profileApplied` is true.
+    expect(plan.profile).toBe('default');
+    expect(plan.profileApplied).toBe(true);
     // The fastest candidate by raw duration was the direct route, through the hazard.
     expect(plan.fastestAlternative).not.toBeNull();
     expect(plan.fastestAlternative.distanceMeters).toBe(1200);
