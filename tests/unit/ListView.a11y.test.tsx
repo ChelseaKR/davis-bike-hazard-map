@@ -55,8 +55,10 @@ describe('ListView (accessibility & parity)', () => {
     expect(screen.getByText(/not that the area is safe/i)).toBeInTheDocument();
   });
 
-  it('surfaces load errors to assistive tech', () => {
-    render(<ListView hazards={[]} loading={false} error="Network down" />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Network down');
+  it('surfaces load errors to assistive tech, in the catalogued wording', () => {
+    render(<ListView hazards={[]} loading={false} error="offline" />);
+    // The alert says the catalogued sentence for the code, not a thrown
+    // Error's message (issue #200).
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn't be reached/i);
   });
 });

@@ -67,7 +67,7 @@ describe('syncOnce', () => {
 
   it('errors out permanently on a 4xx (non-429) rejection', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
-    const submit = vi.fn().mockRejectedValue(new ApiRequestError('bad', 400));
+    const submit = vi.fn().mockRejectedValue(new ApiRequestError('bad', 400, 'request'));
     await syncOnce({ getPending: async () => [queued()], update, submit });
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'error',
@@ -78,7 +78,7 @@ describe('syncOnce', () => {
 
   it('treats 429 as transient', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
-    const submit = vi.fn().mockRejectedValue(new ApiRequestError('slow down', 429));
+    const submit = vi.fn().mockRejectedValue(new ApiRequestError('slow down', 429, 'request'));
     await syncOnce({ getPending: async () => [queued()], update, submit });
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'queued',

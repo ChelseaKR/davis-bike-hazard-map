@@ -112,14 +112,15 @@ const DEFERRED = new Map([
   // (place/davis.json), so the file has held no place name since; the entry was
   // exempting nothing while reading as a live exception. The self-limiting
   // check below found it on its first run. It is now scanned, and clean.
-  [
-    'src/lib/api.ts',
-    'HTTP scheme tokens ("Bearer ") plus the thrown request-failure text, which DOES reach a rider: useHazards renders err.message into ListView\'s role="alert". Wrapping only the local fallback would translate the rarest branch and leave the server sentence in English — the fix is the issue #173 shape (throw a code, resolve it in src/i18n/labels.ts at the point of display), tracked at issue #200',
-  ],
-  [
-    'src/hooks/useHazards.ts',
-    'the same feed-error string as api.ts above: `Could not load hazards.` is the fallback for a non-Error throw, and the common branch is the server sentence api.ts carries. Both move together in issue #200; deferring one and wrapping the other would make the gate green over the branch a rider actually sees',
-  ],
+  // `src/lib/api.ts` and `src/hooks/useHazards.ts` were deferred here for the
+  // feed-load error, which reached a rider's `role="alert"` verbatim in both of
+  // its branches — the server's own English sentence, or a literal in the hook.
+  // Issue #200: the transport now throws an `ApiFailure` code, and `ListView`
+  // and `MapView` resolve it through `feedErrorLabel()` in `src/i18n/labels.ts`.
+  // Both files are scanned. api.ts keeps per-literal `i18n-exempt` reasons on
+  // its URL and query templates, its `Bearer ` auth-scheme tokens, and its
+  // transport diagnostics — each stated on its own line, rather than one
+  // blanket file entry that would also cover anything added to it later.
 ]);
 
 const HAS_LETTER = /\p{L}/u;
