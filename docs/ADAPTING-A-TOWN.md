@@ -154,16 +154,11 @@ tracked on issue #181:
 
 - **Interface copy** naming Davis, in `src/i18n/locales/en.json` — the app title, the
   coverage hint, the map's `aria-label`, and the two out-of-bounds messages.
-- **Server-side text that names Davis and leaves this system.** This is the one to
-  read twice, because it is not interface copy and it is not reversible:
-  `server/lib/osmNotes.ts` writes *"reported by cyclists via the Davis Bike Hazard
-  Map"* and *"Davis Bike Hazard Map reference &lt;id&gt;"* into the body of a note
-  **posted to OpenStreetMap**, which is public and permanent. A second town running
-  its own pack would publish that town's hazards into OSM under Davis's name.
-  `server/openapi.ts`'s API title and several `server/lib/openapi-registry.ts`
-  descriptions say Davis too; those are only served, not published outward.
-  What a second deployment should call itself is a naming decision, not a
-  substitution, which is why this is listed rather than parameterised.
+- **Server-side text that names Davis but is only ever served.** `server/openapi.ts`'s
+  API title and several `server/lib/openapi-registry.ts` descriptions say Davis.
+  These are read by whoever calls this deployment's own API; nothing about them
+  reaches another system, and correcting them is copy-editing rather than a data
+  question.
 - **Licence and attribution text** for the tile layer — `config.tileAttribution` in
   `src/config.ts` is a literal with no environment override. It is OpenStreetMap's
   required attribution, so it is correct for any town using OSM tiles and wrong only
@@ -176,6 +171,17 @@ tracked on issue #181:
   variable away.
 - **Serving two towns from one deployment.** Selection picks one pack per build and
   per process; there is no per-request town.
+
+**Taken off this list because it was fixed, not because it was wrong:** the note
+body **posted to OpenStreetMap**. It used to write *"reported by cyclists via the
+Davis Bike Hazard Map"* and *"Davis Bike Hazard Map reference &lt;id&gt;"* from two
+literals in `server/lib/osmNotes.ts`, so a second town would have published its
+hazards into OSM — public, permanent, and not retractable by redeploying — under
+Davis's name. This document argued that what a second deployment calls itself is a
+naming decision rather than a substitution, and that is right; the answer is that
+the pack is where a town states it. `deploymentName` is a required pack field, so a
+second town writes its own name and a pack that omits one does not load at all.
+Nothing here invents a name for anybody.
 
 **Not on this list, and previously on it in error:** the **tile and routing service
 URLs**. `VITE_TILE_URL` (`src/config.ts`), `ROUTING_URL` and `OSM_NOTES_API_URL`

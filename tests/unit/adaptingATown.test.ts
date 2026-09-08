@@ -17,6 +17,10 @@
  *    into notes posted to OpenStreetMap. That is the item on the list that
  *    actually escapes this system: OSM notes are public and permanent, so a
  *    second town would publish its hazards into OSM under Davis's name.
+ *    **Fixed:** the name is now `deploymentName` in the place pack, and the tests
+ *    below check both directions — the shipped pack still says Davis, and another
+ *    pack's name replaces it. The bullet has come off the remainder list, and a
+ *    test here holds it off.
  *
  * These tests are deliberately narrow. A blanket "no source file may contain
  * the string Davis" rule would fire on every doc comment that discusses the
@@ -27,6 +31,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { buildOsmNotePayload } from '../../server/lib/osmNotes.ts';
+import { PLACE } from '../../shared/place.ts';
 import type { StoredHazard } from '../../server/lib/types.ts';
 
 /**
@@ -84,7 +89,6 @@ describe('the remainder list names what is genuinely still Davis-shaped', () => 
   // the drift this whole file exists to catch.
   const listed = [
     'src/i18n/locales/en.json',
-    'server/lib/osmNotes.ts',
     'server/openapi.ts',
     'server/lib/openapi-registry.ts',
   ];
@@ -143,18 +147,45 @@ describe('an OSM note names the deployment, and that name leaves this system', (
   // Behavioural rather than textual: this is what would actually be posted.
   // Both branches of the back-link are checked, because the one without a
   // configured public base URL is the one that repeats the name a second time.
-  it('puts the place name in the note body with no public base URL configured', () => {
-    const { text } = buildOsmNotePayload(stored(), { enabled: false });
-    expect(text).toContain(`${PLACE_NAME} Bike Hazard Map`);
-    expect(text).toContain(`${PLACE_NAME} Bike Hazard Map reference haz-1`);
-  });
-
-  it('still puts the place name in the note body when a base URL is configured', () => {
+  //
+  // The name now comes from the pack, so this asserts BOTH halves: the shipped
+  // Davis pack still produces the Davis wording (nothing changed for the town
+  // running today), and a different pack's name comes through instead of it
+  // (the town adapting the map does not publish under Davis's).
+  it("carries the running pack's deployment name, not a literal", () => {
     const { text } = buildOsmNotePayload(stored(), {
       enabled: false,
+      deploymentName: PLACE.deploymentName,
+    });
+    expect(PLACE.deploymentName).toBe(`${PLACE_NAME} Bike Hazard Map`);
+    expect(text).toContain(PLACE.deploymentName);
+    expect(text).toContain(`${PLACE.deploymentName} reference haz-1`);
+  });
+
+  it("a second town's pack name replaces it in both branches of the back-link", () => {
+    const other = 'Woodland Bike Hazard Map';
+    const idOnly = buildOsmNotePayload(stored(), { enabled: false, deploymentName: other });
+    expect(idOnly.text).toContain(`${other} reference haz-1`);
+    expect(idOnly.text).not.toContain(PLACE_NAME);
+
+    const linked = buildOsmNotePayload(stored(), {
+      enabled: false,
+      deploymentName: other,
       publicBaseUrl: 'https://example.test/',
     });
-    expect(text).toContain('https://example.test/#hazard=haz-1');
-    expect(text).toContain(`${PLACE_NAME} Bike Hazard Map`);
+    expect(linked.text).toContain('https://example.test/#hazard=haz-1');
+    expect(linked.text).toContain(other);
+    expect(linked.text).not.toContain(PLACE_NAME);
+  });
+
+  it('the remainder list no longer claims the note body is hard-coded', () => {
+    // The document said this was "listed rather than parameterised". It is
+    // parameterised now, so the bullet must go -- listing finished work as
+    // outstanding is the same drift as the tile-URL bullet above.
+    const bullets = remainderSection()
+      .split('\n')
+      .filter((line) => line.startsWith('- '))
+      .join('\n');
+    expect(bullets).not.toMatch(/osmNotes\.ts/);
   });
 });

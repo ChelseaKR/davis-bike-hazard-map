@@ -2,6 +2,7 @@
   "packVersion": 1,
   "id": "davis",
   "displayName": "Davis, CA",
+  "deploymentName": "Davis Bike Hazard Map",
   "bounds": {
     "minLat": 38.52,
     "maxLat": 38.59,
