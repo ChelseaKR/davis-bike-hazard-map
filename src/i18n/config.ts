@@ -20,7 +20,11 @@ import esCatalog from './locales/es.json';
  * start shipping its scaffolding.
  */
 export const SUPPORTED_LANGUAGES = {
+  // A language picker names each language in its own language, so these are
+  // correct in every locale: translating them is the bug, not leaving them.
+  // i18n-exempt: language endonym.
   en: 'English',
+  // i18n-exempt: endonym, as above.
   es: 'Español',
 } as const;
 

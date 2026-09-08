@@ -12,6 +12,7 @@ const SEVERITY_COLORS: Record<Severity, string> = {
 };
 
 function pinSvg(color: string): string {
+  // i18n-exempt: SVG markup for a marker pin — geometry and attributes, no prose.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
     <path d="M14 0C6.27 0 0 6.27 0 14c0 9.5 14 26 14 26s14-16.5 14-26C28 6.27 21.73 0 14 0z" fill="${color}"/>
     <circle cx="14" cy="14" r="6" fill="#fff"/>

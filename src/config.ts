@@ -13,7 +13,11 @@ export const config = {
   tileUrl:
     import.meta.env.VITE_TILE_URL ??
     'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  // The tile provider's required attribution markup: "OpenStreetMap" is a
+  // proper noun and the wording is the licence's own, carried verbatim into
+  // Leaflet's attribution control.
   tileAttribution:
+    // i18n-exempt: licence attribution markup, not translated copy.
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 
   /** Max edge length we downscale uploaded photos to (keeps mobile uploads small). */
