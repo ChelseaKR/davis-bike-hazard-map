@@ -5,12 +5,19 @@
 import { FormattedMessage, useIntl } from 'react-intl';
 import type { Hazard } from '../../shared/types.ts';
 import { HazardCard } from './HazardCard.tsx';
+import { feedErrorLabel } from '../i18n/labels.ts';
+import type { ApiFailure } from '../lib/api.ts';
 import { SkeletonList } from './Skeleton.tsx';
 
 interface ListViewProps {
   hazards: Hazard[];
   loading: boolean;
-  error: string | null;
+  /**
+   * Why the feed failed, as a code (issue #200). It used to be the thrown
+   * `Error`'s message — the server's own English sentence — rendered verbatim
+   * into the `role="alert"` below, under a translated heading.
+   */
+  error: ApiFailure | null;
   onConfirm?: (id: string) => void | Promise<boolean | void>;
   onFocusOnMap?: (hazard: Hazard) => void;
   onRetry?: () => void;
@@ -33,7 +40,7 @@ export function ListView({
       {showSkeleton && <SkeletonList />}
       {error && (
         <div role="alert" className="feed-error">
-          <p className="error-text">{error}</p>
+          <p className="error-text">{feedErrorLabel(intl, error)}</p>
           {onRetry && (
             <button type="button" className="btn btn-small" onClick={onRetry}>
               <FormattedMessage id="common.retry" defaultMessage="Retry" />

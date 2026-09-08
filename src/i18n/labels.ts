@@ -21,6 +21,7 @@ import type { QueueState } from '../lib/db.ts';
 import type { GeolocationFailure } from '../lib/geolocation.ts';
 import type { PushRegistrationFailure } from '../lib/push.ts';
 import type { PhotoReadFailure } from '../lib/photo.ts';
+import type { ApiFailure } from '../lib/api.ts';
 
 const categoryMessages = defineMessages({
   pothole: { id: 'hazard.category.pothole', defaultMessage: 'Pothole' },
@@ -136,6 +137,38 @@ const photoErrorMessages = defineMessages({
 });
 
 /**
+ * Why the hazard feed did not load (issue #200).
+ *
+ * The same shape as the three blocks above, for the same reason. `useHazards`
+ * used to hand `ListView`'s `role="alert"` the thrown `Error`'s message — which
+ * is the SERVER's sentence in the common branch (`body.message`, composed in
+ * English by a server with no catalog) and the literal `Could not load
+ * hazards.` in the fallback. Neither was in any catalog, and the alert around
+ * them was: a Spanish rider got a translated heading over an English sentence.
+ *
+ * These are whole sentences, not fragments, because they stand alone in the
+ * alert. `MapView` puts its own catalogued paragraph above the same string.
+ */
+const feedErrorMessages = defineMessages({
+  offline: {
+    id: 'error.feed.offline',
+    defaultMessage: "The hazard feed couldn't be reached. Check your connection and try again.",
+  },
+  request: {
+    id: 'error.feed.request',
+    defaultMessage: "The hazard feed couldn't be loaded — the server rejected the request.",
+  },
+  server: {
+    id: 'error.feed.server',
+    defaultMessage: 'The hazard feed is unavailable right now. This is a problem on our side.',
+  },
+  parse: {
+    id: 'error.feed.parse',
+    defaultMessage: "The hazard feed came back in a form this app couldn't read.",
+  },
+});
+
+/**
  * The reason half of `route.error.location` ("Couldn't use your location:
  * {reason}"), which is why all four read as sentence fragments rather than
  * standalone sentences.
@@ -148,6 +181,14 @@ export function pushErrorLabel(intl: IntlShape, code: PushRegistrationFailure): 
 }
 export function photoErrorLabel(intl: IntlShape, code: PhotoReadFailure): string {
   return intl.formatMessage(photoErrorMessages[code]);
+}
+
+/**
+ * The rider-facing sentence for a feed failure code. The thrown error's own
+ * message is a diagnostic and is never displayed — see `ApiFailure`.
+ */
+export function feedErrorLabel(intl: IntlShape, code: ApiFailure): string {
+  return intl.formatMessage(feedErrorMessages[code]);
 }
 
 export function categoryLabel(intl: IntlShape, category: HazardCategory): string {

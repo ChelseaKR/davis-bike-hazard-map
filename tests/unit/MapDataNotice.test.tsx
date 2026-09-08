@@ -25,7 +25,7 @@ describe('MapDataNotice', () => {
   });
 
   it('withdraws the "no reports" claim when the feed could not be loaded', () => {
-    render(<MapDataNotice feedError="Network request failed" />);
+    render(<MapDataNotice feedError="offline" />);
 
     // The claim the caption would otherwise make is gone, not merely qualified.
     expect(screen.queryByText(/empty areas mean no reports/i)).not.toBeInTheDocument();
@@ -36,8 +36,11 @@ describe('MapDataNotice', () => {
   });
 
   it('surfaces the underlying failure rather than swallowing it', () => {
-    render(<MapDataNotice feedError="HTTP 503" />);
-    expect(screen.getByRole('alert')).toHaveTextContent('HTTP 503');
+    render(<MapDataNotice feedError="server" />);
+    // Distinguishable from the other codes, and catalogued: the map used to
+    // print the thrown Error's message here, which is the server's own English
+    // sentence under a translated paragraph (issue #200).
+    expect(screen.getByRole('alert')).toHaveTextContent(/problem on our side/i);
   });
 
   it('offers the same retry the list view does', async () => {

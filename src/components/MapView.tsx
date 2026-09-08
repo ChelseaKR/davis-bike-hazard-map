@@ -18,7 +18,14 @@ import { PLACE_CENTER } from '../../shared/validation.ts';
 import { config } from '../config.ts';
 import { hazardIcon } from './mapIcons.ts';
 import { timeAgo } from '../lib/format.ts';
-import { categoryLabel, severityLabel, lifecycleLabel, handoffNote } from '../i18n/labels.ts';
+import {
+  categoryLabel,
+  severityLabel,
+  lifecycleLabel,
+  handoffNote,
+  feedErrorLabel,
+} from '../i18n/labels.ts';
+import type { ApiFailure } from '../lib/api.ts';
 
 interface MapViewProps {
   hazards: Hazard[];
@@ -29,7 +36,7 @@ interface MapViewProps {
    * empty map after a failed fetch is indistinguishable from an empty map
    * after a successful one, and the caption below asserts the second.
    */
-  feedError?: string | null;
+  feedError?: ApiFailure | null;
   onRetry?: () => void;
 }
 
@@ -351,9 +358,10 @@ export function MapDataNotice({
   feedError,
   onRetry,
 }: {
-  feedError: string | null;
+  feedError: ApiFailure | null;
   onRetry?: () => void;
 }) {
+  const intl = useIntl();
   if (feedError) {
     return (
       <div role="alert" className="feed-error map-feed-error">
@@ -364,7 +372,7 @@ export function MapDataNotice({
             values={{ strong: (chunks) => <strong>{chunks}</strong> }}
           />
         </p>
-        <p className="error-text error-detail">{feedError}</p>
+        <p className="error-text error-detail">{feedErrorLabel(intl, feedError)}</p>
         {onRetry && (
           <button type="button" className="btn btn-small" onClick={onRetry}>
             <FormattedMessage id="common.retry" defaultMessage="Retry" />
