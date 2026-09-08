@@ -68,7 +68,7 @@ jobs:
     # being an annotated stable-SemVer tag, and every downstream job was skipped.
     # Both halves matter -- the workflow reaches its trust boundary, and the trust
     # boundary still says no.
-    uses: ChelseaKR/.github/.github/workflows/release-authorize.yml@7be4c3e44e2acf20e8a98eeea4351c1e5d2789bc
+    uses: ChelseaKR/.github/.github/workflows/release-authorize.yml@7be4c3e44e2acf20e8a98eeea4351c1e5d2789bc  # v1.0.0
     permissions:
       contents: read
     with:
@@ -233,9 +233,29 @@ jobs:
         with:
           name: release-assets
           path: release-assets
+      # This job downloads an artifact and never checks the repository out, which
+      # is deliberate -- it publishes bytes another job built and verified, and a
+      # working tree here would only be somewhere for them to drift from. Two
+      # consequences, neither of which had ever been observed, because the whole
+      # workflow failed to parse and so no job in it has ever run.
+      #
+      # `gh` finds the repository from the GIT REMOTE, not from the environment.
+      # `GITHUB_REPOSITORY` is set on every runner and `gh` does not read it, so
+      # with no checkout every `gh` call here would fail to resolve a repository
+      # at all. `GH_REPO` is the variable it does read.
+      #
+      # `--verify-tag` is gone for the same reason: it shells out to `git` to
+      # resolve the tag locally, and there is no git repository to resolve it in.
+      # Nothing is lost. The line above it is a STRONGER check and does not need a
+      # working tree -- it asks the API for the tag object the ref currently points
+      # at and asserts it is byte-for-byte the object the `authorize` job verified
+      # the signature of. `--verify-tag` only asks whether a tag of that name
+      # exists; this asks whether it is still the same object, which is the
+      # question that matters between authorizing a release and publishing one.
       - name: Recheck immutable tag object and create the release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.authorize.outputs.release-tag }}
           TAG_OBJECT_SHA: ${{ needs.authorize.outputs.tag-object-sha }}
         run: |
@@ -243,9 +263,9 @@ jobs:
           LIVE_TAG_OBJECT="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha)"
           test "${LIVE_TAG_OBJECT}" = "${TAG_OBJECT_SHA}"
           gh release create "${TAG}" release-assets/sbom.cdx.json \
+            --repo "${GITHUB_REPOSITORY}" \
             --title "${TAG}" \
-            --notes-file release-assets/release-notes.md \
-            --verify-tag
+            --notes-file release-assets/release-notes.md
 
   verify-published:
     name: verify-published — pull by digest, cosign verify, boot, /livez (REL-16)
