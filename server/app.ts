@@ -38,6 +38,7 @@ import {
   hasHazardFreeCandidate,
   findFastestAlternative,
   isDarkAt,
+  resolveRouteProfile,
   type RoutePlan,
 } from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
@@ -598,10 +599,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // prefer ones that avoid reported hazards (weighted by severity + recency).
   app.get('/api/route', async (req) => {
     const q = (req.query ?? {}) as Record<string, unknown>;
-    const { from, to } = routeRequestSchema.parse({
+    // `profile` is passed through raw so an unknown value reaches the enum and
+    // becomes a 400 naming it. Defaulting it here would turn a typo into a silent
+    // default-profile route, which is the thing the schema exists to refuse.
+    const { from, to, profile: profileId } = routeRequestSchema.parse({
       from: parsePoint(q.from),
       to: parsePoint(q.to),
+      ...(q.profile === undefined ? {} : { profile: q.profile }),
     });
+    const profile = resolveRouteProfile(profileId);
 
     const at = now();
     const hazards = await listPublic(repo, at);
@@ -616,6 +622,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       now: at,
       corridorMeters: 45,
       conditions: { isDark },
+      profile,
     });
     const best = ranked[0];
 
@@ -635,6 +642,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       hazardFreeCandidate: source === 'fallback' ? null : hasHazardFreeCandidate(ranked),
       fastestAlternative: findFastestAlternative(ranked),
       ...(isDark ? { nightWeighting: true } : {}),
+      profile: profileId,
+      // Not an echo of the request. `null` on the straight-line fallback because
+      // no road graph was searched, and `false` when the graph returned a single
+      // candidate: the weights were applied, but a route nothing chose between is
+      // not a route the profile selected. Same three-state discipline as
+      // `hazardFreeCandidate` above, and for the same reason (#163).
+      profileApplied: source === 'fallback' ? null : routes.length > 1,
     };
     return { plan };
   });

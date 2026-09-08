@@ -44,6 +44,8 @@ const plan: RoutePlan = {
   ],
   alternativesConsidered: 2,
   hazardFreeCandidate: false,
+  profile: 'default',
+  profileApplied: true,
   fastestAlternative: {
     distanceMeters: 1300,
     durationSeconds: 320,
