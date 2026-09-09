@@ -9,6 +9,25 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **`sharp` 0.35.3 -> 0.35.4 (`GHSA-rgj7-g3m4-5g8c`, high), for the libheif
+  vulnerabilities its prebuilt binaries carry.** The advisory was published
+  2026-09-08 at 21:25 UTC; `Security (dependency audit + secret scan)` last
+  passed on `main` at `bb9e709` ten hours earlier, against this same
+  `package-lock.json`. So the gate went red on a calendar, not on a commit, and
+  the change here is the lockfile only -- `package.json` already asks for
+  `^0.35.3`, which resolves 0.35.4.
+  - **The vulnerable decoder is reachable from an upload, so this is not a
+    theoretical high.** `server/lib/image.ts` reads the bytes out of the
+    submitted data URL and hands them straight to `sharp()`; the declared MIME
+    type is never consulted, and `sharp.format.heif.input.buffer` is `true` in
+    the prebuilt binary this project installs. A crafted HEIC or AVIF upload
+    therefore reaches libheif before any of the guards below it
+    (`limitInputPixels`, `failOn: 'error'`, the re-encode to JPEG), all of which
+    act on a decode that has already happened.
+  - What actually changes is the bundled library: `@img/sharp-libvips-*`
+    1.3.2 -> 1.3.3, which is libheif 1.23.2. Verified by loading the installed
+    binary rather than by reading the lock.
+
 - Named rider routing profiles on the planner (issue #178, E2): `default`,
   `family-safest` and `e-bike`, requested as `GET /api/route?profile=`. A
   profile is a stated preference over **reported** hazards and nothing more --
