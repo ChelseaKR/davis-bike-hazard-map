@@ -147,8 +147,17 @@ export function MyReports({ onChange }: { onChange?: () => void }) {
                   }}
                 />
               </p>
-              {r.state === 'error' && r.lastError && (
-                <p className="error-text">{r.lastError}</p>
+              {/*
+                Issue #203: the reason comes from the catalog, resolved from the
+                stored CODE. It used to be `{r.lastError}` — the server's own
+                English sentence — and the guard was `&& r.lastError`, so a row
+                with no recorded reason simply printed nothing under a card that
+                says "Couldn't sync". State 'error' is only ever written with a
+                failure in hand, so the reason line is unconditional here and
+                absence gets its own sentence rather than a blank.
+              */}
+              {r.state === 'error' && (
+                <p className="error-text">{labels.queueError(r.lastErrorCode)}</p>
               )}
               {status && (
                 <ol

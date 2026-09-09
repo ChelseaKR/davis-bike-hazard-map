@@ -169,6 +169,54 @@ const feedErrorMessages = defineMessages({
 });
 
 /**
+ * Why a report on this device has not reached the server (issue #203).
+ *
+ * A second surface for the same defect #200 removed from the feed. `MyReports`
+ * rendered the device queue's `lastError` verbatim, and that value is the
+ * server's own sentence (`body.message`, composed in English by a server with
+ * no catalog) in the common branch and `String(err)` in the fallback. Neither
+ * is in any catalog; the card around them is.
+ *
+ * These say what happened to THIS REPORT, not to the feed, so they are their
+ * own block rather than a reuse of `feedErrorMessages`: "the hazard feed
+ * couldn't be reached" is the wrong sentence to print under a report a rider
+ * filed and is waiting on.
+ *
+ * `unrecorded` is the honest reading of an ABSENT code, and it is deliberately
+ * not one of the four. A row written before `lastErrorCode` existed is still on
+ * real devices — this store is IndexedDB — and picking any of the four for it
+ * would publish a reason nothing measured. It also covers a code this build
+ * does not recognise, which is the same fact from the other direction: the two
+ * remain distinguishable in the stored record (`lastErrorCode` absent, versus
+ * present and unknown) and in `lastError`, which is kept as a diagnostic.
+ */
+const queueErrorMessages = defineMessages({
+  offline: {
+    id: 'error.queue.offline',
+    defaultMessage: "This report hasn't reached the server — your device couldn't connect.",
+  },
+  request: {
+    id: 'error.queue.request',
+    defaultMessage: 'The server would not accept this report.',
+  },
+  server: {
+    id: 'error.queue.server',
+    defaultMessage: 'Sending this report failed. This is a problem on our side.',
+  },
+  parse: {
+    id: 'error.queue.parse',
+    defaultMessage: "The server answered in a form this app couldn't read.",
+  },
+  unrecorded: {
+    id: 'error.queue.unrecorded',
+    defaultMessage: "This report couldn't be sent, and this device didn't record a reason it can show you.",
+  },
+});
+
+/** The four codes this build renders a specific sentence for. */
+const QUEUE_ERROR_CODES: readonly ApiFailure[] = ['offline', 'request', 'server', 'parse'];
+
+/**
  * The reason half of `route.error.location` ("Couldn't use your location:
  * {reason}"), which is why all four read as sentence fragments rather than
  * standalone sentences.
@@ -221,6 +269,19 @@ export function queueStateLabel(intl: IntlShape, state: QueueState): string {
   return intl.formatMessage(queueStateMessages[state]);
 }
 
+/**
+ * The rider-facing sentence for a queued report's failure (issue #203).
+ *
+ * Takes `string | undefined` rather than `ApiFailure | undefined` on purpose:
+ * the argument comes off an IndexedDB row, so its type is a claim about what
+ * this build wrote, not about what is on the device. An absent or unrecognised
+ * value resolves to `unrecorded` instead of throwing or rendering blank.
+ */
+export function queueErrorLabel(intl: IntlShape, code?: string): string {
+  const known = QUEUE_ERROR_CODES.find((c) => c === code);
+  return intl.formatMessage(known ? queueErrorMessages[known] : queueErrorMessages.unrecorded);
+}
+
 /** React-hook accessor for the enum labels, bound to the ambient locale. */
 export function useLabels() {
   const intl = useIntl();
@@ -231,5 +292,6 @@ export function useLabels() {
     handoff: (stage: HandoffStage) => handoffLabel(intl, stage),
     handoffNote: (handoff: PublicHandoffInfo) => handoffNote(intl, handoff),
     queueState: (state: QueueState) => queueStateLabel(intl, state),
+    queueError: (code?: string) => queueErrorLabel(intl, code),
   };
 }

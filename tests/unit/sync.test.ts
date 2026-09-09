@@ -61,6 +61,7 @@ describe('syncOnce', () => {
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'queued',
       attempts: 1,
+      lastErrorCode: 'offline',
       lastError: 'network down',
     });
   });
@@ -72,6 +73,7 @@ describe('syncOnce', () => {
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'error',
       attempts: 1,
+      lastErrorCode: 'request',
       lastError: 'bad',
     });
   });
@@ -83,6 +85,7 @@ describe('syncOnce', () => {
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'queued',
       attempts: 1,
+      lastErrorCode: 'request',
       lastError: 'slow down',
     });
   });
@@ -98,6 +101,7 @@ describe('syncOnce', () => {
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'error',
       attempts: MAX_SYNC_ATTEMPTS,
+      lastErrorCode: 'offline',
       lastError: 'still down',
     });
   });
