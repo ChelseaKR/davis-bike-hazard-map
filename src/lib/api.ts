@@ -90,9 +90,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // non-JSON error body — ignore
     }
     throw new ApiRequestError(
-      // The feed path renders `code` through `feedErrorLabel`, not this. The one
-      // place this sentence still reaches a screen is `MyReports`, via the device
-      // queue's `lastError` — a separate surface, tracked at issue #203.
+      // No rider-facing surface renders this sentence. The feed resolves `code`
+      // through `feedErrorLabel`, and "My reports" resolves the device queue's
+      // stored code through `queueErrorLabel` (issue #203, which is what this
+      // comment used to name as the one place it still reached a screen).
       // i18n-exempt: a transport diagnostic; the display path resolves `code`
       body?.message ?? `Request failed (${res.status})`,
       res.status,

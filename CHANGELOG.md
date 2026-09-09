@@ -9,6 +9,40 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **"My reports" no longer shows a rider the server's English sentence when a
+  report fails to sync (issue #203).** `MyReports` rendered the device queue's
+  `lastError` verbatim, and that value is `ApiRequestError.message` -- the
+  server's own sentence, composed in English by a server with no catalog -- or
+  `String(err)` on a non-`Error` throw. The card around it was catalogued, so a
+  Spanish rider got a translated card over an English reason. This is the same
+  defect issue #200 removed from the hazard feed, on a second surface.
+
+  **Neither i18n gate could observe it.** G2's pass A flags string *literals* in
+  JSX and `{r.lastError}` is an expression; pass B scans `src/lib/api.ts`, where
+  the literal carries an `i18n-exempt` reason naming this issue. Each gate was
+  correct about its own file and nothing related the two.
+
+  `sync.ts` now records the transport's `ApiFailure` code as `lastErrorCode`,
+  and `MyReports` resolves it through `queueErrorLabel()` in
+  `src/i18n/labels.ts` -- the shape #173 and #200 established. The server
+  sentence is kept on the row as a diagnostic and is never rendered.
+
+  - **A row written before this change is read as absent, not guessed at.**
+    `lastErrorCode` is a NEW key rather than a repurposed `lastError`, because
+    the queue is IndexedDB and rows written by an earlier build are on real
+    devices. Those rows resolve to `error.queue.unrecorded` -- "this device
+    didn't record a reason it can show you" -- which is deliberately not one of
+    the four codes: picking `offline` for a row that never measured a connection
+    would publish a reason nothing observed.
+  - **The reason line is now unconditional under a failed report.** The old
+    guard was `state === 'error' && r.lastError`, so a row with no sentence
+    printed a card reading "Couldn't sync" with nothing under it, which reads
+    the same as a report that is fine.
+  - `tests/unit/queueErrorMessages.test.tsx` formats the whole path under a
+    SENTINEL catalog -- an English regex cannot tell correct output from
+    defective output when both are English -- and covers a pre-migration row, an
+    unrecognised code, and a report that has not failed.
+
 - **`sharp` 0.35.3 -> 0.35.4 (`GHSA-rgj7-g3m4-5g8c`, high), for the libheif
   vulnerabilities its prebuilt binaries carry.** The advisory was published
   2026-09-08 at 21:25 UTC; `Security (dependency audit + secret scan)` last

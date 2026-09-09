@@ -10,6 +10,7 @@
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { ReportSubmission } from '../../shared/types.ts';
+import type { ApiFailure } from './api.ts';
 
 export type QueueState = 'queued' | 'syncing' | 'synced' | 'error';
 
@@ -19,7 +20,25 @@ export interface QueuedReport {
   submission: ReportSubmission;
   state: QueueState;
   attempts: number;
+  /**
+   * The last failure as a DIAGNOSTIC sentence — the server's own English, or
+   * the browser's. Never rendered (issue #203); `lastErrorCode` is what the UI
+   * resolves. Kept because it is the only thing that survives to explain an
+   * unrecognised code, and because a bug report needs the original text.
+   */
   lastError?: string;
+  /**
+   * The last failure as a machine code, resolved through
+   * `queueErrorLabel()` in `src/i18n/labels.ts` at the point of display
+   * (issue #203, the shape #173 and #200 established).
+   *
+   * A SEPARATE key rather than a repurposed `lastError`, because this store is
+   * IndexedDB and rows written before this field existed are still on real
+   * devices. Absent on a row in state `'error'` means "written before the code
+   * existed", which is a different fact from "no failure was recorded" (state
+   * is not `'error'`) — and neither may be rendered as if it were a reason.
+   */
+  lastErrorCode?: ApiFailure;
   /** Server id once synced, for de-duplication and linking. */
   serverId?: string;
   createdAt: number;
