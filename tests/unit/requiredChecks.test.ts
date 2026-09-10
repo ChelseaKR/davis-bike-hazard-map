@@ -317,12 +317,76 @@ describe('required status checks name jobs that exist and can fail', () => {
   });
 
   it('detects a job that cannot fail (proves that detector is not inert)', () => {
-    // The nightly WebKit job is deliberately advisory: `continue-on-error: true`.
-    // It is the repo's own worked example of a job that must never be required.
-    const webkit = producersOf('End-to-end (WebKit, non-blocking)');
-    expect(webkit, 'the advisory WebKit job was not found; update this control').toHaveLength(1);
-    expect(webkit[0]!.canFail).toBe(false);
-    expect(requiredContexts).not.toContain('End-to-end (WebKit, non-blocking)');
+    // Synthetic jobs, deliberately. Until 2026-09-10 this control pointed at
+    // the live nightly WebKit job, which carried `continue-on-error: true` —
+    // so the detector's only negative example was a defect in the tree, and
+    // fixing that defect would have taken the control with it. A detector's
+    // negative case must not depend on something staying broken.
+    expect(
+      whyItCannotFail({ 'continue-on-error': true, steps: [{ run: 'npm test' }] }),
+    ).toMatch(/continue-on-error/);
+    expect(whyItCannotFail({ steps: [] })).toMatch(/no steps/);
+    expect(whyItCannotFail({ steps: [{ run: 'echo hi' }, { run: 'true' }] })).toMatch(/no-op/);
+    // The positive half, in the same test: a detector that refused everything
+    // would satisfy all three assertions above on its own.
+    expect(whyItCannotFail({ steps: [{ run: 'npm test' }] })).toBe('');
+    expect(whyItCannotFail({ steps: [{ uses: 'actions/checkout@v7' }] })).toBe('');
+  });
+
+  /**
+   * The other half of (b), and the one nothing here modelled.
+   *
+   * A required context satisfied by a muted job is a gate that cannot fail.
+   * A NON-required context on a muted job is worse in a quieter way: the
+   * workflow's own conclusion is `success` whatever the job did, so
+   * `gh run list` shows green and only `actions/runs/<id>/jobs` disagrees.
+   * `e2e-webkit-nightly` sat in exactly that shape for eight weeks — 55 runs
+   * reported `success`, the job inside failed on 55 of 55, and nobody could
+   * see it. A check that has never passed is not a check.
+   *
+   * So: no job in this repository is muted, and the allowance list is empty.
+   * It is the honest kind of hand-maintained list — every way to make it
+   * green is a correct one (drop the flag, or declare the job with a reason)
+   * — and it is self-limiting in both directions: an entry naming a job that
+   * is no longer muted fails, as does a muted job with no entry.
+   */
+  const MUTED_JOBS_ALLOWED: { where: string; reason: string }[] = [];
+
+  it('has no workflow job whose failure is invisible at run level', () => {
+    const muted = workflows.flatMap(({ file, doc }) =>
+      Object.entries((doc?.jobs ?? {}) as Record<string, Yaml>)
+        .filter(([, job]) => job?.['continue-on-error'] === true)
+        .map(([jobId]) => `${file}:jobs.${jobId}`),
+    );
+    const undeclared = muted.filter(
+      (where) => !MUTED_JOBS_ALLOWED.some((a) => a.where === where),
+    );
+    expect(
+      undeclared,
+      'these jobs set continue-on-error: true, so their workflow reports ' +
+        'success whatever they do and their failure is invisible in ' +
+        '`gh run list`. Either drop the flag or add an entry to ' +
+        'MUTED_JOBS_ALLOWED saying who reads the job conclusion instead:\n  ' +
+        undeclared.join('\n  '),
+    ).toEqual([]);
+    const stale = MUTED_JOBS_ALLOWED.filter((a) => !muted.includes(a.where));
+    expect(
+      stale.map((a) => a.where),
+      'these entries excuse a job that is no longer muted; delete them',
+    ).toEqual([]);
+  });
+
+  it('lets the advisory WebKit nightly report its own failure', () => {
+    const webkit = producersOf('End-to-end (WebKit, nightly)');
+    expect(
+      webkit,
+      'the nightly WebKit job was not found under that name; update this guard',
+    ).toHaveLength(1);
+    // Advisory on purpose — the real Safari signal is the pre-launch device
+    // pass, so it is not a required context...
+    expect(requiredContexts).not.toContain('End-to-end (WebKit, nightly)');
+    // ...but advisory is not the same as muted. See the note above.
+    expect(webkit[0]!.canFail, webkit[0]!.cannotFailReason).toBe(true);
   });
 
   it('requires only contexts that report on every pull request into main', () => {

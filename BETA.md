@@ -159,11 +159,24 @@ Then in the app: file a report → open **Moderate**, sign in with your
   human VoiceOver/NVDA pass ([`screen-reader-walkthrough.md`](./docs/audits/screen-reader-walkthrough.md))
   and the equity-reviewer sign-off on the coverage view.
 
-## CI notes (two non-blocking jobs)
+## CI notes (two advisory jobs)
 
-- **WebKit e2e** is non-blocking: WebKit-on-Linux fails to render headlessly in
-  CI (a tooling issue, not a product bug — Chromium + Firefox are the required
-  gate). Real Safari/iOS coverage is the manual device pass before public launch.
+- **WebKit e2e** runs nightly and is advisory — it is not one of the required
+  contexts, because the real Safari/iOS signal is the manual device pass before
+  public launch. It is *not* muted: as of 2026-09-10 the job reports its own
+  failure, so a red run shows in `gh run list`.
+
+  It had previously never passed. From 2026-07-18 to 2026-09-10 the workflow
+  reported `success` on 55 of 55 runs while the job inside failed on 55 of 55,
+  because the job carried `continue-on-error: true`. The cause was not WebKit
+  and not this site: the e2e harness serves the production build over plain
+  http on localhost, the production CSP carries helmet's default
+  `upgrade-insecure-requests`, and WebKit honours that directive on loopback
+  where Chromium and Firefox exempt it — so every asset was fetched over
+  `https://` against a plaintext port and the app never booted. The harness now
+  sets `CSP_UPGRADE_INSECURE_REQUESTS=false` and the suite passes 11/11 in
+  WebKit, axe scans included. WebKit found no accessibility defect this site's
+  Chromium and Firefox runs miss.
 - **CodeQL** analyzes application code and workflows and publishes results to
   the Security tab. The repository is public, so code scanning is available;
   keep both matrix jobs green even though they are not currently required by

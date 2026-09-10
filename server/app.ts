@@ -201,6 +201,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
+        // `upgrade-insecure-requests` is one of helmet's defaults and is
+        // inherited by this list. `null` is helmet's way of dropping a default
+        // directive, and the e2e harness is the only thing that asks for it:
+        // over plain http://localhost WebKit honours the upgrade, every asset
+        // request goes to https:// against a plaintext port, and the app never
+        // boots. See serverConfig.cspUpgradeInsecureRequests for the full note.
+        ...(config.cspUpgradeInsecureRequests ? {} : { upgradeInsecureRequests: null }),
       },
     },
     crossOriginEmbedderPolicy: false,
