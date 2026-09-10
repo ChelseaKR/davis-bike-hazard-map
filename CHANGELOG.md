@@ -48,7 +48,25 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
     at the live WebKit job — that control's only negative example used to be a
     real defect, so fixing the defect would have silently disarmed it.
 
-  **Measured after the change:** 11/11 pass in WebKit. With the directive
+  - **One test then had to stop racing the harness.** With the CSP fixed, Linux
+    WebKit ran 10 of 11 and `offline: a report is saved, then syncs when back
+    online` failed on 1 of 3 runs and was rescued by the retry on the other 2 —
+    a coin-flip nightly, which is the same disease as a muted one. Reading the
+    queue row out of IndexedDB in the CI browser: it reached
+    `{"state":"syncing","attempts":0}` at **+575ms** and was still there at
+    **+15,611ms**, with **no `/api/reports` request event emitted at all**. The
+    request never left the browser: `setOffline(false)` returns before WebKit
+    will carry a new one, and `startSync` fires its first tick within ~500ms of
+    load. Nothing inside the test's 15s poll can rescue that, because the app's
+    own recovery for a hung request is `STALE_SYNCING_MS` — 10 minutes,
+    deliberately generous so a real photo upload on slow mobile data is never
+    re-sent. The test now proves the interface is carrying traffic before
+    reopening the app. **No assertion changed and no timeout was raised**;
+    Chromium and Firefox satisfy the new poll on its first try.
+
+  **Measured after the change:** WebKit 11/11 pass, in Linux CI as well as
+  locally — the first green run in the workflow's life, 2026-09-10, run
+  `34528460145`, `11 passed (30.2s)` with zero flaky. With the directive
   restored, 11/11 fail again — the same symptom as CI. With a colour-contrast
   regression planted in `--ink`, 3 of the 6 a11y tests go red naming
   `color-contrast`, so the suite can still fail for the right reason. WebKit

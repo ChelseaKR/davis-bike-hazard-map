@@ -21,7 +21,8 @@ name: e2e-webkit-nightly
 # directive on loopback where Chromium and Firefox exempt it. Every asset was
 # fetched over https:// against a plaintext port, so the app never booted. The
 # harness now sets CSP_UPGRADE_INSECURE_REQUESTS=false (playwright.config.ts;
-# see serverConfig.cspUpgradeInsecureRequests) and the suite passes: 11/11.
+# see serverConfig.cspUpgradeInsecureRequests). First green run in the
+# workflow's life: 2026-09-10, run 34528460145, `11 passed (30.2s)`.
 #
 # So `continue-on-error` is gone. Nothing needs it — a scheduled workflow
 # produces no status check on a pull request and cannot block a merge — and
