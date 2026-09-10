@@ -9,6 +9,26 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **`js-yaml` 4.3.1 -> 4.3.2 and `browserslist` 4.28.6 -> 4.28.9, the two open
+  HIGH Dependabot alerts** (`#47`, `#31`). Both are transitive dev-only
+  dependencies -- neither is in `package.json`, neither reaches the running
+  server or the shipped bundle -- so this is a lockfile-only change; nothing in
+  `dependencies` moves.
+  - `js-yaml` is pulled in by the lint toolchain; `browserslist` by the build's
+    target resolution.
+  - The diff is the two packages plus the five that `browserslist` itself
+    depends on (`baseline-browser-mapping`, `caniuse-lite`,
+    `electron-to-chromium`, `node-releases`, `update-browserslist-db`) -- its
+    own closure, not unrelated lock drift. `baseline-browser-mapping` 2.11.22
+    incidentally closes the moderate alert `#43` (patched at 2.11.0).
+  - **Still open, and not fixable on its own:** the moderate alerts on `vitest`
+    and `@vitest/mocker` (`#45`, `#44`, patched at 4.1.11).
+    `@vitest/coverage-v8@4.1.10` pins its `vitest` peer to the **exact**
+    version, so `npm update vitest` is a no-op -- measured, the lock does not
+    move. Both must be bumped in one commit. `@vitest/coverage-v8@4.1.11`
+    exists, so the fix is available; it is deliberately not in this PR, which
+    is scoped to the highs.
+
 - **"My reports" no longer shows a rider the server's English sentence when a
   report fails to sync (issue #203).** `MyReports` rendered the device queue's
   `lastError` verbatim, and that value is `ApiRequestError.message` -- the
