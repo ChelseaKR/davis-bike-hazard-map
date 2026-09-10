@@ -9,6 +9,51 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **The nightly WebKit e2e job now passes, and can now be seen when it does
+  not.** `e2e-webkit-nightly` reported `success` on **55 of 55 runs** between
+  its first run on 2026-07-18 and 2026-09-10, while the job inside it —
+  `End-to-end (WebKit, non-blocking)` — **failed on 55 of 55**. A job-level
+  `continue-on-error: true` makes the *workflow's* conclusion green whatever
+  the job did, so `gh run list` showed an unbroken column of green over a check
+  that had never once passed. WebKit accessibility on this site had therefore
+  never been verified, and the nightly built to verify it had been broken since
+  the day it was created.
+
+  **The cause was neither WebKit nor this site.** The e2e harness serves the
+  production build over plain `http://localhost:8788`; the production CSP
+  carries helmet's default `upgrade-insecure-requests`; and WebKit applies that
+  directive on loopback, where Chromium and Firefox exempt `localhost` as a
+  potentially-trustworthy origin. So under WebKit every `/assets/*.js` fetch
+  went to `https://localhost:8788/…`, died in a TLS handshake against a
+  plaintext port, and left `#root` empty — all 11 e2e tests timed out on a
+  locator, six of them the axe scans.
+
+  - `serverConfig.cspUpgradeInsecureRequests` (env
+    `CSP_UPGRADE_INSECURE_REQUESTS`) gates the directive. **It defaults to on,
+    so the deployed CSP is unchanged**; `playwright.config.ts` sets it off,
+    because nothing under test loads an absolute `http://` URL and it is the
+    one directive whose removal cannot change what the suite observes.
+    `tests/unit/securityHeaders.test.ts` pins all three claims: the directive
+    is emitted by default, turning it off removes that directive **and nothing
+    else**, and the harness actually sets the variable.
+  - `continue-on-error: true` is gone from the nightly, and the job is renamed
+    `End-to-end (WebKit, nightly)`. Nothing needed the mute — a scheduled
+    workflow produces no status check on a pull request and cannot block a
+    merge — and `protect-main` still requires `End-to-end (Chromium +
+    Firefox)`, not this one. The job also writes a one-line verdict to the run
+    summary so a reader gets an answer without downloading the trace artifact.
+  - `tests/unit/requiredChecks.test.ts` gains a guard that **no** job in the
+    tree is muted (declared allowance list, empty, self-limiting in both
+    directions), and its "this detector is not inert" control no longer points
+    at the live WebKit job — that control's only negative example used to be a
+    real defect, so fixing the defect would have silently disarmed it.
+
+  **Measured after the change:** 11/11 pass in WebKit. With the directive
+  restored, 11/11 fail again — the same symptom as CI. With a colour-contrast
+  regression planted in `--ink`, 3 of the 6 a11y tests go red naming
+  `color-contrast`, so the suite can still fail for the right reason. WebKit
+  found no accessibility defect that the Chromium and Firefox runs miss.
+
 - **`js-yaml` 4.3.1 -> 4.3.2 and `browserslist` 4.28.6 -> 4.28.9, the two open
   HIGH Dependabot alerts** (`#47`, `#31`). Both are transitive dev-only
   dependencies -- neither is in `package.json`, neither reaches the running

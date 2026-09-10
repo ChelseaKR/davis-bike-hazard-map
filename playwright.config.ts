@@ -13,8 +13,10 @@ const BASE_URL = `http://localhost:${PORT}`;
 // Browser selection: local runs use Chromium only (fast, one install).
 //   E2E_BROWSERS=chromium,firefox   explicit comma list (takes precedence)
 //   E2E_ALL_BROWSERS=1              chromium + firefox + webkit
-// CI runs chromium+firefox as a required gate and webkit as a separate
-// non-blocking job (Linux-WebKit needs a fix — see the e2e-webkit CI job).
+// CI runs chromium+firefox as the required gate and webkit as a separate
+// nightly job (.github/workflows/e2e-webkit-nightly.yml) — advisory, because
+// the pre-launch Safari/iOS pass is a device pass, but no longer non-blocking:
+// the nightly reports its own failure.
 const ALL = {
   chromium: { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   firefox: { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
@@ -53,9 +55,17 @@ export default defineConfig({
     // ships in production builds).
     // ALLOW_INMEMORY lets this production-mode server boot without a database
     // (e2e uses a throwaway in-memory store).
+    //
+    // CSP_UPGRADE_INSECURE_REQUESTS=false is load-bearing and must not be
+    // dropped: this harness serves the production build over plain http on
+    // localhost, and WebKit — unlike Chromium and Firefox — honours
+    // `upgrade-insecure-requests` on loopback, so with it on, every asset is
+    // fetched over https:// against a plaintext port and the app never boots.
+    // Nothing under test loads an absolute http:// URL, so the directive is a
+    // no-op here in every browser. Pinned by tests/unit/securityHeaders.test.ts.
     command:
       'cross-env PWA_DISABLE=true npm run build && cross-env NODE_ENV=production ' +
-      'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret ' +
+      'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret CSP_UPGRADE_INSECURE_REQUESTS=false ' +
       'MODERATOR_USERNAME=e2e MODERATOR_PASSWORD=e2e-password ' +
       `PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,

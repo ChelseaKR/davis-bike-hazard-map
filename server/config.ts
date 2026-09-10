@@ -145,6 +145,30 @@ export const serverConfig = {
   clientDir: process.env.CLIENT_DIR ?? './dist',
   serveClient: process.env.SERVE_CLIENT === 'true' || isProd,
 
+  /**
+   * Emit the CSP `upgrade-insecure-requests` directive (one of helmet's
+   * defaults; the explicit directive list in server/app.ts inherits it).
+   *
+   * ON by default, which is right for the deployed site: fly terminates TLS,
+   * every page is served over https, and the directive costs nothing.
+   *
+   * It is *fatal* when the same server is reached over plain `http://`.
+   * `upgrade-insecure-requests` rewrites every subresource URL in the document
+   * to `https://`, and WebKit applies it on loopback — Chromium and Firefox
+   * exempt `localhost` as a potentially-trustworthy origin, WebKit does not.
+   * So on `http://localhost:PORT` WebKit fetches `https://localhost:PORT/assets/*`,
+   * every one dies in a TLS handshake against a plaintext port, `#root` stays
+   * empty and every locator times out. That is the whole reason the WebKit
+   * nightly had never passed once in 55 runs (2026-07-18..2026-09-10); see
+   * `.github/workflows/e2e-webkit-nightly.yml`.
+   *
+   * The e2e harness therefore sets `CSP_UPGRADE_INSECURE_REQUESTS=false`
+   * (playwright.config.ts). Nothing under test loads an absolute `http://`
+   * URL, so the directive is a no-op for those pages in every browser — it is
+   * the one CSP directive whose removal cannot change what the suite observes.
+   */
+  cspUpgradeInsecureRequests: process.env.CSP_UPGRADE_INSECURE_REQUESTS !== 'false',
+
   rateLimit: {
     max: int('RATE_LIMIT_MAX', 120), // requests
     windowMs: int('RATE_LIMIT_WINDOW_MS', 60_000),

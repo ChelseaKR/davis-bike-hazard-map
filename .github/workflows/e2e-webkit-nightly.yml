@@ -1,11 +1,33 @@
 name: e2e-webkit-nightly
 
-# Advisory WebKit end-to-end coverage, moved off per-push CI to a nightly
-# schedule (CI-CD-STANDARD §11d: a non-blocking job that cannot fail a merge
-# has no business spending minutes on every commit — it used to run on every
-# push to main from ci.yml). WebKit-on-Linux currently fails to render the
-# shell in headless CI (tracked). Kept visible but non-blocking; real
-# Safari/iOS coverage is the manual SR/device pass before public launch.
+# WebKit end-to-end coverage, on a nightly schedule rather than per-push
+# (CI-CD-STANDARD §11d: a job that cannot fail a merge has no business spending
+# minutes on every commit — it used to run on every push to main from ci.yml).
+# It is advisory: `protect-main` requires "End-to-end (Chromium + Firefox)" and
+# deliberately does not require this one, because the real Safari/iOS signal is
+# the manual SR/device pass before public launch.
+#
+# Advisory is not the same as unable to fail, and this workflow spent its whole
+# life confusing the two. From its first run on 2026-07-18 to 2026-09-10 it
+# reported `success` on 55 of 55 runs while the job inside it FAILED on 55 of
+# 55 — `continue-on-error: true` at job level makes the run conclusion green
+# whatever happens, so `gh run list` showed an unbroken column of green over a
+# check that had never once passed. WebKit accessibility on this site had
+# therefore never been verified at all.
+#
+# The cause of the failures was not WebKit and not this site: the e2e harness
+# serves the production build over plain http on localhost, the production CSP
+# carries helmet's default `upgrade-insecure-requests`, and WebKit honours that
+# directive on loopback where Chromium and Firefox exempt it. Every asset was
+# fetched over https:// against a plaintext port, so the app never booted. The
+# harness now sets CSP_UPGRADE_INSECURE_REQUESTS=false (playwright.config.ts;
+# see serverConfig.cspUpgradeInsecureRequests) and the suite passes: 11/11.
+#
+# So `continue-on-error` is gone. Nothing needs it — a scheduled workflow
+# produces no status check on a pull request and cannot block a merge — and
+# with it there the failure was visible only to someone who thought to read
+# `actions/runs/<id>/jobs` instead of the runs list. If this goes red, it means
+# WebKit is broken on this site and the run list will say so.
 on:
   schedule:
     - cron: '0 6 * * *' # nightly 06:00 UTC (before CodeQL's Monday 07:00 run)
@@ -20,10 +42,9 @@ concurrency:
 
 jobs:
   e2e-webkit:
-    name: End-to-end (WebKit, non-blocking)
+    name: End-to-end (WebKit, nightly)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -36,9 +57,30 @@ jobs:
       - name: Install Playwright WebKit
         run: npx playwright install --with-deps webkit
       - name: Run e2e (WebKit)
+        id: e2e
         env:
           E2E_BROWSERS: webkit
         run: npm run e2e
+      # State the verdict on the run page itself. The failure of a nightly is
+      # read by whoever opens the run, and a one-line summary is the difference
+      # between a verdict and a 2,500-line log with an artifact to download.
+      - name: Say what happened
+        if: always()
+        env:
+          OUTCOME: ${{ steps.e2e.outcome }}
+        run: |
+          if [ "$OUTCOME" = "success" ]; then
+            echo "✅ WebKit e2e passed. Safari-engine coverage verified for this commit." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "❌ **WebKit e2e failed** (outcome: \`$OUTCOME\`)."
+              echo ""
+              echo "This job is advisory — it does not gate merges — but it is the only"
+              echo "Safari-engine check this repository has, so a red run means WebKit"
+              echo "users are seeing something Chromium and Firefox users are not."
+              echo "The \`playwright-report-webkit\` artifact on this run has the traces."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
