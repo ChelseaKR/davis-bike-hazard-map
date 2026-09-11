@@ -60,3 +60,80 @@ export async function waitAndApprove(
 export async function openTab(page: Page, label: string): Promise<void> {
   await page.getByRole('button', { name: label, exact: true }).click();
 }
+
+// Synthetic coordinates only -- no real location in any fixture (DEFINITION_OF_DONE.md).
+const STUB_FROM = { lat: 38.5449, lng: -121.7405 };
+const STUB_TO = { lat: 38.5382, lng: -121.7617 };
+
+/**
+ * A `/api/route` response body, for the states the harness's own router cannot
+ * produce. The e2e server runs with ROUTING_URL empty (playwright.config.ts), so
+ * a real request only ever gets the straight-line fallback. A spec that needs a
+ * preference that chose between routes, or a road network that offered only one,
+ * answers `/api/route` in the browser with this -- the same body shape the server
+ * returns.
+ */
+export function stubRoutePlan(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    source: 'osrm',
+    from: STUB_FROM,
+    to: STUB_TO,
+    route: {
+      geometry: [STUB_FROM, STUB_TO],
+      distanceMeters: 2300,
+      durationSeconds: 540,
+      steps: [
+        { instruction: 'Head out on A St', distanceMeters: 1200, location: STUB_FROM },
+        { instruction: 'Arrive at your destination', distanceMeters: 0, location: STUB_TO },
+      ],
+    },
+    nearby: [],
+    alternativesConsidered: 3,
+    hazardFreeCandidate: true,
+    fastestAlternative: null,
+    profile: 'default',
+    profileApplied: true,
+    ...over,
+  };
+}
+
+/** One hazard on a stubbed route, so the result has a hazard list to read and scan. */
+export function stubNearbyHazard(): Record<string, unknown> {
+  return {
+    hazard: {
+      id: 'e2e-route-hazard',
+      category: 'dangerous_intersection',
+      severity: 'high',
+      description: null,
+      location: STUB_FROM,
+      photoUrl: null,
+      status: 'approved',
+      confirmations: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      expiresAt: 9e15,
+      source: 'report',
+    },
+    distanceMeters: 12,
+    penalty: 1850,
+  };
+}
+
+/**
+ * Answer every `/api/route` request in the browser with `next()`, and return the
+ * `profile` parameter each request carried, in order (null when it carried none).
+ */
+export async function answerRoutesWith(
+  page: Page,
+  next: () => Record<string, unknown>,
+): Promise<(string | null)[]> {
+  const asked: (string | null)[] = [];
+  await page.route(
+    (url) => url.pathname === '/api/route',
+    async (route) => {
+      asked.push(new URL(route.request().url()).searchParams.get('profile'));
+      await route.fulfill({ json: { plan: next() } });
+    },
+  );
+  return asked;
+}

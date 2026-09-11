@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '../i18n-render.tsx';
+import { render, screen, waitFor, within } from '../i18n-render.tsx';
 import userEvent from '@testing-library/user-event';
 import type { RoutePlan } from '../../shared/routing.ts';
+import { ROUTE_PROFILE_IDS } from '../../shared/types.ts';
 
 // The Leaflet map is a lazy enhancement that needs a real DOM — stub it so the
 // jsdom test exercises the accessible (map-free) output.
@@ -307,5 +308,198 @@ describe('RoutePlanner', () => {
     render(<RoutePlanner />);
     await userEvent.click(screen.getAllByRole('button', { name: /use my location/i })[0]);
     expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't use your location/i);
+  });
+});
+
+/**
+ * The paragraph whose whole text matches, including text inside <strong>.
+ * `getByText` alone matches an element's own text nodes, so a sentence with a
+ * bolded preference name in the middle would never match it.
+ */
+function paragraph(re: RegExp): HTMLElement | null {
+  return screen.queryByText((_, el) => el?.tagName === 'P' && re.test(el.textContent ?? ''));
+}
+
+async function planIt() {
+  await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+  await waitFor(() => expect(screen.getByText(/turn-by-turn directions/i)).toBeInTheDocument());
+}
+
+describe('RoutePlanner rider preference (issue #178)', () => {
+  it('offers every profile as a radio in one labelled group, Standard selected', () => {
+    fetchRoute.mockReset();
+    render(<RoutePlanner />);
+    const group = screen.getByRole('group', { name: 'Route preference' });
+    const radios = within(group).getAllByRole('radio') as HTMLInputElement[];
+    expect(radios.map((r) => r.value)).toEqual([...ROUTE_PROFILE_IDS]);
+    expect(within(group).getByRole('radio', { name: 'Standard' })).toBeChecked();
+    expect(within(group).getByRole('radio', { name: 'Family / cargo bike' })).not.toBeChecked();
+    expect(within(group).getByRole('radio', { name: 'E-bike' })).not.toBeChecked();
+  });
+
+  it('never calls a preference safe; the one use of the word says none is', () => {
+    fetchRoute.mockReset();
+    render(<RoutePlanner />);
+    const text = screen.getByRole('group', { name: 'Route preference' }).textContent ?? '';
+    expect(text).not.toMatch(/safest/i);
+    expect(text.match(/\bsafe\b/gi)).toHaveLength(1);
+    expect(text).toMatch(/none of them makes a route safe/i);
+  });
+
+  it('describes each preference, to assistive technology, by the weights it applies', () => {
+    fetchRoute.mockReset();
+    render(<RoutePlanner />);
+    const description = (name: string) => {
+      const id = screen.getByRole('radio', { name }).getAttribute('aria-describedby');
+      return document.getElementById(id ?? '')?.textContent ?? '';
+    };
+    expect(description('Standard')).toMatch(/counts as 800 m of extra riding, and less/);
+    expect(description('Standard')).toMatch(/every hazard type counts the same/i);
+    expect(description('Family / cargo bike')).toMatch(
+      /counts as 2\.4 km of extra riding \(Standard: 800 m\)/,
+    );
+    expect(description('Family / cargo bike')).toMatch(/Dangerous intersection counts 2\.5× as much/);
+    expect(description('Family / cargo bike')).toMatch(/never picks a route past a high-severity report/i);
+    expect(description('E-bike')).toMatch(/counts as 1\.2 km of extra riding \(Standard: 800 m\)/);
+    expect(description('E-bike')).toMatch(/Pothole and Surface damage count 1\.5× as much/);
+    expect(description('E-bike')).toMatch(/Glass \/ debris counts 1\.3× as much/);
+    expect(description('E-bike')).not.toMatch(/never picks/i);
+  });
+
+  it('sends the chosen preference with the plan', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(plan({ profile: 'family-safest' }));
+    render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('radio', { name: 'Family / cargo bike' }));
+    await planIt();
+    expect(fetchRoute).toHaveBeenCalledOnce();
+    expect(fetchRoute.mock.calls[0][2]).toBe('family-safest');
+  });
+
+  it('says the preference chose the route only when more than one route was weighed', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(
+      plan({ profile: 'family-safest', profileApplied: true, alternativesConsidered: 3 }),
+    );
+    render(<RoutePlanner profile="family-safest" />);
+    await planIt();
+    expect(paragraph(/^Chosen with the Family \/ cargo bike preference\.$/)).toBeInTheDocument();
+    const weights = screen.getByRole('list', { name: /how family \/ cargo bike weighs reported hazards/i });
+    expect(within(weights).getAllByRole('listitem')).toHaveLength(4);
+    expect(paragraph(/^For the route the Family \/ cargo bike preference chose\.$/)).toBeInTheDocument();
+    expect(paragraph(/nothing to choose between/)).toBeNull();
+    expect(paragraph(/did not choose this/)).toBeNull();
+  });
+
+  it('says the preference had nothing to choose between when the road network offered one route', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(
+      plan({ profile: 'e-bike', profileApplied: false, alternativesConsidered: 1 }),
+    );
+    render(<RoutePlanner profile="e-bike" />);
+    await planIt();
+    expect(
+      paragraph(/^Planned with the E-bike preference, but the road network offered only this one route/),
+    ).toBeInTheDocument();
+    expect(paragraph(/^Chosen with/)).toBeNull();
+    expect(paragraph(/^For the only route the road network offered/)).toBeInTheDocument();
+    // The weights still priced the hazards on the one route, so they are shown.
+    expect(screen.getByRole('list', { name: /how e-bike weighs reported hazards/i })).toBeInTheDocument();
+  });
+
+  it('says no preference chose a direct line', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(
+      plan({
+        source: 'fallback',
+        profile: 'e-bike',
+        profileApplied: null,
+        hazardFreeCandidate: null,
+        alternativesConsidered: 1,
+      }),
+    );
+    render(<RoutePlanner profile="e-bike" />);
+    await planIt();
+    expect(
+      paragraph(/^The E-bike preference did not choose this: it is a direct line, not a route search\.$/),
+    ).toBeInTheDocument();
+    expect(paragraph(/^Chosen with/)).toBeNull();
+    expect(paragraph(/^For a direct line; no route preference chose it\.$/)).toBeInTheDocument();
+  });
+
+  it('names no preference for a plan that records none, such as one cached before profiles existed', async () => {
+    fetchRoute.mockReset();
+    const legacy: Partial<RoutePlan> = plan();
+    delete legacy.profile;
+    delete legacy.profileApplied;
+    fetchRoute.mockResolvedValue(legacy as RoutePlan);
+    render(<RoutePlanner />);
+    await planIt();
+    expect(paragraph(/does not record what its route preference did/)).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: /weighs reported hazards/i })).toBeNull();
+    expect(paragraph(/^Chosen with/)).toBeNull();
+    expect(paragraph(/^For the route the/)).toBeNull();
+    expect(paragraph(/was planned with the/)).toBeNull();
+
+    // Choosing a preference now must not produce "planned with the Standard
+    // preference": the plan never said so, and a stale notice would invent it.
+    // Without this step the test cannot see a plannedProfileOf that fills in a
+    // default, because the outcome's own fallback branch absorbs it.
+    await userEvent.click(screen.getByRole('radio', { name: 'E-bike' }));
+    expect(paragraph(/was planned with the/)).toBeNull();
+  });
+
+  it('names no preference for a plan whose preference this build does not know', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(
+      plan({ profile: 'cargo-trike' as RoutePlan['profile'], profileApplied: true }),
+    );
+    render(<RoutePlanner />);
+    await planIt();
+    expect(paragraph(/does not record what its route preference did/)).toBeInTheDocument();
+    expect(paragraph(/^Chosen with/)).toBeNull();
+  });
+
+  it('does not read "not applied" into a real search that failed to say what its preference did', async () => {
+    // `profileApplied: null` is only ever the fallback. On a real search it is
+    // a server this build does not understand, and the panel must not guess.
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(plan({ source: 'osrm', profile: 'e-bike', profileApplied: null }));
+    render(<RoutePlanner profile="e-bike" />);
+    await planIt();
+    expect(paragraph(/does not record what its route preference did/)).toBeInTheDocument();
+    expect(paragraph(/direct line/)).toBeNull();
+  });
+
+  it('says a plan is stale when the preference changes after planning, and still describes the plan it shows', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue(plan({ profile: 'default', profileApplied: true }));
+    render(<RoutePlanner />);
+    await planIt();
+    expect(paragraph(/was planned with the/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'E-bike' }));
+    expect(
+      paragraph(
+        /^The route below was planned with the Standard preference\. You have chosen E-bike since: plan again to use it\.$/,
+      ),
+    ).toBeInTheDocument();
+    expect(paragraph(/^Chosen with the Standard preference\.$/)).toBeInTheDocument();
+
+    fetchRoute.mockResolvedValue(plan({ profile: 'e-bike', profileApplied: true }));
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() => expect(paragraph(/^Chosen with the E-bike preference\.$/)).toBeInTheDocument());
+    expect(paragraph(/was planned with the/)).toBeNull();
+  });
+
+  it('is controlled by App when App passes the preference', async () => {
+    fetchRoute.mockReset();
+    const onProfileChange = vi.fn();
+    render(<RoutePlanner profile="e-bike" onProfileChange={onProfileChange} />);
+    expect(screen.getByRole('radio', { name: 'E-bike' })).toBeChecked();
+    await userEvent.click(screen.getByRole('radio', { name: 'Family / cargo bike' }));
+    expect(onProfileChange).toHaveBeenCalledWith('family-safest');
+    // Controlled: the permalink decides what is selected, not the click.
+    expect(screen.getByRole('radio', { name: 'E-bike' })).toBeChecked();
   });
 });

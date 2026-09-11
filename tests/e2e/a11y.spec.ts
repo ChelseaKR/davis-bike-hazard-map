@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { openTab } from './helpers.ts';
+import { answerRoutesWith, openTab, stubNearbyHazard, stubRoutePlan } from './helpers.ts';
 
 /**
  * Full-page accessibility pass in a real browser (covers colour-contrast and
@@ -69,6 +69,38 @@ test.describe('accessibility', () => {
       'aria-expanded',
       'true',
     );
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  /**
+   * The route planner with a plan on screen: the preference picker, the result's
+   * preference sentence and weights, the hazard list and the steps caption.
+   *
+   * None of that exists until a route is planned, and the harness's own router
+   * only ever answers with a straight line, so `/api/route` is answered in the
+   * browser. The content is asserted before the scan, because a scan of a result
+   * that never rendered would pass.
+   */
+  test('route planner with a planned route has no WCAG A/AA violations', async ({ page }) => {
+    await answerRoutesWith(page, () =>
+      stubRoutePlan({
+        profile: 'family-safest',
+        profileApplied: true,
+        hazardFreeCandidate: false,
+        nearby: [stubNearbyHazard()],
+      }),
+    );
+    await page.goto('/#/route?profile=family-safest');
+    await page.getByRole('button', { name: /plan a safer route/i }).click();
+
+    await expect(page.locator('.route-profile-result > p.hint')).toHaveText(
+      'Chosen with the Family / cargo bike preference.',
+    );
+    await expect(page.getByRole('heading', { name: 'Hazards still on this route' })).toBeVisible();
+    await expect(page.locator('#route-steps-profile')).toBeVisible();
+    await expect(page.getByRole('radio')).toHaveCount(3);
 
     const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(results.violations).toEqual([]);

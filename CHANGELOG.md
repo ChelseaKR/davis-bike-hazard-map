@@ -9,6 +9,41 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **The route planner has a rider-preference picker (issue #178), so the
+  profiles #199 made requestable can finally be chosen in the app.** Three radio
+  options -- *Standard*, *Family / cargo bike*, *E-bike* -- each described by the
+  weights it applies. Those sentences are composed from `ROUTE_PROFILES` and
+  `DEFAULT_SCORING` (`routeProfileWeightLines`, `src/i18n/labels.ts`) rather than
+  written per profile, so a weight change changes what a rider reads in the same
+  commit. `tests/unit/routeProfileCopy.test.ts` holds the copy to the table in
+  both directions, and fails the day a profile gains a scoring override the copy
+  does not describe. No label or rule calls a preference safe; the one use of the
+  word in the picker is the sentence saying none of them makes a route safe.
+
+  **The result names the preference the server planned with, not the one the
+  picker shows now, and says what it did in each state `profileApplied` can
+  report:** *chosen with* it when more than one route was weighed; *had nothing to
+  choose between* when the road network offered one route; *did not choose this*
+  on the straight-line fallback. A plan that records none -- the service worker
+  can serve one cached before profiles existed, and it carries no `profile` field
+  -- says so, rather than naming a preference or crashing. Changing the
+  preference after planning says which one the route on screen was planned with.
+
+  **The preference is part of the permalink:** `#/route?profile=e-bike`, on the
+  route tab only, and omitted for `default`, so every earlier route link and
+  every cached plan URL is unchanged. An unknown value, `constructor` included,
+  is dropped the way an invalid filter is.
+
+  **The e2e harness now runs with `ROUTING_URL` empty**, so the planner answers
+  with its straight-line fallback at once and with no network. The default is the
+  public OSRM demo server; no e2e test on `main` had planned a route, and the
+  first one would have made a third party's uptime part of a required check.
+  States the fallback cannot produce are driven by answering `/api/route` in the
+  browser.
+
+  Spanish for the new strings is owed under REVIEW-GATE R3, like every other
+  string: `es` stays structure-only, with no machine translation.
+
 - **The nightly WebKit e2e job now passes, and can now be seen when it does
   not.** `e2e-webkit-nightly` reported `success` on **55 of 55 runs** between
   its first run on 2026-07-18 and 2026-09-10, while the job inside it —

@@ -13,7 +13,7 @@ import {
   useViewState,
   type ViewState,
 } from '../../src/hooks/useViewState.ts';
-import type { Hazard } from '../../shared/types.ts';
+import { ROUTE_PROFILE_IDS, type Hazard } from '../../shared/types.ts';
 
 const hazard = { id: 'h1' } as Hazard;
 
@@ -209,5 +209,90 @@ describe('useViewState hash integration', () => {
       window.dispatchEvent(new Event('popstate'));
     });
     expect(result.current[0].tab).toBe('map'); // unchanged after unmount
+  });
+});
+
+describe('route preference in the permalink (issue #178)', () => {
+  it('serializes a non-default preference on the route tab, and only there', () => {
+    expect(serializeViewState(state({ tab: 'route', routeProfile: 'e-bike' }))).toBe(
+      '#/route?profile=e-bike',
+    );
+    expect(serializeViewState(state({ tab: 'map', routeProfile: 'e-bike' }))).toBe('#/map');
+    expect(serializeViewState(state({ tab: 'list', routeProfile: 'family-safest' }))).toBe(
+      '#/list',
+    );
+  });
+
+  it('omits the default, so every route link made before profiles existed is unchanged', () => {
+    expect(serializeViewState(state({ tab: 'route' }))).toBe('#/route');
+    expect(serializeViewState(state({ tab: 'route', routeProfile: 'default' }))).toBe('#/route');
+  });
+
+  it('appends the preference after any filters', () => {
+    const s = state({ tab: 'route', routeProfile: 'family-safest', filters: { minSeverity: 'high' } });
+    expect(serializeViewState(s)).toBe('#/route?severity=high&profile=family-safest');
+  });
+
+  it('parses a known preference on the route tab', () => {
+    expect(parseHash('#/route?profile=family-safest')).toEqual({
+      tab: 'route',
+      routeProfile: 'family-safest',
+    });
+  });
+
+  it('drops an unknown preference, including names every plain object inherits', () => {
+    for (const value of ['family-safes', 'constructor', 'toString', '__proto__', '']) {
+      expect(parseHash(`#/route?profile=${value}`), value).toEqual({ tab: 'route' });
+    }
+  });
+
+  it('ignores a preference on any tab but the route tab', () => {
+    expect(parseHash('#/map?profile=e-bike')).toEqual({ tab: 'map' });
+    expect(parseHash('#/hazard/h1?profile=e-bike')).toEqual({ tab: 'map', hazardId: 'h1' });
+  });
+
+  it('round-trips every profile', () => {
+    for (const routeProfile of ROUTE_PROFILE_IDS) {
+      const parsed = parseHash(serializeViewState(state({ tab: 'route', routeProfile })));
+      expect(parsed.routeProfile ?? 'default', routeProfile).toBe(routeProfile);
+    }
+  });
+
+  it('setRouteProfile sets it, and returns the same state when nothing changed', () => {
+    const next = viewReducer(initialViewState, { type: 'setRouteProfile', profile: 'e-bike' });
+    expect(next.routeProfile).toBe('e-bike');
+    expect(viewReducer(next, { type: 'setRouteProfile', profile: 'e-bike' })).toBe(next);
+  });
+
+  it('hydrating the route tab takes the URL as the source of truth', () => {
+    const withBike = viewReducer(initialViewState, {
+      type: 'hydrateFromHash',
+      hash: '#/route?profile=e-bike',
+    });
+    expect(withBike.routeProfile).toBe('e-bike');
+    // A route link without the parameter means the default, not "whatever was set before".
+    expect(viewReducer(withBike, { type: 'hydrateFromHash', hash: '#/route' }).routeProfile).toBe(
+      'default',
+    );
+  });
+
+  it('hydrating another tab keeps the preference for when the rider comes back', () => {
+    const onMap = viewReducer(state({ tab: 'route', routeProfile: 'e-bike' }), {
+      type: 'hydrateFromHash',
+      hash: '#/map',
+    });
+    expect(onMap.tab).toBe('map');
+    expect(onMap.routeProfile).toBe('e-bike');
+  });
+
+  it('boots cold from a route link carrying a preference', () => {
+    window.history.replaceState(null, '', '#/route?profile=family-safest');
+    try {
+      const { result } = renderHook(() => useViewState());
+      expect(result.current[0].tab).toBe('route');
+      expect(result.current[0].routeProfile).toBe('family-safest');
+    } finally {
+      window.history.replaceState(null, '', '#');
+    }
   });
 });
