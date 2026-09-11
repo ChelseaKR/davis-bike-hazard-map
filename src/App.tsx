@@ -10,6 +10,7 @@ import type { Hazard } from '../shared/types.ts';
 import { useHazards } from './hooks/useHazards.ts';
 import { useOnline } from './hooks/useOnline.ts';
 import { useRefreshOnReconnect } from './hooks/useRefreshOnReconnect.ts';
+import { useRecurrence } from './hooks/useRecurrence.ts';
 import { useViewState, type Tab } from './hooks/useViewState.ts';
 import { startSync } from './lib/sync.ts';
 import { confirmHazard } from './lib/api.ts';
@@ -20,6 +21,7 @@ import { ReportForm } from './components/ReportForm.tsx';
 import { MyReports } from './components/MyReports.tsx';
 import { ModerationPanel } from './components/ModerationPanel.tsx';
 import { CoverageView } from './components/CoverageView.tsx';
+import { TrendsView } from './components/TrendsView.tsx';
 import { RoutePlanner } from './components/RoutePlanner.tsx';
 import { StatusBanner } from './components/StatusBanner.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
@@ -33,14 +35,24 @@ const MapView = lazy(() =>
 );
 
 /** Read-only views available in the public dashboard. */
-const PUBLIC_TABS: Tab[] = ['map', 'list', 'coverage', 'route'];
+const PUBLIC_TABS: Tab[] = ['map', 'list', 'coverage', 'trends', 'route'];
 
-const ALL_TABS: Tab[] = ['map', 'list', 'coverage', 'route', 'report', 'mine', 'moderate'];
+const ALL_TABS: Tab[] = [
+  'map',
+  'list',
+  'coverage',
+  'trends',
+  'route',
+  'report',
+  'mine',
+  'moderate',
+];
 
 const tabMessages = defineMessages({
   map: { id: 'nav.tab.map', defaultMessage: 'Map' },
   list: { id: 'nav.tab.list', defaultMessage: 'List' },
   coverage: { id: 'nav.tab.coverage', defaultMessage: 'Coverage' },
+  trends: { id: 'nav.tab.trends', defaultMessage: 'Trends' },
   route: { id: 'nav.tab.route', defaultMessage: 'Route' },
   report: { id: 'nav.tab.report', defaultMessage: 'Report' },
   mine: { id: 'nav.tab.mine', defaultMessage: 'My reports' },
@@ -59,6 +71,9 @@ export default function App() {
   const online = useOnline();
 
   const { hazards, all, loading, error, lastUpdatedAt, refresh } = useHazards(filters);
+  // Recurrence labels (issue #180), re-read whenever the feed is: the map popup
+  // and the list card both render from this one state.
+  const recurrence = useRecurrence(lastUpdatedAt);
 
   // Public-dashboard-only (issue #111): scripts/seed.ts data is now marked
   // `source: 'seed'`, but a visitor to the read-only public map has no other
@@ -208,6 +223,7 @@ export default function App() {
                 // to keep asserting "empty areas mean no reports".
                 feedError={error}
                 onRetry={() => void refresh()}
+                recurrence={recurrence}
               />
             </Suspense>
           )}
@@ -221,11 +237,14 @@ export default function App() {
                 onConfirm={onConfirm}
                 onFocusOnMap={showOnMap}
                 onRetry={() => void refresh()}
+                recurrence={recurrence}
               />
             </div>
           )}
 
           {tab === 'coverage' && <CoverageView hazards={all} />}
+
+          {tab === 'trends' && <TrendsView />}
 
           {tab === 'route' && (
             <RoutePlanner

@@ -34,12 +34,21 @@ import {
   type Severity,
 } from '../../shared/types.ts';
 
-export type Tab = 'map' | 'list' | 'coverage' | 'route' | 'report' | 'mine' | 'moderate';
+export type Tab =
+  | 'map'
+  | 'list'
+  | 'coverage'
+  | 'trends'
+  | 'route'
+  | 'report'
+  | 'mine'
+  | 'moderate';
 
 const TAB_VALUES: readonly Tab[] = [
   'map',
   'list',
   'coverage',
+  'trends',
   'route',
   'report',
   'mine',

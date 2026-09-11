@@ -21,6 +21,7 @@ import {
   type RouteProfileId,
 } from '../../shared/types.ts';
 import { DEFAULT_SCORING, ROUTE_PROFILES } from '../../shared/routing.ts';
+import type { RecurrenceBadge } from '../../shared/recurrence.ts';
 import { formatDistance } from '../lib/format.ts';
 import type { QueueState } from '../lib/db.ts';
 import type { GeolocationFailure } from '../lib/geolocation.ts';
@@ -136,6 +137,25 @@ const routeProfileWeightMessages = defineMessages({
     id: 'route.profile.weight.refuseHighSeverity',
     defaultMessage:
       'Never picks a route past a high-severity report while the road network offered one without, however much longer that one is.',
+  },
+});
+
+/**
+ * Recurrence labels (issue #180). "Reported here", never "happened here": the
+ * count is of separate episodes riders REPORTED at this ~70 m cell, and a street
+ * nobody reports never gets one. One sentence, rendered by both the list card and
+ * the map popup, so the two cannot disagree.
+ */
+const recurrenceMessages = defineMessages({
+  note: {
+    id: 'hazard.recurrence.note',
+    defaultMessage:
+      'Reported here in {episodes, plural, one {# separate episode} other {# separate episodes}} since {since}.',
+  },
+  unavailable: {
+    id: 'hazard.recurrence.unavailable',
+    defaultMessage:
+      'Labels for recurring reports could not be loaded, so none are shown. A hazard without one may still have been reported here before.',
   },
 });
 
@@ -380,6 +400,35 @@ export function routeProfileWeightLines(intl: IntlShape, id: RouteProfileId): st
   return lines;
 }
 
+/**
+ * A `YYYY-MM` month key as, in English, "March 2026". The key is already a
+ * calendar month in the town's time zone -- the server bucketed it there -- so it
+ * is formatted as a mid-month UTC date, which no viewer's own offset can move
+ * into a neighbouring month.
+ */
+export function monthLabel(intl: IntlShape, key: string): string {
+  const [year, month] = key.split('-').map(Number);
+  return intl.formatDate(Date.UTC(year, month - 1, 15), {
+    year: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  });
+}
+
+export function recurrenceNote(
+  intl: IntlShape,
+  badge: Pick<RecurrenceBadge, 'episodes' | 'since'>,
+): string {
+  return intl.formatMessage(recurrenceMessages.note, {
+    episodes: badge.episodes,
+    since: monthLabel(intl, badge.since),
+  });
+}
+
+export function recurrenceUnavailableNote(intl: IntlShape): string {
+  return intl.formatMessage(recurrenceMessages.unavailable);
+}
+
 export function queueStateLabel(intl: IntlShape, state: QueueState): string {
   return intl.formatMessage(queueStateMessages[state]);
 }
@@ -409,6 +458,9 @@ export function useLabels() {
     queueState: (state: QueueState) => queueStateLabel(intl, state),
     queueError: (code?: string) => queueErrorLabel(intl, code),
     routeProfile: (id: RouteProfileId) => routeProfileLabel(intl, id),
+    month: (key: string) => monthLabel(intl, key),
+    recurrence: (badge: Pick<RecurrenceBadge, 'episodes' | 'since'>) => recurrenceNote(intl, badge),
+    recurrenceUnavailable: () => recurrenceUnavailableNote(intl),
     routeProfileWeights: (id: RouteProfileId) => routeProfileWeightLines(intl, id),
   };
 }
