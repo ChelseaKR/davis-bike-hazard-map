@@ -137,3 +137,45 @@ export async function answerRoutesWith(
   );
   return asked;
 }
+
+/**
+ * Report a hazard at `location`, approve it, and return its id.
+ *
+ * The trends table and the coverage tally only exist once something has been
+ * reported, so a spec that scans either has to put a report in the store first --
+ * this suite shares one in-memory store, and a spec that ran before any other had
+ * an empty one (the first run of the trends accessibility scan found no table).
+ */
+export async function seedApprovedHazard(
+  request: APIRequestContext,
+  location: { lat: number; lng: number },
+  description: string,
+  category = 'surface_damage',
+): Promise<string> {
+  const created = await request.post('/api/reports', {
+    headers: { 'content-type': 'application/json' },
+    data: {
+      category,
+      severity: 'moderate',
+      description,
+      location,
+      photo: null,
+      clientId: crypto.randomUUID(),
+      capturedAt: Date.now(),
+    },
+  });
+  expect(created.status()).toBe(201);
+  const { hazard } = (await created.json()) as { hazard: { id: string } };
+
+  const login = await request.post('/api/auth/login', {
+    headers: { 'content-type': 'application/json' },
+    data: { username: MOD_USER, password: MOD_PASS },
+  });
+  const { token } = (await login.json()) as { token: string };
+  const decided = await request.post(`/api/moderation/${hazard.id}`, {
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    data: { decision: 'approve' },
+  });
+  expect(decided.status()).toBe(200);
+  return hazard.id;
+}

@@ -313,6 +313,16 @@ parity gate).
   equity review before publishing any ranking of chronic sites. **Excellence
   bar:** every chronic label clicks through to its raw supporting reports;
   the methodology note ships with it (extends R10).
+- **Built 2026-09-11 (issue #180), publication flagged off.** The detection is
+  derived on read (`shared/recurrence.ts`), not an offline job over stored
+  episodes: a stored index would keep a trace of a deleted report. **The
+  real-data gate stands** — with no year of reports nothing is labelled, and both
+  publication surfaces are off (`RECURRENCE_BADGES_PUBLISH`, `CHRONIC_PUBLISH`)
+  pending the location-privacy review (#160) and the equity review named above.
+  The excellence bar is **partly met and deliberately so**: a label carries the
+  episode count and the month each counted episode opened, and does *not* click
+  through to its raw supporting reports — most of those have expired off the map,
+  and republishing them is the disclosure the review has to decide on first.
 
 ### EXP-14 — Near-miss data federation (BikeMaps.org and kin)
 **Pitch:** interoperate with the established cycling-incident crowdsourcing ecosystem — import context, export (consented) contributions.

@@ -838,6 +838,9 @@ textarea {
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid var(--line);
   text-align: end;
+  /* A figure must never split across two lines at 320px. The table scrolls
+     inside .trends-scroll instead; the page itself never scrolls sideways. */
+  white-space: nowrap;
 }
 .trends-table th[scope='row'],
 .trends-table thead th:first-child {

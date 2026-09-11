@@ -39,6 +39,25 @@ failure modes:
   When the endpoint is unreachable the view falls back to the feed, says so,
   and withholds every desert/over/under flag rather than guessing it.
 
+- **Reports by month (issue #180).** `GET /api/trends` counts the SAME set this
+  view counts — reports received, minus rejected — split by the month each was
+  received in the town's time zone, and minus seeded demo data, which is counted
+  apart so fiction never enters a time series. A test holds the two surfaces to
+  each other area by area. A month in which nothing was received anywhere is
+  omitted and counted, never shown as zero: a quiet month and a month the service
+  was not running in are indistinguishable from this data, and the paused beta
+  (#161) makes that live rather than hypothetical. Every trend carries this
+  document's own sentence — *A crowdsourced map measures reports received, not
+  ground-truth danger.* — in its payload and in the view, and a test fails if the
+  two drift apart.
+- **Recurring sites are computed but NOT published.** A ranking of places by how
+  often they were reported is the allocational bias this document commits to
+  avoiding, pointed at a map: it ranks the streets whose riders report most. It is
+  behind `CHRONIC_PUBLISH`, off, pending a year of real data and this reviewer's
+  sign-off. The per-hazard labels are behind a second flag, off, pending the
+  location-fuzzing review (#160), because they disclose the cell-level history of
+  reports that have left the map.
+
 ## Segments to monitor post-launch
 
 - Reports per Davis neighbourhood / census block over time.
@@ -50,5 +69,8 @@ failure modes:
 - [x] No inference of reporter attributes — **review-gated** (design: no accounts/PII).
 - [x] Coverage-by-area view — **auto-gated** (`areas` + `CoverageView` tests); equity reviewer sign-off pending pre-launch.
 - [x] Coverage counts the set it claims to count (reports received, not the live feed) — **auto-gated** (`tests/unit/coverage.test.ts`, `tests/unit/CoverageView.test.tsx`).
+- [x] Trends count that same set, month by month, and omit months rather than zero them — **auto-gated** (`tests/unit/trends.test.ts`, `tests/unit/recurrenceApi.test.ts`).
+- [ ] Publishing a ranking of recurring sites — **review-gated** (equity reviewer; `CHRONIC_PUBLISH` is off).
+- [ ] Publishing per-hazard recurrence labels — **review-gated** (privacy reviewer, #160; `RECURRENCE_BADGES_PUBLISH` is off).
 
 **Last verified: 2026-08-27 · Recheck cadence: per release / quarterly post-launch.**
