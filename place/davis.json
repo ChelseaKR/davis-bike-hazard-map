@@ -10,6 +10,7 @@
     "maxLng": -121.68
   },
   "center": { "lat": 38.5449, "lng": -121.7405 },
+  "timeZone": "America/Los_Angeles",
   "outOfBoundsMessage": "Location must be within Davis, CA.",
   "elsewhereAreaName": "Elsewhere in Davis",
   "areas": [

@@ -84,6 +84,24 @@ const areaSchema = z
 const landmarkSchema = z.strictObject({ name: z.string().min(1), point: pointSchema });
 
 /**
+ * Whether a string is a CANONICAL IANA time zone name this runtime knows -- the
+ * zone the trend view buckets months in (issue #180).
+ *
+ * Canonical, not merely accepted: ICU resolves legacy aliases such as `PST`, and
+ * which aliases a runtime accepts varies by engine. The pack is validated in the
+ * browser as well as on the server, so an alias one runtime resolves and another
+ * refuses would load on the server and stop the client at import. Requiring the
+ * name to round-trip through `resolvedOptions()` unchanged rules that out.
+ */
+function isCanonicalTimeZone(zone: string): boolean {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone }).resolvedOptions().timeZone === zone;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The pack schema. Structural checks only; the cross-field checks that need the
  * whole pack (names unique, centre inside bounds, landmarks inside bounds) run in
  * {@link parsePlacePack}, where they can name the offending entry.
@@ -105,6 +123,18 @@ export const placePackSchema = z
     deploymentName: z.string().min(1),
     bounds: boundsSchema,
     center: pointSchema,
+    // The town's IANA time zone. Month-by-month trends (issue #180) are bucketed in
+    // it: a report filed at 6 p.m. on 31 March in Davis is a March report, and is
+    // already 1 April in UTC. Required, like every other field, because a default of
+    // UTC would move every evening report at a month's end into the next month and
+    // nothing in the table would say so.
+    timeZone: z
+      .string()
+      .min(1)
+      .refine(
+        isCanonicalTimeZone,
+        'timeZone must be a canonical IANA zone name this runtime knows, e.g. America/Los_Angeles',
+      ),
     outOfBoundsMessage: z.string().min(1),
     elsewhereAreaName: z.string().min(1),
     areas: z.array(areaSchema).min(1),

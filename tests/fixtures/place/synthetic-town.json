@@ -10,6 +10,7 @@
     "maxLng": 20.4
   },
   "center": { "lat": 10.2, "lng": 20.2 },
+  "timeZone": "Africa/Ndjamena",
   "outOfBoundsMessage": "Location must be within Synthetic Town.",
   "elsewhereAreaName": "Elsewhere in Synthetic Town",
   "areas": [
