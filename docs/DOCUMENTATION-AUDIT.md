@@ -71,8 +71,8 @@ Up to 5 representative files per category; the complete list follows below.
 ## Package and localization metadata
 
 - Node package `davis-bike-hazard-map` at version `0.1.0` (scripts: `a11y`, `build`, `dev`, `dev:client`, `dev:server`, `docs:audit`, `docs:audit:check`, `e2e`, `e2e:i18n`, `i18n:bcp47`, `i18n:cldr`, `i18n:extract`, `i18n:extract:check`, `i18n:gates`, `i18n:no-hardcoded`, `i18n:parity`, `i18n:pseudo:gen`, `i18n:utf8`, `lint`, `lint:css`, `lint:fix`, `place:validate`, `prepare`, `preview`, `ruleset:check`, `seed`, `start`, `test`, `test:coverage`, `test:unit`, `test:watch`, `typecheck`, `verify`).
-- Locale catalog `src/i18n/locales/en.json`: 318 keys, 0 with an empty message.
-- Locale catalog `src/i18n/locales/es.json`: 318 keys, 318 with an empty message.
+- Locale catalog `src/i18n/locales/en.json`: 319 keys, 0 with an empty message.
+- Locale catalog `src/i18n/locales/es.json`: 319 keys, 319 with an empty message.
 
 ## Full hand-authored doc inventory
 
