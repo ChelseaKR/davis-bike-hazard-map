@@ -63,9 +63,17 @@ export default defineConfig({
     // fetched over https:// against a plaintext port and the app never boots.
     // Nothing under test loads an absolute http:// URL, so the directive is a
     // no-op here in every browser. Pinned by tests/unit/securityHeaders.test.ts.
+    //
+    // ROUTING_URL= (empty) is load-bearing as well: an empty routing URL makes
+    // the planner answer with its straight-line fallback, immediately and with
+    // no network. The default is the public OSRM demo server, and a third party's
+    // uptime must never decide whether this suite is green -- the rule the map
+    // picker scan already applies to tiles. A spec that needs a real multi-route
+    // answer stubs `/api/route` in the browser instead
+    // (tests/e2e/route-profiles.spec.ts).
     command:
       'cross-env PWA_DISABLE=true npm run build && cross-env NODE_ENV=production ' +
-      'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret CSP_UPGRADE_INSECURE_REQUESTS=false ' +
+      'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret CSP_UPGRADE_INSECURE_REQUESTS=false ROUTING_URL= ' +
       'MODERATOR_USERNAME=e2e MODERATOR_PASSWORD=e2e-password ' +
       `PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,

@@ -14,17 +14,23 @@
  *
  *   #/map · #/list · #/coverage · …   the active tab
  *   ?cat=a,b&severity=high&days=30    active filters, appended to any path
+ *   #/route?profile=e-bike            the planner's rider preference (issue
+ *                                     #178); route tab only, and omitted for
+ *                                     `default`
  *   #/hazard/<id>                     a hazard deep link; held as
  *                                     `pendingHazardId` until the feed
  *                                     resolves it to focus-on-map (App.tsx)
  */
 import { useEffect, useReducer, useRef, type Dispatch } from 'react';
 import {
+  DEFAULT_ROUTE_PROFILE_ID,
   HAZARD_CATEGORIES,
+  ROUTE_PROFILE_IDS,
   SEVERITIES,
   type Hazard,
   type HazardCategory,
   type HazardFilters,
+  type RouteProfileId,
   type Severity,
 } from '../../shared/types.ts';
 
@@ -49,11 +55,20 @@ export interface ViewState {
   pendingHazardId: string | null;
   /** Bumped to nudge queue-derived UI (StatusBanner) to re-read. */
   statusKey: number;
+  /**
+   * The route planner's rider preference (issue #178). Held here, not inside
+   * RoutePlanner, so it is part of the permalink: `#/route?profile=e-bike` opens
+   * the planner with that preference selected. It survives a tab switch in
+   * memory but is serialized on the route tab only, because a map or list URL
+   * carrying a routing preference would describe a view that has none.
+   */
+  routeProfile: RouteProfileId;
 }
 
 export type ViewAction =
   | { type: 'setTab'; tab: Tab }
   | { type: 'setFilters'; filters: HazardFilters }
+  | { type: 'setRouteProfile'; profile: RouteProfileId }
   | { type: 'focusOnMap'; hazard: Hazard }
   | { type: 'hydrateFromHash'; hash: string }
   | { type: 'clearPendingHazard' }
@@ -65,6 +80,7 @@ export const initialViewState: ViewState = {
   focusHazard: null,
   pendingHazardId: null,
   statusKey: 0,
+  routeProfile: DEFAULT_ROUTE_PROFILE_ID,
 };
 
 /** The view-state parts a location hash can express. */
@@ -72,19 +88,35 @@ export interface ParsedViewHash {
   tab?: Tab;
   filters?: HazardFilters;
   hazardId?: string;
+  /** Only ever set for the route tab; see {@link ViewState.routeProfile}. */
+  routeProfile?: RouteProfileId;
 }
 
 function isTab(value: string): value is Tab {
   return (TAB_VALUES as readonly string[]).includes(value);
 }
 
-function filtersToQuery(filters: HazardFilters): string {
+function filtersToParams(filters: HazardFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.categories?.length) params.set('cat', filters.categories.join(','));
   if (filters.minSeverity) params.set('severity', filters.minSeverity);
   if (filters.withinDays !== undefined) params.set('days', String(filters.withinDays));
-  const query = params.toString();
-  return query ? `?${query}` : '';
+  return params;
+}
+
+/**
+ * The `profile` parameter, if it names a profile this build has. An array
+ * membership test rather than an object lookup, so `constructor` and the other
+ * inherited names are refused here exactly as `resolveRouteProfile` refuses them
+ * (#199). An unknown value is dropped, as an invalid filter is: the picker then
+ * shows the preference actually in force, and the result names the one the
+ * server says it planned with, so nothing claims the link's value was used.
+ */
+function queryToRouteProfile(query: string): RouteProfileId | undefined {
+  const value = new URLSearchParams(query).get('profile');
+  return value !== null && (ROUTE_PROFILE_IDS as readonly string[]).includes(value)
+    ? (value as RouteProfileId)
+    : undefined;
 }
 
 function queryToFilters(query: string): HazardFilters | undefined {
@@ -122,7 +154,15 @@ export function serializeViewState(state: ViewState): string {
   const focusId = state.focusHazard?.id ?? state.pendingHazardId;
   const path =
     state.tab === 'map' && focusId ? `hazard/${encodeURIComponent(focusId)}` : state.tab;
-  return `#/${path}${filtersToQuery(state.filters)}`;
+  const params = filtersToParams(state.filters);
+  // Route tab only, and never the default: a route link made before profiles
+  // existed stays byte-identical, and a map URL carries no preference for a
+  // planner it is not showing.
+  if (state.tab === 'route' && state.routeProfile !== DEFAULT_ROUTE_PROFILE_ID) {
+    params.set('profile', state.routeProfile);
+  }
+  const query = params.toString();
+  return `#/${path}${query ? `?${query}` : ''}`;
 }
 
 /**
@@ -145,6 +185,10 @@ export function parseHash(hash: string): ParsedViewHash {
   }
   const filters = queryToFilters(query);
   if (filters) parsed.filters = filters;
+  if (parsed.tab === 'route') {
+    const routeProfile = queryToRouteProfile(query);
+    if (routeProfile) parsed.routeProfile = routeProfile;
+  }
   return parsed;
 }
 
@@ -154,6 +198,10 @@ export function viewReducer(state: ViewState, action: ViewAction): ViewState {
       return { ...state, tab: action.tab };
     case 'setFilters':
       return { ...state, filters: action.filters };
+    case 'setRouteProfile':
+      return state.routeProfile === action.profile
+        ? state
+        : { ...state, routeProfile: action.profile };
     case 'focusOnMap':
       // Focusing a hazard always brings the map forward (and satisfies any
       // pending deep link for it).
@@ -168,6 +216,14 @@ export function viewReducer(state: ViewState, action: ViewAction): ViewState {
         filters: parsed.filters ?? {},
         focusHazard: keepFocus,
         pendingHazardId: parsed.hazardId && !keepFocus ? parsed.hazardId : null,
+        // On the route tab the URL is the source of truth, and a link without
+        // `profile` means the default. Anywhere else the URL says nothing about
+        // the planner, so the in-memory preference is kept for when the rider
+        // comes back to it.
+        routeProfile:
+          parsed.tab === 'route'
+            ? (parsed.routeProfile ?? DEFAULT_ROUTE_PROFILE_ID)
+            : state.routeProfile,
       };
       // Bail out (referential identity) when the hash already reflects the
       // state, so echoes of our own writes never cause a render loop.
@@ -191,6 +247,7 @@ function initViewState(): ViewState {
     tab: parsed.tab ?? initialViewState.tab,
     filters: parsed.filters ?? initialViewState.filters,
     pendingHazardId: parsed.hazardId ?? null,
+    routeProfile: parsed.routeProfile ?? initialViewState.routeProfile,
   };
 }
 

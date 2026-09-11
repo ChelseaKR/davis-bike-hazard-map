@@ -57,6 +57,9 @@ describe('RoutePlanner accessibility', () => {
   it('has no violations for the empty planner form', async () => {
     fetchRoute.mockReset();
     const { container } = render(<RoutePlanner />);
+    // Content first: the picker is part of this form now, and a scan that
+    // passed without it on screen would say nothing about it.
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
     await checkA11y(container);
   });
 
@@ -66,6 +69,30 @@ describe('RoutePlanner accessibility', () => {
     const { container } = render(<RoutePlanner />);
     await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
     await waitFor(() => expect(screen.getByText(/turn-by-turn directions/i)).toBeInTheDocument());
+    await checkA11y(container);
+  });
+
+  it('has no violations with an unapplied preference and a stale-plan notice on screen', async () => {
+    fetchRoute.mockReset();
+    fetchRoute.mockResolvedValue({
+      ...plan,
+      source: 'fallback',
+      profile: 'e-bike',
+      profileApplied: null,
+      hazardFreeCandidate: null,
+    });
+    const { container } = render(<RoutePlanner />);
+    await userEvent.click(screen.getByRole('radio', { name: 'E-bike' }));
+    await userEvent.click(screen.getByRole('button', { name: /plan a safer route/i }));
+    await waitFor(() => expect(screen.getByText(/turn-by-turn directions/i)).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('radio', { name: 'Standard' }));
+    // Content first, again: both surfaces this scan exists for must be present.
+    expect(container.querySelector('.route-profile-stale')?.textContent).toMatch(
+      /planned with the E-bike preference/,
+    );
+    expect(container.querySelector('.route-profile-result')?.textContent).toMatch(
+      /did not choose this/,
+    );
     await checkA11y(container);
   });
 });
