@@ -11,6 +11,15 @@ import { canTransition, transition, type TransitionCause } from '../../shared/st
 import type { ValidatedReport } from '../../shared/validation.ts';
 import { fuzzCoordinate } from '../../shared/geo.ts';
 import { tallyByArea, type AreaCount } from '../../shared/areas.ts';
+import {
+  recurrenceBadges,
+  recurringSites,
+  reportTrends,
+  type RecurrenceBadge,
+  type RecurrenceOptions,
+  type RecurringSite,
+  type ReportTrends,
+} from '../../shared/recurrence.ts';
 import { dataUrlToBytes } from '../../shared/exif.ts';
 import { processPhoto } from './image.ts';
 import { handoffDeliveryKind } from './handoffRetry.ts';
@@ -388,4 +397,62 @@ export async function migrateInlinePhotos(repo: Repository, photos: PhotoStore):
 export async function areaReportCounts(repo: Repository): Promise<AreaCount[]> {
   const received = (await repo.all()).filter((h) => h.status !== 'rejected');
   return tallyByArea(received.map((h) => h.publicLocation));
+}
+
+/**
+ * The limits sentence every trend and ranking carries, quoted from
+ * docs/audits/coverage-equity.md (markdown emphasis removed). A test reads that
+ * document and fails if the two drift apart.
+ */
+export const REPORTS_NOT_GROUND_TRUTH =
+  'A crowdsourced map measures reports received, not ground-truth danger.';
+
+/** What `GET /api/trends` counted, stated in its own response for API consumers. */
+export const TRENDS_BASIS =
+  'Counted by the calendar month each report was received, in the town time zone. ' +
+  'Every report received is counted except rejected ones and seeded demo data. ' +
+  '"confirmed" and "resolved" are what has happened to that month\'s reports so far, ' +
+  'so a past month can still change. A month in which nothing was received anywhere ' +
+  'is left out rather than shown as zero: this service cannot tell a quiet month from ' +
+  'one it was not running in.';
+
+/** What `GET /api/chronic` ranks, stated in its own response. */
+export const RECURRING_SITES_BASIS =
+  'A site is one public ~70 m cell and one hazard category. An episode is a stretch of ' +
+  'time in which at least one approved report there was open; a report made while ' +
+  'another was open joins its episode. Only moderated, real reports count. This ranks ' +
+  'places by how often riders reported them, not by danger: a street nobody reports ' +
+  'never appears here.';
+
+/**
+ * Reports received per area per month, for `GET /api/trends` (issue #180): the
+ * coverage view's set with a month on it. See `reportTrends` for the three rules
+ * that keep a time series of crowd reports honest.
+ */
+export async function reportTrendsFor(repo: Repository): Promise<ReportTrends> {
+  return reportTrends(await repo.listLifecycle());
+}
+
+/**
+ * Recurrence labels for the hazards on the public feed right now. The feed is
+ * read first (it runs the expiry sweep), then the lifecycle records, so the
+ * history and the map describe the same moment.
+ */
+export async function recurrenceBadgesFor(
+  repo: Repository,
+  now: number,
+  resolvedVisibleMs: number,
+  opts: Pick<RecurrenceOptions, 'minEpisodes' | 'windowDays'>,
+): Promise<RecurrenceBadge[]> {
+  const onMap = await listPublicFeed(repo, now, resolvedVisibleMs);
+  return recurrenceBadges(onMap, await repo.listLifecycle(), { ...opts, now });
+}
+
+/** The ranking of recurring sites, for `GET /api/chronic` when it is published. */
+export async function recurringSiteRanking(
+  repo: Repository,
+  now: number,
+  opts: Pick<RecurrenceOptions, 'minEpisodes' | 'windowDays'>,
+): Promise<RecurringSite[]> {
+  return recurringSites(await repo.listLifecycle(), { ...opts, now });
 }

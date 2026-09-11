@@ -7,6 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
+import { DEFAULT_RECURRENCE } from '../shared/recurrence.ts';
 
 function int(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -98,6 +99,33 @@ export const serverConfig = {
 
   /** How long a resolved hazard stays visible (greyed) on the public map, in days. */
   resolvedVisibleDays: int('RESOLVED_VISIBLE_DAYS', 7),
+
+  /**
+   * Report trends and recurring sites (issue #180). `GET /api/trends` is always
+   * on: it is the coverage view's set, split by month, over the same six areas.
+   * The two surfaces below publish more than anything public does today, so both
+   * are OFF until someone decides they should be on. Either can be flipped
+   * without a code change, and `buildApp` refuses a threshold under which
+   * "recurring" would be false.
+   */
+  recurrence: {
+    /**
+     * `GET /api/chronic`, a ranking of places by how often they were reported.
+     * Off, the route answers 404 without reading the store. The issue's own gate:
+     * a year of real data and an equity review before any ranking of places is
+     * published (docs/audits/coverage-equity.md).
+     */
+    rankingPublish: process.env.CHRONIC_PUBLISH === 'true',
+    /**
+     * "Reported here in N separate episodes since <month>" on the map and list.
+     * Off by default because it publishes the cell-level history of reports that
+     * have LEFT the map -- where reports came from, at ~70 m, for months back.
+     * That is a location-privacy decision (#160) before it is a feature.
+     */
+    badgesPublish: process.env.RECURRENCE_BADGES_PUBLISH === 'true',
+    minEpisodes: int('RECURRENCE_MIN_EPISODES', DEFAULT_RECURRENCE.minEpisodes),
+    windowDays: int('RECURRENCE_WINDOW_DAYS', DEFAULT_RECURRENCE.windowDays),
+  },
 
   /**
    * Web-push alerts for saved areas/routes. OFF by default — needs VAPID keys to
