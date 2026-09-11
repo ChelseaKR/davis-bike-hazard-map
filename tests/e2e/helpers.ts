@@ -9,14 +9,39 @@ interface QueueHazard {
   description: string | null;
 }
 
-/** Sign in as the e2e moderator and return a session bearer token. */
-async function moderatorToken(request: APIRequestContext): Promise<string> {
-  const res = await request.post('/api/auth/login', {
-    headers: { 'content-type': 'application/json' },
-    data: { username: MOD_USER, password: MOD_PASS },
-  });
-  const body = (await res.json()) as { token: string };
-  return body.token;
+/**
+ * ONE moderator session for the whole run, and a login that fails loudly.
+ *
+ * `/api/auth/login` allows 10 attempts per 15 minutes per IP (server/app.ts), and
+ * every request in this suite comes from one IP. Signing in per seeded hazard
+ * spent that budget inside a single run: on the push run, which is chromium AND
+ * firefox, the eleventh login was refused, `token` came back `undefined`, and the
+ * failure surfaced as sixteen 401s on moderation -- in specs that had nothing to
+ * do with the change that added the extra logins.
+ *
+ * So: log in once, and assert the login itself. A helper that returns an
+ * undefined token from a refused login reports the refusal somewhere else, in
+ * someone else's test.
+ */
+let session: Promise<string> | null = null;
+
+function moderatorToken(request: APIRequestContext): Promise<string> {
+  if (!session) {
+    session = (async () => {
+      const res = await request.post('/api/auth/login', {
+        headers: { 'content-type': 'application/json' },
+        data: { username: MOD_USER, password: MOD_PASS },
+      });
+      expect(res.status(), 'moderator login').toBe(200);
+      const body = (await res.json()) as { token?: string };
+      expect(body.token, 'moderator login returned no token').toBeTruthy();
+      return body.token as string;
+    })().catch((err: unknown) => {
+      session = null; // a refused login must not be cached as the session
+      throw err;
+    });
+  }
+  return session;
 }
 
 /** Fetch the moderation queue (returns [] on any non-OK response). */
@@ -167,11 +192,7 @@ export async function seedApprovedHazard(
   expect(created.status()).toBe(201);
   const { hazard } = (await created.json()) as { hazard: { id: string } };
 
-  const login = await request.post('/api/auth/login', {
-    headers: { 'content-type': 'application/json' },
-    data: { username: MOD_USER, password: MOD_PASS },
-  });
-  const { token } = (await login.json()) as { token: string };
+  const token = await moderatorToken(request);
   const decided = await request.post(`/api/moderation/${hazard.id}`, {
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     data: { decision: 'approve' },
