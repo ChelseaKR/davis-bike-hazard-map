@@ -24,8 +24,19 @@ import {
   lifecycleLabel,
   handoffNote,
   feedErrorLabel,
+  recurrenceNote,
+  recurrenceUnavailableNote,
 } from '../i18n/labels.ts';
 import type { ApiFailure } from '../lib/api.ts';
+import type { RecurrenceBadge } from '../../shared/recurrence.ts';
+import type { RecurrenceState } from '../hooks/useRecurrence.ts';
+
+/**
+ * The current recurrence label for a hazard id. Read through a ref at the moment a
+ * popup opens, so labels that arrive after the markers do reach the next popup
+ * without rebuilding the clustered marker layer.
+ */
+type BadgeLookup = { readonly current: (id: string) => RecurrenceBadge | null };
 
 interface MapViewProps {
   hazards: Hazard[];
@@ -38,6 +49,11 @@ interface MapViewProps {
    */
   feedError?: ApiFailure | null;
   onRetry?: () => void;
+  /**
+   * Recurrence labels (issue #180). The popup prints the same sentence the list
+   * card prints (`recurrenceNote`), from the same state, so the two cannot disagree.
+   */
+  recurrence?: RecurrenceState;
 }
 
 /**
@@ -57,6 +73,7 @@ export function buildPopup(
   // clustered marker layer once a minute. Named rather than implicit so the
   // clock is visible and pinnable, per src/lib/useNow.ts.
   now: number = Date.now(),
+  recurrence: RecurrenceBadge | null = null,
 ): HTMLElement {
   const el = document.createElement('div');
   el.className = 'map-popup';
@@ -79,6 +96,14 @@ export function buildPopup(
       defaultMessage: 'Demo data',
     });
     el.appendChild(demo);
+  }
+
+  // Never on a seeded hazard: fiction cannot recur (issue #180).
+  if (recurrence && hazard.source !== 'seed') {
+    const recurring = document.createElement('p');
+    recurring.className = 'map-popup-recurrence';
+    recurring.textContent = recurrenceNote(intl, recurrence);
+    el.appendChild(recurring);
   }
 
   if (hazard.handoff) {
@@ -195,6 +220,7 @@ function makeMarker(
   hazard: Hazard,
   intl: IntlShape,
   onConfirm?: (id: string) => void | Promise<boolean | void>,
+  badgeFor?: BadgeLookup,
 ): L.Marker {
   const marker = L.marker([hazard.location.lat, hazard.location.lng], {
     icon: hazardIcon(hazard.severity),
@@ -208,11 +234,19 @@ function makeMarker(
       { category: categoryLabel(intl, hazard.category) },
     ),
   });
-  marker.bindPopup(() => buildPopup(hazard, intl, onConfirm));
+  marker.bindPopup(() =>
+    buildPopup(hazard, intl, onConfirm, undefined, badgeFor?.current(hazard.id) ?? null),
+  );
   return marker;
 }
 
-function ClusterLayer({ hazards, onConfirm, focusHazard, intl }: MapViewProps & { intl: IntlShape }) {
+function ClusterLayer({
+  hazards,
+  onConfirm,
+  focusHazard,
+  intl,
+  badgeFor,
+}: MapViewProps & { intl: IntlShape; badgeFor: BadgeLookup }) {
   const map = useMap();
   const groupRef = useRef<L.MarkerClusterGroup | null>(null);
   const markersRef = useRef<Map<string, MarkerEntry>>(new Map());
@@ -257,18 +291,20 @@ function ClusterLayer({ hazards, onConfirm, focusHazard, intl }: MapViewProps & 
       if (hazard.id === focusHazard?.id) continue;
       const existing = entries.get(hazard.id);
       if (!existing) {
-        const marker = makeMarker(hazard, intl, onConfirm);
+        const marker = makeMarker(hazard, intl, onConfirm, badgeFor);
         entries.set(hazard.id, { marker, updatedAt: hazard.updatedAt });
         toAdd.push(marker);
       } else if (existing.updatedAt !== hazard.updatedAt) {
         existing.marker.setLatLng([hazard.location.lat, hazard.location.lng]);
         existing.marker.setIcon(hazardIcon(hazard.severity));
-        existing.marker.bindPopup(() => buildPopup(hazard, intl, onConfirm));
+        existing.marker.bindPopup(() =>
+          buildPopup(hazard, intl, onConfirm, undefined, badgeFor.current(hazard.id)),
+        );
         existing.updatedAt = hazard.updatedAt;
       }
     }
     if (toAdd.length) group.addLayers(toAdd);
-  }, [hazards, onConfirm, focusHazard, intl]);
+  }, [hazards, onConfirm, focusHazard, intl, badgeFor]);
 
   return null;
 }
@@ -278,19 +314,21 @@ function FocusMarker({
   hazard,
   onConfirm,
   intl,
+  badgeFor,
 }: {
   hazard?: Hazard | null;
   onConfirm?: (id: string) => void | Promise<boolean | void>;
   intl: IntlShape;
+  badgeFor: BadgeLookup;
 }) {
   const map = useMap();
   useEffect(() => {
     if (!hazard) return;
-    const marker = makeMarker(hazard, intl, onConfirm).addTo(map);
+    const marker = makeMarker(hazard, intl, onConfirm, badgeFor).addTo(map);
     return () => {
       map.removeLayer(marker);
     };
-  }, [hazard, onConfirm, intl, map]);
+  }, [hazard, onConfirm, intl, map, badgeFor]);
   return null;
 }
 
@@ -357,9 +395,12 @@ function FlyTo({ focusHazard }: { focusHazard?: Hazard | null }) {
 export function MapDataNotice({
   feedError,
   onRetry,
+  recurrenceUnavailable = false,
 }: {
   feedError: ApiFailure | null;
   onRetry?: () => void;
+  /** Recurrence labels could not be loaded: say so, as the list does (issue #180). */
+  recurrenceUnavailable?: boolean;
 }) {
   const intl = useIntl();
   if (feedError) {
@@ -382,6 +423,7 @@ export function MapDataNotice({
     );
   }
   return (
+    <>
     <p className="map-caption hint">
       <FormattedMessage
         id="map.caption"
@@ -392,11 +434,29 @@ export function MapDataNotice({
         }}
       />
     </p>
+    {recurrenceUnavailable && (
+      <p className="hint recurrence-unavailable">{recurrenceUnavailableNote(intl)}</p>
+    )}
+    </>
   );
 }
 
-export function MapView({ hazards, onConfirm, focusHazard, feedError = null, onRetry }: MapViewProps) {
+export function MapView({
+  hazards,
+  onConfirm,
+  focusHazard,
+  feedError = null,
+  onRetry,
+  recurrence,
+}: MapViewProps) {
   const intl = useIntl();
+  const badgeFor = useRef<(id: string) => RecurrenceBadge | null>(() => null);
+  // Updated after render, not during it: a popup reads the ref when it OPENS,
+  // which is always after this effect has run for the labels on screen.
+  useEffect(() => {
+    badgeFor.current = (id) =>
+      recurrence?.status === 'published' ? (recurrence.badges.get(id) ?? null) : null;
+  }, [recurrence]);
   return (
     <div className="map-view">
       <MapContainer
@@ -414,12 +474,17 @@ export function MapView({ hazards, onConfirm, focusHazard, feedError = null, onR
           onConfirm={onConfirm}
           focusHazard={focusHazard}
           intl={intl}
+          badgeFor={badgeFor}
         />
-        <FocusMarker hazard={focusHazard} onConfirm={onConfirm} intl={intl} />
+        <FocusMarker hazard={focusHazard} onConfirm={onConfirm} intl={intl} badgeFor={badgeFor} />
         <FlyTo focusHazard={focusHazard} />
         <MapA11y intl={intl} />
       </MapContainer>
-      <MapDataNotice feedError={feedError} onRetry={onRetry} />
+      <MapDataNotice
+        feedError={feedError}
+        onRetry={onRetry}
+        recurrenceUnavailable={recurrence?.status === 'unavailable'}
+      />
     </div>
   );
 }

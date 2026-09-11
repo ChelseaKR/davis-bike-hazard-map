@@ -110,6 +110,7 @@ describe('the loader refuses rather than defaulting', () => {
     'deploymentName',
     'bounds',
     'center',
+    'timeZone',
     'outOfBoundsMessage',
     'elsewhereAreaName',
     'areas',
@@ -118,6 +119,17 @@ describe('the loader refuses rather than defaulting', () => {
     const pack = validPack();
     delete pack[field];
     expect(() => parsePlacePack(pack, `missing-${field}`)).toThrow(PlacePackError);
+  });
+
+  it('refuses a time zone this runtime does not know, rather than bucketing months in UTC', () => {
+    for (const zone of ['America/Davis', 'PST', 'UTC+8', '']) {
+      const pack = validPack();
+      pack.timeZone = zone;
+      expect(() => parsePlacePack(pack, `zone-${zone}`), zone).toThrow(PlacePackError);
+    }
+    const pack = validPack();
+    pack.timeZone = 'America/Los_Angeles';
+    expect(parsePlacePack(pack, 'zone-ok').timeZone).toBe('America/Los_Angeles');
   });
 
   it('refuses a zero or negative exposure weight', () => {

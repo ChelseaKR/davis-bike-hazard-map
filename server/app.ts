@@ -31,6 +31,7 @@ import {
   alertSubscriptionSchema,
 } from '../shared/validation.ts';
 import { PLACE } from '../shared/place.ts';
+import { assertRecurrenceOptions } from '../shared/recurrence.ts';
 import { SEVERITY_RANK, type Hazard, type Severity } from '../shared/types.ts';
 import type { ValidatedHazardFilters } from '../shared/validation.ts';
 import {
@@ -63,7 +64,13 @@ import { openapiSpec } from './openapi.ts';
 const API_VERSION = '1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 import {
+  RECURRING_SITES_BASIS,
+  REPORTS_NOT_GROUND_TRUTH,
+  TRENDS_BASIS,
   areaReportCounts,
+  recurrenceBadgesFor,
+  recurringSiteRanking,
+  reportTrendsFor,
   confirmHazard,
   createHazard,
   listModerationQueue,
@@ -145,6 +152,9 @@ const ttlOpts = (config: typeof serverConfig) => ({
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const config = deps.config ?? serverConfig;
   const now = deps.now ?? (() => Date.now());
+  // Refuse to boot with a threshold under which "recurring" would be false (one
+  // episode), rather than publish single reports as recurring sites (#180).
+  assertRecurrenceOptions(config.recurrence);
   const fetchImpl = deps.fetchImpl ?? fetch;
   const { repo } = deps;
   const photos = deps.photos ?? new MemoryPhotoStore();
@@ -598,6 +608,80 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .header('cache-control', 'no-cache')
       .header('content-type', 'application/json')
       .send(body);
+  });
+
+  // --- Trends: reports received per area per month (E8, issue #180) ---
+  // The coverage view's set with a month on it: every report received except
+  // rejected ones, less seeded demo data, bucketed by the month it was received in
+  // the town's time zone. A month in which nothing was received anywhere is left
+  // out (`omittedMonths`), never printed as zero. Aggregate counts over the same
+  // six areas coverage publishes; no ids, cells or per-report data.
+  app.get('/api/trends', async (req, reply) => {
+    const trends = await reportTrendsFor(repo);
+    const body = JSON.stringify({ ...trends, basis: TRENDS_BASIS, limits: REPORTS_NOT_GROUND_TRUTH });
+    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+    return reply
+      .header('etag', etag)
+      .header('cache-control', 'no-cache')
+      .header('content-type', 'application/json')
+      .send(body);
+  });
+
+  // --- Recurrence labels for hazards on the map (EXP-13, issue #180) ---
+  // OFF by default (config.recurrence.badgesPublish): a label publishes the
+  // cell-level history of reports that have left the map. Off, this answers 404
+  // `not_published` WITHOUT reading the store, and the client shows no label and
+  // no failure -- "not published" is not "could not load".
+  app.get('/api/hazards/recurrence', async (req, reply) => {
+    if (!config.recurrence.badgesPublish) {
+      return reply.status(404).header('cache-control', 'no-cache').send({
+        error: 'not_published',
+        message: 'Recurrence labels are not published on this deployment.',
+      });
+    }
+    const { minEpisodes, windowDays } = config.recurrence;
+    const badges = await recurrenceBadgesFor(repo, now(), config.resolvedVisibleDays * DAY_MS, {
+      minEpisodes,
+      windowDays,
+    });
+    const body = JSON.stringify({ badges, minEpisodes, windowDays, timeZone: PLACE.timeZone });
+    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+    return reply
+      .header('etag', etag)
+      .header('cache-control', 'no-cache')
+      .header('content-type', 'application/json')
+      .send(body);
+  });
+
+  // --- Ranking of recurring sites (EXP-13, issue #180) ---
+  // OFF by default (CHRONIC_PUBLISH), per the issue's own gate: a year of real
+  // data and an equity review before any ranking of places is published. Always
+  // mounted, so the OpenAPI contract test sees the route it documents; off, it
+  // answers 404 `not_published` before the store is read, so no ranking is ever
+  // computed, let alone served.
+  app.get('/api/chronic', async (_req, reply) => {
+    if (!config.recurrence.rankingPublish) {
+      return reply.status(404).header('cache-control', 'no-cache').send({
+        error: 'not_published',
+        message: 'The ranking of recurring sites is not published on this deployment.',
+      });
+    }
+    const { minEpisodes, windowDays } = config.recurrence;
+    const sites = await recurringSiteRanking(repo, now(), { minEpisodes, windowDays });
+    return reply.header('cache-control', 'no-cache').send({
+      sites,
+      minEpisodes,
+      windowDays,
+      timeZone: PLACE.timeZone,
+      basis: RECURRING_SITES_BASIS,
+      limits: REPORTS_NOT_GROUND_TRUTH,
+    });
   });
 
   // --- Hazard-aware bike route planner ---

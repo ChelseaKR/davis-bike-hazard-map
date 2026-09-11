@@ -9,6 +9,53 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **Reports by month, and recurring sites (issue #180; research roadmap E8,
+  ideation EXP-13).** A `Trends` tab counts how many hazards were reported in each
+  month and what has happened to those reports since. The recurring-site machinery
+  ships with it and publishes nothing by default.
+
+  **The trend is the coverage view's set with a month on it** -- every report
+  received except rejected ones, less seeded demo data -- so `GET /api/trends` and
+  `GET /api/coverage` count one set, and a test holds them to each other area by
+  area. Three rules keep it honest. Months are the town's calendar months: a report
+  filed at 6 p.m. on 31 March in Davis is a March report and is already 1 April in
+  UTC, so the place pack now carries a required, canonical `timeZone` (an alias
+  like `PST` is refused, because ICU resolves it and another engine may not).
+  `confirmed` and `resolved` are cohort counts -- what has happened to that month's
+  reports so far -- because when a confirmation happened is deliberately not
+  stored: a durable confirmation log would be a movement trace of a cyclist (#187).
+  And a month in which nothing was received anywhere is left out and counted in
+  `omittedMonths`, never printed as zero, because this service cannot tell a quiet
+  month from one it was not running in -- with the beta paused (#161) that is a
+  live possibility, not a hypothetical.
+
+  **Episodes are derived on read, never stored.** There is no episode table and no
+  migration: a stored index would be a second copy of what the lifecycle timestamps
+  already say, and it would keep a trace of a report whose reporter deleted it,
+  which the privacy page promises it does not. A site is one fuzzed ~70 m cell and
+  one category; an episode is a stretch in which at least one approved report there
+  was open, and a report made while another was open joins it. Only moderated, real
+  reports count: pending, rejected and seeded rows never do, each asserted against a
+  sibling fixture that does recur, so an exclusion cannot pass for another reason.
+
+  **Both new publication surfaces are off by default, and refuse without reading
+  the store.** `RECURRENCE_BADGES_PUBLISH` gates the "reported here in N separate
+  episodes since <month>" labels, because they publish the cell-level history of
+  reports that have LEFT the map -- where reports came from, at ~70 m, months back
+  -- and that is a location-privacy decision (#160) before it is a feature.
+  `CHRONIC_PUBLISH` gates the ranking, which is the issue's own gate: a year of real
+  data and an equity review. Off, both answer 404 `not_published`, and the client
+  shows nothing and says nothing, because a deployment's own configuration is not an
+  outage. A label that could not be LOADED is a third state, and the list and the map
+  both say so -- a hazard without a label must not read as "never reported here
+  before".
+
+  `Repository.listLifecycle` reads only what an aggregate needs -- category, the
+  fuzzed cell, status, timestamps, confirmations, provenance -- so the precise
+  point, the description, the photo and the moderation log never enter the process
+  for a trend. The Postgres query names those columns and no others, and a
+  both-stores test holds the two adapters to the same records.
+
 - **The route planner has a rider-preference picker (issue #178), so the
   profiles #199 made requestable can finally be chosen in the app.** Three radio
   options -- *Standard*, *Family / cargo bike*, *E-bike* -- each described by the

@@ -18,6 +18,7 @@ import {
 import type { RoutePlan } from '../../shared/routing.ts';
 import type { Watch } from '../../shared/alerts.ts';
 import type { AreaCount } from '../../shared/areas.ts';
+import type { RecurrenceBadge, ReportTrends } from '../../shared/recurrence.ts';
 
 /**
  * Why a request failed, as a machine code rather than a sentence (issue #200,
@@ -166,6 +167,45 @@ export async function fetchHazards(filters?: HazardQuery): Promise<HazardFeed> {
 export async function fetchCoverage(): Promise<AreaCount[]> {
   const { areas } = await request<{ areas: AreaCount[] }>('/coverage');
   return areas;
+}
+
+/**
+ * Reports received per area per month (issue #180): the coverage view's set,
+ * split by the month each report was received in the town's time zone. The body
+ * also carries the server's own `basis` and `limits` sentences for API consumers;
+ * the view renders its own catalogued copy instead.
+ */
+export async function fetchTrends(): Promise<ReportTrends> {
+  return request<ReportTrends>('/trends');
+}
+
+/**
+ * Recurrence labels for the hazards on the map (issue #180), or `null` when this
+ * deployment does not publish them.
+ *
+ * `null` is "not published" and it is not a failure: labels are off by default,
+ * and a page that said "could not be loaded" on every default deployment would be
+ * reporting its own configuration as an outage. A transport or server error still
+ * throws, so the caller keeps "none here by design" apart from "none could load".
+ */
+export async function fetchRecurrence(): Promise<RecurrenceBadge[] | null> {
+  try {
+    const { badges } = await request<{ badges: RecurrenceBadge[] }>('/hazards/recurrence');
+    if (!Array.isArray(badges)) {
+      // A 200 whose body is not the labels this client expects -- an older or
+      // newer server. Reported as a parse failure, the same code the feed uses,
+      // so the page says labels could not be loaded rather than treating a body
+      // it could not read as "this deployment publishes none".
+      // i18n-exempt: a diagnostic message, never rendered; display resolves `code`
+      throw new ApiRequestError('recurrence body carried no badges array', 200, 'parse');
+    }
+    return badges;
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 404 && err.body?.error === 'not_published') {
+      return null;
+    }
+    throw err;
+  }
 }
 
 /** Submit a report. Idempotent on `clientId`, so retries are safe. */

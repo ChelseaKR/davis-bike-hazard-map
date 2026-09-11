@@ -6,13 +6,23 @@ Instantiates `/STANDARDS/RESPONSIBLE-TECH-FRAMEWORK.md` §C for this repo.
 
 | Data | Why | Where | Retention | Who can access |
 |------|-----|-------|-----------|----------------|
-| Hazard type/severity/description | Core function | Server store | Until resolved/expired (14–30 d by severity) | Public (after approval) |
+| Hazard type/severity/description | Core function | Server store | Public for 14–30 d by severity, then kept with the precise point coarsened (see the note below) | Public (after approval) |
 | Photo (EXIF-stripped, optionally blurred) | Evidence of hazard | PhotoStore (blob) | Rejected: deleted at decision; resolved/expired: deleted after `RESOLVED_VISIBLE_DAYS` (see retention table) | Public only after approval; moderators before |
 | Precise location | 311 dispatch (opt-in only) | Server store, internal | Same as hazard | Server + opt-in 311 hand-off only |
 | Public location (fuzzed to a ~70 m grid, ≤~99 m from true) | Map display | Server store | Same as hazard | Public |
 | Alert subscription: watch geometry (saved area box, or route polyline **simplified to ~35 m** — corridor precision, never the raw GPS trace) | Saved-route/area push alerts (opt-in, feature-flagged) | Server subscription store | **180-day TTL**, renewed on re-subscribe; expired records pruned before every match | Server only; never public |
 | Alert subscription: push endpoint + encryption keys, optional label | Web Push delivery | Server subscription store | Same 180-day TTL | Server only; endpoint/keys redacted from logs |
 | No accounts, no contact info, no analytics/trackers | — | — | — | — |
+
+**Retention, as measured 2026-09-11 (issue #180).** The hazard row above said
+"until resolved/expired". The code does not delete those records: `moderateHazard`
+and the expiry sweep overwrite the precise point with the public (fuzzed) one and
+the record then stays — which is what `GET /api/coverage` has always counted
+("every report ever received except rejected ones"). The row now describes that.
+**Whether the policy should instead be "delete the record after N days" is an
+owner decision**, and it is not only about this feature: it would change what the
+coverage view can say about data deserts. Trends and recurring sites read the same
+retained history, so the question is now consequential rather than academic.
 
 **Threat model (specific people in the data):** a bystander photographed in a
 street scene; a reporter whose home-adjacent report could reveal where they live.
@@ -62,6 +72,19 @@ street scene; a reporter whose home-adjacent report could reveal where they live
   `cache-control: public, max-age=3600` (`server/app.ts`), so a copy of a
   deleted photo can persist in browser/CDN caches for up to **1 hour** after
   deletion. Reporter self-deletion has the same residual window.
+- **Trends and recurring sites are derived, never stored (issue #180).** The
+  monthly trend and the recurring-site machinery are computed on every read from
+  `Repository.listLifecycle`, which selects only category, the FUZZED public cell,
+  status, timestamps, the confirmation count and provenance — never the precise
+  point, the description, the photo or the moderation log. Nothing is written, so
+  nothing about a report can outlive the report: a reporter's deletion removes it
+  from every future trend by construction, which a stored episode index would not
+  have done. What each surface may publish is separately gated: the monthly trend
+  is aggregate counts over the same six areas the coverage view already publishes
+  (no ids, no cells, no per-report data) and is on; the per-hazard labels disclose
+  the cell-level history of reports that have LEFT the map and are OFF pending the
+  location-fuzzing review (#160); the ranking of places is OFF pending an equity
+  review. With a flag off the endpoint answers 404 before the store is read.
 - **Reporter deletion.** `DELETE /api/reports/<clientId>` removes a report
   (record + photo blobs); the clientId is the device-held capability. Exposed in
   the app's "My reports" and the privacy page.

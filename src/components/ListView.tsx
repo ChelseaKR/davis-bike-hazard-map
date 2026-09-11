@@ -8,6 +8,8 @@ import { HazardCard } from './HazardCard.tsx';
 import { feedErrorLabel } from '../i18n/labels.ts';
 import type { ApiFailure } from '../lib/api.ts';
 import { SkeletonList } from './Skeleton.tsx';
+import { useLabels } from '../i18n/labels.ts';
+import type { RecurrenceState } from '../hooks/useRecurrence.ts';
 
 interface ListViewProps {
   hazards: Hazard[];
@@ -21,6 +23,8 @@ interface ListViewProps {
   onConfirm?: (id: string) => void | Promise<boolean | void>;
   onFocusOnMap?: (hazard: Hazard) => void;
   onRetry?: () => void;
+  /** Recurrence labels (issue #180); the map popup reads the same state. */
+  recurrence?: RecurrenceState;
 }
 
 export function ListView({
@@ -30,7 +34,9 @@ export function ListView({
   onConfirm,
   onFocusOnMap,
   onRetry,
+  recurrence,
 }: ListViewProps) {
+  const labels = useLabels();
   // Skeletons only on the very first load (when we have nothing to show yet);
   // a background refresh keeps the existing cards visible.
   const intl = useIntl();
@@ -57,6 +63,9 @@ export function ListView({
           />
         </p>
       )}
+      {recurrence?.status === 'unavailable' && (
+        <p className="hint recurrence-unavailable">{labels.recurrenceUnavailable()}</p>
+      )}
       <ul className="hazard-list">
         {hazards.map((h) => (
           <HazardCard
@@ -64,6 +73,7 @@ export function ListView({
             hazard={h}
             onConfirm={onConfirm}
             onFocusOnMap={onFocusOnMap}
+            recurrence={recurrence?.status === 'published' ? (recurrence.badges.get(h.id) ?? null) : null}
           />
         ))}
       </ul>

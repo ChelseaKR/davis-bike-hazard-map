@@ -54,8 +54,10 @@ build: it runs the loader for its own sake and exits non-zero.
   "packVersion": 1,
   "id": "davis",                       // lowercase kebab-case
   "displayName": "Davis, CA",
+  "deploymentName": "Davis Bike Hazard Map", // what the service calls itself; leaves the system in OSM notes
   "bounds":  { "minLat": …, "maxLat": …, "minLng": …, "maxLng": … },
   "center":  { "lat": …, "lng": … },   // must be inside bounds
+  "timeZone": "America/Los_Angeles",   // IANA zone; month-by-month trends are bucketed in it
   "outOfBoundsMessage": "Location must be within Davis, CA.",
   "elsewhereAreaName": "Elsewhere in Davis",
   "areas":     [ { "name": …, "minLat": …, "maxLat": …, "minLng": …, "maxLng": …, "exposureWeight": … } ],
@@ -92,6 +94,7 @@ than obvious at boot:
 | Inverted bounding box (`min` ≥ `max`) | Accepts nothing, and reads as "no reports here". |
 | Centre outside its own bounds | The default map view opens somewhere the map refuses reports. |
 | A landmark outside the bounds | A route preset the report validator would then refuse. |
+| `timeZone` this runtime does not know | Month-by-month trends would have no calendar to bucket in; a default of UTC would move every evening report at a month's end into the next month. |
 | Unknown or misspelled field | See above. |
 | Empty `areas` or `landmarks` | A coverage view with nothing to bucket into. |
 

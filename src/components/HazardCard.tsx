@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
 import { lifecycleStage, type Hazard } from '../../shared/types.ts';
+import type { RecurrenceBadge } from '../../shared/recurrence.ts';
 import { timeAgo, formatLatLng } from '../lib/format.ts';
 import { useNow } from '../lib/useNow.ts';
 import { useLabels } from '../i18n/labels.ts';
@@ -24,6 +25,8 @@ interface HazardCardProps {
   onConfirm?: (id: string) => void | Promise<boolean | void>;
   onFocusOnMap?: (hazard: Hazard) => void;
   now?: number;
+  /** This hazard's recurrence label (issue #180), or null when there is none to show. */
+  recurrence?: RecurrenceBadge | null;
 }
 
 const SEVERITY_SHAPE: Record<Hazard['severity'], string> = {
@@ -37,6 +40,7 @@ export function HazardCard({
   onConfirm,
   onFocusOnMap,
   now,
+  recurrence = null,
 }: HazardCardProps) {
   const effectiveNow = useNow(now);
   const intl = useIntl();
@@ -87,6 +91,12 @@ export function HazardCard({
             values={{ when: hazard.resolvedAt ? ` ${timeAgo(hazard.resolvedAt, effectiveNow)}` : '' }}
           />
         </p>
+      )}
+
+      {/* A seeded hazard is never labelled: the server does not send one, and the
+          card would not print it if it did -- fiction cannot recur. */}
+      {recurrence && hazard.source !== 'seed' && (
+        <p className="hazard-recurrence-note">{labels.recurrence(recurrence)}</p>
       )}
 
       {hazard.handoff && (

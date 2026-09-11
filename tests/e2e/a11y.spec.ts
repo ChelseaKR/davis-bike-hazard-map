@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { answerRoutesWith, openTab, stubNearbyHazard, stubRoutePlan } from './helpers.ts';
+import {
+  answerRoutesWith,
+  openTab,
+  seedApprovedHazard,
+  stubNearbyHazard,
+  stubRoutePlan,
+} from './helpers.ts';
 
 /**
  * Full-page accessibility pass in a real browser (covers colour-contrast and
@@ -102,6 +108,26 @@ test.describe('accessibility', () => {
     await expect(page.locator('#route-steps-profile')).toBeVisible();
     await expect(page.getByRole('radio')).toHaveCount(3);
 
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  /**
+   * The monthly trends table (issue #180). Content first, as above: a scan of a
+   * view whose table never loaded would pass and say nothing.
+   */
+  test('trends view has no WCAG A/AA violations', async ({ page, request }, testInfo) => {
+    // The table only exists once something has been reported, and this spec can
+    // run against an empty store.
+    await seedApprovedHazard(
+      request,
+      { lat: 38.5585, lng: -121.7288 },
+      `E2E trends a11y (${testInfo.project.name})`,
+    );
+    await page.goto('/');
+    await openTab(page, 'Trends');
+    await expect(page.getByRole('table')).toBeVisible();
+    await expect(page.getByRole('columnheader')).toHaveCount(4);
     const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(results.violations).toEqual([]);
   });

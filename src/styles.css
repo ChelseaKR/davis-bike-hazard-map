@@ -818,6 +818,48 @@ textarea {
   padding-top: 0.75rem;
 }
 
+/* --- Trends (issue #180): the table is the whole representation --- */
+.trends-scroll {
+  overflow-x: auto;
+}
+.trends-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+}
+.trends-table caption {
+  text-align: start;
+  font-weight: 700;
+  padding-bottom: 0.4rem;
+}
+.trends-table th,
+.trends-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: end;
+  /* A figure must never split across two lines at 320px. The table scrolls
+     inside .trends-scroll instead; the page itself never scrolls sideways. */
+  white-space: nowrap;
+}
+.trends-table th[scope='row'],
+.trends-table thead th:first-child {
+  text-align: start;
+}
+.trends-table thead th {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  vertical-align: bottom;
+}
+.hazard-recurrence-note,
+.map-popup-recurrence {
+  margin: 0.3rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--brand-dark);
+}
+
 /* --- Loading skeletons --- */
 .skeleton {
   background: var(--line);

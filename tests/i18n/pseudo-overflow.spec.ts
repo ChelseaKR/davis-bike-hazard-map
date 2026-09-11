@@ -28,7 +28,13 @@ const PSEUDO = JSON.parse(readFileSync(resolve(HERE, 'en-XA.generated.json'), 'u
 const MARK = '⟦'; // every pseudo value carries this; its presence proves re-render
 
 // Tab order in the nav (labels are pseudo-localized, so click by index).
-const TABS = ['map', 'list', 'coverage', 'route', 'report', 'mine', 'moderate'] as const;
+//
+// This list IS the index: inserting a tab in App.tsx and not here re-points every
+// case after it at the wrong view, silently and green. When `trends` was added
+// after `coverage` (#180), the case named `route` opened Trends, `report` opened
+// Route, and `moderate` was never opened at all -- 14 tests still passing over a
+// different seven views. Keep it in the order App.tsx renders.
+const TABS = ['map', 'list', 'coverage', 'trends', 'route', 'report', 'mine', 'moderate'] as const;
 
 interface I18nTestHandle {
   setMessages: (messages: Record<string, string> | null) => void;
@@ -114,7 +120,7 @@ test.describe('G9 — pseudolocale overflow (en-XA, ~40% expansion)', () => {
         }
 
         // 2) The main layout columns explicitly: their content must fit.
-        for (const sel of ['.app', '.app-main', '.filters', '.list-view', '.moderation', '.report-form', '.route-planner', '.coverage', '.my-reports']) {
+        for (const sel of ['.app', '.app-main', '.filters', '.list-view', '.moderation', '.report-form', '.route-planner', '.coverage', '.trends', '.my-reports']) {
           for (const el of Array.from(document.querySelectorAll(sel))) {
             if (inMap(el)) continue;
             const cs = getComputedStyle(el);

@@ -236,6 +236,64 @@ export const coverageResponseSchema = z.object({
   areas: z.array(z.object({ name: z.string(), count: z.number().int().nonnegative() })),
 });
 
+const monthSchema = z.string().regex(/^\d{4}-\d{2}$/).openapi({ description: 'YYYY-MM, in `timeZone`' });
+const cellSchema = z.object({ lat: z.number(), lng: z.number() });
+
+/**
+ * Body of GET /trends -- reports received per area per month (issue #180).
+ * Cohorts, not flows: `confirmed` and `resolved` are what has happened to the
+ * month's reports so far. Months with nothing received anywhere are omitted.
+ */
+export const trendsResponseSchema = z.object({
+  timeZone: z.string(),
+  months: z.array(
+    z.object({
+      month: monthSchema,
+      areas: z.array(
+        z.object({
+          name: z.string(),
+          received: z.number().int().nonnegative(),
+          confirmed: z.number().int().nonnegative(),
+          resolved: z.number().int().nonnegative(),
+        }),
+      ),
+    }),
+  ),
+  omittedMonths: z.number().int().nonnegative(),
+  seedExcluded: z.number().int().nonnegative(),
+  basis: z.string(),
+  limits: z.string(),
+});
+
+/** Body of GET /hazards/recurrence when recurrence labels are published. */
+export const recurrenceResponseSchema = z.object({
+  badges: z.array(
+    z.object({ hazardId: z.string(), episodes: z.number().int().min(2), since: monthSchema }),
+  ),
+  minEpisodes: z.number().int().min(2),
+  windowDays: z.number().positive(),
+  timeZone: z.string(),
+});
+
+/** Body of GET /chronic when the ranking is published. No record ids. */
+export const chronicResponseSchema = z.object({
+  sites: z.array(
+    z.object({
+      category: z.enum(HAZARD_CATEGORIES),
+      cell: cellSchema,
+      area: z.string(),
+      episodes: z.number().int().min(2),
+      since: monthSchema,
+      episodeMonths: z.array(monthSchema),
+    }),
+  ),
+  minEpisodes: z.number().int().min(2),
+  windowDays: z.number().positive(),
+  timeZone: z.string(),
+  basis: z.string(),
+  limits: z.string(),
+});
+
 const json = (schema: z.ZodTypeAny) => ({ 'application/json': { schema } });
 const errorContent = json(errorSchema);
 
@@ -330,6 +388,55 @@ registry.registerPath({
     'observed, and must not read as a data desert. Aggregate counts only.',
   responses: {
     200: { description: 'per-area report tallies', content: json(coverageResponseSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/trends',
+  tags: ['public'],
+  summary: 'Reports received per area per month (E8, issue #180)',
+  description:
+    'The /coverage set with a month on it: every report received except rejected ones, ' +
+    'less seeded demo data (counted in `seedExcluded`), bucketed by the month it was ' +
+    'received in the town time zone. `confirmed` and `resolved` are cohort counts -- what ' +
+    'has happened to that month\'s reports so far. A month with no report received anywhere ' +
+    'is omitted and counted in `omittedMonths`, never reported as zero. Aggregate counts only.',
+  responses: {
+    200: { description: 'per-area monthly tallies', content: json(trendsResponseSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/hazards/recurrence',
+  tags: ['public'],
+  summary: 'Recurrence labels for hazards on the public map (EXP-13, issue #180)',
+  description:
+    'For each hazard currently on the public feed whose cell and category were reported in ' +
+    'at least `minEpisodes` separate episodes within `windowDays`: the episode count and the ' +
+    'month the first counted episode opened. Not published by default ' +
+    '(RECURRENCE_BADGES_PUBLISH): it discloses the cell-level history of reports that have ' +
+    'left the map. When off, 404 with error `not_published`, and the store is not read.',
+  responses: {
+    200: { description: 'recurrence labels', content: json(recurrenceResponseSchema) },
+    404: { description: 'not published on this deployment', content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/chronic',
+  tags: ['public'],
+  summary: 'Ranking of recurring sites (EXP-13, issue #180), unpublished by default',
+  description:
+    'Sites (a public ~70 m cell and a category) reported in at least `minEpisodes` separate ' +
+    'episodes within `windowDays`, most episodes first. Ranks by how often riders reported a ' +
+    'place, never by danger. Not published unless CHRONIC_PUBLISH is on: 404 with error ' +
+    '`not_published`, and the store is not read.',
+  responses: {
+    200: { description: 'recurring sites', content: json(chronicResponseSchema) },
+    404: { description: 'not published on this deployment', content: errorContent },
   },
 });
 
