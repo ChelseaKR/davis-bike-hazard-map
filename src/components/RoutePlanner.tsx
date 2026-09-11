@@ -8,10 +8,24 @@
  * Accessibility: the turn-by-turn <ol> and the hazards-on-route list are the
  * primary, map-free output (parity gate). The map is a lazy enhancement and
  * never the only way to read the route.
+ *
+ * Rider preference (issue #178): a radio group over the profiles in
+ * `shared/routing.ts`, each described by the weights it applies. Those sentences
+ * are composed from the profile table (`routeProfileWeightLines`), so the copy
+ * cannot drift from the numbers. The result names the preference the SERVER says
+ * it planned with (`plan.profile`), not whatever the picker shows now, and says
+ * in each of `profileApplied`'s states what that preference actually did --
+ * including "nothing", which is the true answer for a direct line or for a road
+ * network that offered one route.
  */
 import { lazy, Suspense, useState } from 'react';
 import { FormattedMessage, useIntl } from 'react-intl';
-import type { GeoPoint } from '../../shared/types.ts';
+import {
+  DEFAULT_ROUTE_PROFILE_ID,
+  ROUTE_PROFILE_IDS,
+  type GeoPoint,
+  type RouteProfileId,
+} from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import { fetchRoute } from '../lib/api.ts';
 import { PLACE_LANDMARKS, landmarkByName } from '../lib/landmarks.ts';
@@ -30,9 +44,57 @@ interface Endpoint {
 const DEFAULT_START: Endpoint = { label: PLACE_LANDMARKS[0].name, point: PLACE_LANDMARKS[0].point };
 const DEFAULT_END: Endpoint = { label: PLACE_LANDMARKS[1].name, point: PLACE_LANDMARKS[1].point };
 
-export function RoutePlanner() {
+interface RoutePlannerProps {
+  /**
+   * The selected rider preference. App passes the permalink's value (see
+   * `ViewState.routeProfile`); when absent the planner keeps its own.
+   */
+  profile?: RouteProfileId;
+  onProfileChange?: (profile: RouteProfileId) => void;
+}
+
+/**
+ * The preference a plan says it was made with, or null when it names nothing
+ * this build recognises. A plan is a network response -- or a service-worker
+ * cached one, and a plan cached before profiles existed (#199) carries no
+ * `profile` at all -- so its type is a claim about what some server wrote, not a
+ * fact about what arrived. Null renders as "not recorded", never as a preference.
+ */
+function plannedProfileOf(plan: RoutePlan): RouteProfileId | null {
+  const value: unknown = plan.profile;
+  return typeof value === 'string' && (ROUTE_PROFILE_IDS as readonly string[]).includes(value)
+    ? (value as RouteProfileId)
+    : null;
+}
+
+/**
+ * What the preference did, in the words the result can support. Mirrors
+ * `profileApplied`'s three states, plus `unrecorded` for a plan that does not
+ * say -- because the one thing this panel must never do is fill that silence
+ * with a claim.
+ */
+type ProfileOutcome = 'applied' | 'onlyRoute' | 'noSearch' | 'unrecorded';
+
+function profileOutcomeOf(plan: RoutePlan, planned: RouteProfileId | null): ProfileOutcome {
+  if (planned === null) return 'unrecorded';
+  if (plan.profileApplied === true) return 'applied';
+  if (plan.profileApplied === false) return 'onlyRoute';
+  if (plan.profileApplied === null && plan.source === 'fallback') return 'noSearch';
+  return 'unrecorded';
+}
+
+export function RoutePlanner({
+  profile: controlledProfile,
+  onProfileChange,
+}: RoutePlannerProps = {}) {
   const intl = useIntl();
   const labels = useLabels();
+  const [localProfile, setLocalProfile] = useState<RouteProfileId>(DEFAULT_ROUTE_PROFILE_ID);
+  const profile = controlledProfile ?? localProfile;
+  const chooseProfile = (next: RouteProfileId) => {
+    if (controlledProfile === undefined) setLocalProfile(next);
+    onProfileChange?.(next);
+  };
   const [start, setStart] = useState<Endpoint>(DEFAULT_START);
   const [end, setEnd] = useState<Endpoint>(DEFAULT_END);
   const [plan, setPlan] = useState<RoutePlan | null>(null);
@@ -45,7 +107,7 @@ export function RoutePlanner() {
     setLoading(true);
     setError(null);
     try {
-      setPlan(await fetchRoute(start.point, end.point));
+      setPlan(await fetchRoute(start.point, end.point, profile));
     } catch (err) {
       setError(
         err instanceof Error
@@ -101,6 +163,8 @@ export function RoutePlanner() {
   };
 
   const hazardsOnRoute = plan?.nearby.length ?? 0;
+  const plannedProfile = plan ? plannedProfileOf(plan) : null;
+  const profileOutcome: ProfileOutcome = plan ? profileOutcomeOf(plan, plannedProfile) : 'unrecorded';
 
   return (
     <section
@@ -148,6 +212,40 @@ export function RoutePlanner() {
           );
         })}
 
+        <fieldset className="route-profile">
+          <legend>
+            <FormattedMessage id="route.profile.legend" defaultMessage="Route preference" />
+          </legend>
+          <p className="hint route-profile-note">
+            <FormattedMessage
+              id="route.profile.note"
+              defaultMessage="Each preference weighs the hazards riders have reported differently. None of them makes a route safe: the map only knows what has been reported."
+            />
+          </p>
+          {ROUTE_PROFILE_IDS.map((id) => (
+            <div className="route-profile-option" key={id}>
+              <label
+                className={`route-profile-chip${profile === id ? ' route-profile-chip-on' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="route-profile"
+                  value={id}
+                  checked={profile === id}
+                  onChange={() => chooseProfile(id)}
+                  aria-describedby={`route-profile-weights-${id}`}
+                />
+                {labels.routeProfile(id)}
+              </label>
+              <ul className="route-profile-weights" id={`route-profile-weights-${id}`}>
+                {labels.routeProfileWeights(id).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </fieldset>
+
         <button type="submit" className="btn" disabled={loading}>
           {loading ? (
             <FormattedMessage id="route.planning" defaultMessage="Planning…" />
@@ -161,6 +259,19 @@ export function RoutePlanner() {
         {error && (
           <p role="alert" className="error-text">
             {error}
+          </p>
+        )}
+        {plannedProfile !== null && plannedProfile !== profile && (
+          <p className="route-profile-stale">
+            <FormattedMessage
+              id="route.profile.stale"
+              defaultMessage="The route below was planned with the <strong>{planned}</strong> preference. You have chosen <strong>{selected}</strong> since: plan again to use it."
+              values={{
+                planned: labels.routeProfile(plannedProfile),
+                selected: labels.routeProfile(profile),
+                strong: (chunks) => <strong>{chunks}</strong>,
+              }}
+            />
           </p>
         )}
       </div>
@@ -208,6 +319,60 @@ export function RoutePlanner() {
               />
             </p>
           )}
+
+          <div className="route-profile-result">
+            <p className="hint">
+              {profileOutcome === 'unrecorded' || plannedProfile === null ? (
+                <FormattedMessage
+                  id="route.profile.result.unrecorded"
+                  defaultMessage="This plan does not record what its route preference did. It may have been saved on this device before preferences existed; plan again to use one."
+                />
+              ) : profileOutcome === 'applied' ? (
+                <FormattedMessage
+                  id="route.profile.result.applied"
+                  defaultMessage="Chosen with the <strong>{profile}</strong> preference."
+                  values={{
+                    profile: labels.routeProfile(plannedProfile),
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  }}
+                />
+              ) : profileOutcome === 'onlyRoute' ? (
+                <FormattedMessage
+                  id="route.profile.result.onlyRoute"
+                  defaultMessage="Planned with the <strong>{profile}</strong> preference, but the road network offered only this one route, so the preference had nothing to choose between: every preference would give you this route."
+                  values={{
+                    profile: labels.routeProfile(plannedProfile),
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  }}
+                />
+              ) : (
+                <FormattedMessage
+                  id="route.profile.result.noSearch"
+                  defaultMessage="The <strong>{profile}</strong> preference did not choose this: it is a direct line, not a route search."
+                  values={{
+                    profile: labels.routeProfile(plannedProfile),
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  }}
+                />
+              )}
+            </p>
+            {profileOutcome !== 'unrecorded' && plannedProfile !== null && (
+              <>
+                <p className="route-profile-weights-heading" id="route-profile-result-weights">
+                  <FormattedMessage
+                    id="route.profile.result.weightsHeading"
+                    defaultMessage="How {profile} weighs reported hazards:"
+                    values={{ profile: labels.routeProfile(plannedProfile) }}
+                  />
+                </p>
+                <ul className="route-profile-weights" aria-labelledby="route-profile-result-weights">
+                  {labels.routeProfileWeights(plannedProfile).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
 
           {plan.fastestAlternative && (
             <p className="hint route-comparison">
@@ -285,8 +450,39 @@ export function RoutePlanner() {
           <h4>
             <FormattedMessage id="route.steps.heading" defaultMessage="Turn-by-turn directions" />
           </h4>
+          {plan.route.steps.length > 0 && plannedProfile !== null && profileOutcome !== 'unrecorded' && (
+            <p className="hint route-steps-profile" id="route-steps-profile">
+              {profileOutcome === 'applied' ? (
+                <FormattedMessage
+                  id="route.steps.profile.applied"
+                  defaultMessage="For the route the <strong>{profile}</strong> preference chose."
+                  values={{
+                    profile: labels.routeProfile(plannedProfile),
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  }}
+                />
+              ) : profileOutcome === 'onlyRoute' ? (
+                <FormattedMessage
+                  id="route.steps.profile.onlyRoute"
+                  defaultMessage="For the only route the road network offered; no preference chose between routes."
+                />
+              ) : (
+                <FormattedMessage
+                  id="route.steps.profile.noSearch"
+                  defaultMessage="For a direct line; no route preference chose it."
+                />
+              )}
+            </p>
+          )}
           {plan.route.steps.length > 0 ? (
-            <ol className="route-steps">
+            <ol
+              className="route-steps"
+              aria-describedby={
+                plannedProfile !== null && profileOutcome !== 'unrecorded'
+                  ? 'route-steps-profile'
+                  : undefined
+              }
+            >
               {plan.route.steps.map((step, i) => (
                 <li key={i}>
                   <span className="route-step-instruction">{step.instruction}</span>

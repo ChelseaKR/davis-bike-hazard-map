@@ -10,13 +10,18 @@
  * React components.
  */
 import { defineMessages, useIntl, type IntlShape } from 'react-intl';
-import type {
-  HazardCategory,
-  Severity,
-  LifecycleStage,
-  HandoffStage,
-  PublicHandoffInfo,
+import {
+  DEFAULT_ROUTE_PROFILE_ID,
+  HAZARD_CATEGORIES,
+  type HazardCategory,
+  type Severity,
+  type LifecycleStage,
+  type HandoffStage,
+  type PublicHandoffInfo,
+  type RouteProfileId,
 } from '../../shared/types.ts';
+import { DEFAULT_SCORING, ROUTE_PROFILES } from '../../shared/routing.ts';
+import { formatDistance } from '../lib/format.ts';
 import type { QueueState } from '../lib/db.ts';
 import type { GeolocationFailure } from '../lib/geolocation.ts';
 import type { PushRegistrationFailure } from '../lib/push.ts';
@@ -81,6 +86,56 @@ const handoffDeliveryMessages = defineMessages({
   unknown: {
     id: 'hazard.handoff.delivery.unknown',
     defaultMessage: 'City 311: forwarded, but delivery was not recorded.',
+  },
+});
+
+/**
+ * Rider routing preferences (issue #178). The ids are the API's; these are what a
+ * rider reads. `family-safest` is deliberately not called "safest" here: no
+ * profile makes a route safe (see `ROUTE_PROFILES` in shared/routing.ts), and a
+ * picker label is exactly where a rider would take that word as a promise.
+ */
+const routeProfileMessages = defineMessages({
+  default: { id: 'route.profile.name.default', defaultMessage: 'Standard' },
+  'family-safest': {
+    id: 'route.profile.name.familySafest',
+    defaultMessage: 'Family / cargo bike',
+  },
+  'e-bike': { id: 'route.profile.name.eBike', defaultMessage: 'E-bike' },
+});
+
+/**
+ * One sentence per rule a routing profile applies. Composed from
+ * `ROUTE_PROFILES` and `DEFAULT_SCORING` by {@link routeProfileWeightLines}
+ * rather than written per profile, so a weight change in shared/routing.ts
+ * changes what a rider is told in the same commit. A hand-written description of
+ * each profile would be a second copy of the table with nothing holding the two
+ * together.
+ */
+const routeProfileWeightMessages = defineMessages({
+  basePenalty: {
+    id: 'route.profile.weight.basePenalty',
+    defaultMessage:
+      'A high-severity report right beside a route counts as {distance} of extra riding, and less as it ages or sits further from the line.',
+  },
+  basePenaltyChanged: {
+    id: 'route.profile.weight.basePenaltyChanged',
+    defaultMessage:
+      'A high-severity report right beside a route counts as {distance} of extra riding ({standard}: {standardDistance}), and less as it ages or sits further from the line.',
+  },
+  multiplier: {
+    id: 'route.profile.weight.multiplier',
+    defaultMessage:
+      '{count, plural, one {{categories} counts {factor}× as much as usual.} other {{categories} count {factor}× as much as usual.}}',
+  },
+  noMultipliers: {
+    id: 'route.profile.weight.noMultipliers',
+    defaultMessage: 'Every hazard type counts the same.',
+  },
+  refuseHighSeverity: {
+    id: 'route.profile.weight.refuseHighSeverity',
+    defaultMessage:
+      'Never picks a route past a high-severity report while the road network offered one without, however much longer that one is.',
   },
 });
 
@@ -265,6 +320,66 @@ export function handoffNote(intl: IntlShape, handoff: PublicHandoffInfo): string
   );
 }
 
+export function routeProfileLabel(intl: IntlShape, id: RouteProfileId): string {
+  return intl.formatMessage(routeProfileMessages[id]);
+}
+
+/**
+ * The rules a routing profile applies, as sentences, in a fixed order: the base
+ * high-severity cost, then each per-type multiplier (largest first, ties in
+ * `HAZARD_CATEGORIES` order), then the high-severity refusal. Deterministic, so
+ * the picker and the result print the same lines for the same profile.
+ *
+ * A multiplier of exactly 1 is not described: it changes nothing, and a line
+ * saying so would read as a rule. `scoring` overrides other than
+ * `highPenaltyMeters` are not described either, because none exist;
+ * `tests/unit/routeProfileCopy.test.ts` fails the day one is added to the table
+ * without a sentence here.
+ */
+export function routeProfileWeightLines(intl: IntlShape, id: RouteProfileId): string[] {
+  const profile = ROUTE_PROFILES[id];
+  const standardMeters = DEFAULT_SCORING.highPenaltyMeters;
+  const meters = profile.scoring.highPenaltyMeters ?? standardMeters;
+  const lines = [
+    meters === standardMeters
+      ? intl.formatMessage(routeProfileWeightMessages.basePenalty, {
+          distance: formatDistance(meters),
+        })
+      : intl.formatMessage(routeProfileWeightMessages.basePenaltyChanged, {
+          distance: formatDistance(meters),
+          standard: routeProfileLabel(intl, DEFAULT_ROUTE_PROFILE_ID),
+          standardDistance: formatDistance(standardMeters),
+        }),
+  ];
+
+  const byFactor = new Map<number, HazardCategory[]>();
+  for (const category of HAZARD_CATEGORIES) {
+    const factor = profile.categoryMultipliers[category];
+    if (factor === undefined || factor === 1) continue;
+    byFactor.set(factor, [...(byFactor.get(factor) ?? []), category]);
+  }
+  if (byFactor.size === 0) {
+    lines.push(intl.formatMessage(routeProfileWeightMessages.noMultipliers));
+  }
+  for (const [factor, categories] of [...byFactor].sort(([a], [b]) => b - a)) {
+    lines.push(
+      intl.formatMessage(routeProfileWeightMessages.multiplier, {
+        count: categories.length,
+        categories: intl.formatList(
+          categories.map((c) => categoryLabel(intl, c)),
+          { type: 'conjunction' },
+        ),
+        factor: intl.formatNumber(factor, { maximumFractionDigits: 2 }),
+      }),
+    );
+  }
+
+  if (profile.refuseHighSeverityWhenAlternativeExists) {
+    lines.push(intl.formatMessage(routeProfileWeightMessages.refuseHighSeverity));
+  }
+  return lines;
+}
+
 export function queueStateLabel(intl: IntlShape, state: QueueState): string {
   return intl.formatMessage(queueStateMessages[state]);
 }
@@ -293,5 +408,7 @@ export function useLabels() {
     handoffNote: (handoff: PublicHandoffInfo) => handoffNote(intl, handoff),
     queueState: (state: QueueState) => queueStateLabel(intl, state),
     queueError: (code?: string) => queueErrorLabel(intl, code),
+    routeProfile: (id: RouteProfileId) => routeProfileLabel(intl, id),
+    routeProfileWeights: (id: RouteProfileId) => routeProfileWeightLines(intl, id),
   };
 }

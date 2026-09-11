@@ -54,7 +54,8 @@ const TABS = config.publicDashboard
 
 export default function App() {
   const intl = useIntl();
-  const [{ tab, filters, focusHazard, pendingHazardId, statusKey }, dispatch] = useViewState();
+  const [{ tab, filters, focusHazard, pendingHazardId, statusKey, routeProfile }, dispatch] =
+    useViewState();
   const online = useOnline();
 
   const { hazards, all, loading, error, lastUpdatedAt, refresh } = useHazards(filters);
@@ -226,7 +227,12 @@ export default function App() {
 
           {tab === 'coverage' && <CoverageView hazards={all} />}
 
-          {tab === 'route' && <RoutePlanner />}
+          {tab === 'route' && (
+            <RoutePlanner
+              profile={routeProfile}
+              onProfileChange={(profile) => dispatch({ type: 'setRouteProfile', profile })}
+            />
+          )}
 
           {!config.publicDashboard && tab === 'report' && (
             <>

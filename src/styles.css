@@ -1028,6 +1028,59 @@ textarea {
   font-size: 0.8rem;
   color: var(--ink-soft);
 }
+/* Rider preference (issue #178): a native radio group, the label wrapping its
+   input so the whole chip is the target (the ReportForm severity pattern). */
+.route-profile {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 0;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.route-profile legend {
+  font-weight: 700;
+  padding: 0 0.3rem;
+}
+.route-profile-option {
+  margin-top: 0.6rem;
+}
+.route-profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: var(--tap);
+  padding: 0.3rem 0.8rem;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+.route-profile-chip-on {
+  border-color: var(--brand);
+  background: #e6f2ec;
+  color: var(--brand-dark);
+}
+.route-profile-chip:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.route-profile-weights {
+  margin: 0.3rem 0 0;
+  padding-inline-start: 1.2rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.route-profile-weights-heading {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.route-profile-stale {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.6rem;
+  border-inline-start: 4px solid var(--brand);
+  background: var(--surface);
+}
 .route-summary {
   display: flex;
   flex-wrap: wrap;

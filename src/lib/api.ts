@@ -6,12 +6,14 @@
  */
 import { getDeviceId } from './deviceId.ts';
 import { config } from '../config.ts';
-import type {
-  ApiError,
-  GeoPoint,
-  Hazard,
-  HazardFilters,
-  ReportSubmission,
+import {
+  DEFAULT_ROUTE_PROFILE_ID,
+  type ApiError,
+  type GeoPoint,
+  type Hazard,
+  type HazardFilters,
+  type ReportSubmission,
+  type RouteProfileId,
 } from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import type { Watch } from '../../shared/alerts.ts';
@@ -194,10 +196,21 @@ export async function confirmHazard(id: string): Promise<{ hazard: Hazard; count
 /**
  * Plan a hazard-aware cycling route between two points. Same-origin (the server
  * proxies the OSRM backend), so the response is service-worker cacheable.
+ *
+ * `profile` is the rider preference (issue #178). The default is omitted rather
+ * than sent: the server reads an absent profile as `default`, and leaving it off
+ * keeps the URL -- and so the service worker's cached plan for it -- identical to
+ * every plan requested before profiles existed.
  */
-export async function fetchRoute(from: GeoPoint, to: GeoPoint): Promise<RoutePlan> {
+export async function fetchRoute(
+  from: GeoPoint,
+  to: GeoPoint,
+  profile: RouteProfileId = DEFAULT_ROUTE_PROFILE_ID,
+): Promise<RoutePlan> {
   // i18n-exempt: query string, not display copy
-  const q = `from=${from.lat},${from.lng}&to=${to.lat},${to.lng}`;
+  let q = `from=${from.lat},${from.lng}&to=${to.lat},${to.lng}`;
+  // i18n-exempt: query string, not display copy
+  if (profile !== DEFAULT_ROUTE_PROFILE_ID) q += `&profile=${encodeURIComponent(profile)}`;
   const { plan } = await request<{ plan: RoutePlan }>(`/route?${q}`);
   return plan;
 }
