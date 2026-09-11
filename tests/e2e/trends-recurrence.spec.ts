@@ -92,12 +92,40 @@ test('a default deployment publishes no recurrence labels, and says nothing abou
 
 test('a published label reads the same on the list card and in the map popup', async ({
   page,
-  request,
-}, testInfo) => {
-  const description = `E2E recurrence label (${testInfo.project.name})`;
-  const id = await seedApprovedHazard(request, { lat: 38.5312, lng: -121.7208 }, description);
+}) => {
+  // The feed is stubbed to ONE hazard on purpose. This test is about the client
+  // rendering one sentence on two surfaces, and the map identifies a marker only
+  // by its category in the alt text: with the store shared across specs and both
+  // browser projects, several hazards of one category mean several identical
+  // markers and `.first()` clicks whichever the DOM happened to order first.
+  // (That is exactly how it failed on main, in firefox, after chromium had
+  // already seeded one.) The server's own label path is covered by the API tests
+  // and by the default-deployment test above.
+  const id = 'e2e-recurrence-label';
+  const description = 'E2E stubbed hazard for the recurrence label';
   const sentence = 'Reported here in 3 separate episodes since January 2026.';
+  const hazard = {
+    id,
+    category: 'surface_damage',
+    severity: 'moderate',
+    description,
+    location: { lat: 38.5312, lng: -121.7208 },
+    photoUrl: null,
+    thumbnailUrl: null,
+    status: 'approved',
+    confirmations: 0,
+    createdAt: Date.now() - 60_000,
+    updatedAt: Date.now() - 60_000,
+    expiresAt: Date.now() + 30 * 86_400_000,
+    resolvedAt: null,
+    handoff: null,
+    source: 'report',
+  };
 
+  await page.route(
+    (url) => url.pathname === '/api/hazards',
+    (route) => route.fulfill({ json: { hazards: [hazard], serverTime: Date.now() } }),
+  );
   await page.route(
     (url) => url.pathname === '/api/hazards/recurrence',
     (route) =>
@@ -118,7 +146,9 @@ test('a published label reads the same on the list card and in the map popup', a
 
   // The same sentence, from the same state, in the popup.
   await page.goto(`/#/hazard/${id}`);
-  await page.getByAltText('Surface damage hazard marker').first().click();
+  const marker = page.getByAltText('Surface damage hazard marker');
+  await expect(marker).toHaveCount(1);
+  await marker.click();
   await expect(page.locator('.map-popup-recurrence')).toHaveText(sentence);
 });
 
