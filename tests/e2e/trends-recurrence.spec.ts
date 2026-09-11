@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { openTab, seedApprovedHazard } from './helpers.ts';
 
 /**
@@ -152,4 +153,15 @@ test('the monthly table reflows at 320px without splitting a figure across two l
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
+
+  // And the container that scrolls is reachable by keyboard. This scan is at
+  // 320px on purpose: axe's `scrollable-region-focusable` only applies once the
+  // element actually overflows, so the desktop-width pass in a11y.spec.ts can be
+  // green while a narrow screen is mouse-only -- which is how CI caught it and a
+  // desktop run did not.
+  await expect(page.locator('.trends-scroll')).toHaveAttribute('tabindex', '0');
+  const scan = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(scan.violations).toEqual([]);
 });

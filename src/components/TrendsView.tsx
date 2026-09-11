@@ -134,7 +134,26 @@ export function TrendsView() {
             </select>
           </div>
 
-          <div className="trends-scroll">
+          {/*
+            A region that scrolls must be reachable by keyboard (WCAG 2.1.1,
+            axe `scrollable-region-focusable`): at a narrow width this container
+            is the only way to the columns that are off screen, and a mouse must
+            not be the only way to get there. CI caught this where a local
+            desktop-width scan could not -- the rule only applies once the table
+            actually overflows, which at 1280px it does not.
+          */}
+          <div
+            className="trends-scroll"
+            // jsx-a11y's static rule and axe's runtime rule disagree here, and
+            // axe is the one measuring the rendered page.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={0}
+            role="region"
+            aria-label={intl.formatMessage({
+              id: 'trends.tableRegion',
+              defaultMessage: 'Reports by month, scrollable table',
+            })}
+          >
             <table className="trends-table">
               <caption>
                 {area === ALL_AREAS ? (

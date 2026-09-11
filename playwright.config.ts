@@ -71,9 +71,18 @@ export default defineConfig({
     // picker scan already applies to tiles. A spec that needs a real multi-route
     // answer stubs `/api/route` in the browser instead
     // (tests/e2e/route-profiles.spec.ts).
+    //
+    // The rate limits are raised for the same kind of reason. Every request in
+    // this suite comes from one IP inside one 60-second window, and the server's
+    // production defaults (120 requests/minute, 30 reports/hour) are a property
+    // of the deployment, not of anything under test: nothing in tests/e2e
+    // asserts a 429. Left at the defaults, CI failed with a moderation approve
+    // answering 429 and a page whose own feed request was refused -- a limit the
+    // suite hit by being a suite, reported as a broken feature.
     command:
       'cross-env PWA_DISABLE=true npm run build && cross-env NODE_ENV=production ' +
       'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret CSP_UPGRADE_INSECURE_REQUESTS=false ROUTING_URL= ' +
+      'RATE_LIMIT_MAX=100000 REPORTS_PER_HOUR=100000 CONFIRMATIONS_PER_HOUR=100000 ' +
       'MODERATOR_USERNAME=e2e MODERATOR_PASSWORD=e2e-password ' +
       `PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,

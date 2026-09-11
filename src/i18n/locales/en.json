@@ -316,5 +316,6 @@
   "trends.loading": "Loading monthly totals…",
   "trends.omitted": "{count, plural, one {# month} other {# months}} in this span had no reports anywhere and {count, plural, one {is} other {are}} left out rather than shown as zero: this service cannot tell a quiet month from one it was not running in.",
   "trends.seedExcluded": "{count, plural, one {# illustrative demo hazard is} other {# illustrative demo hazards are}} not counted: demo data is fiction, and its dates are invented.",
+  "trends.tableRegion": "Reports by month, scrollable table",
   "trends.unavailable": "<strong>The monthly totals could not be loaded</strong>, so none are shown. There is nothing to fall back on here: the map only carries what is on it now."
 }
