@@ -37,6 +37,15 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // A test that failed and then passed on the retry above is reported `flaky`,
+  // and Playwright exits 0 on flaky unless told otherwise — so the retry turns
+  // an intermittent failure into a green check that records nothing but a log
+  // line. That has already happened on this config: the WebKit nightly of
+  // 2026-09-10 (run 34527424825) concluded `success` over `1 flaky`, a 15s
+  // predicate timeout in the offline capture->sync spec. In CI the retry still
+  // runs and `trace: 'on-first-retry'` still captures the failed attempt; the
+  // run fails. Locally there is no retry, so a flake is already a failure.
+  failOnFlakyTests: !!process.env.CI,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
 
   use: {
