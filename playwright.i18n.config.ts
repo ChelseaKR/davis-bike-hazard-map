@@ -20,6 +20,10 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // Same rule as the main e2e config: a test that failed and then passed on the
+  // retry above is reported `flaky`, and Playwright exits 0 on flaky unless
+  // told otherwise. The retry still runs; the run fails so the flake is seen.
+  failOnFlakyTests: !!process.env.CI,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
 
   use: {
