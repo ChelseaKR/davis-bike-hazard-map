@@ -1,3 +1,11 @@
+# Not covered by any entry below, because Dependabot has no ecosystem for these
+# pins. Renovate's default `nvm` and `github-actions` managers proposed bumps to
+# them until Renovate was disabled (#219). They are now a manual check:
+#   - `.nvmrc`, and the `node-version:` inputs to actions/setup-node in
+#     .github/workflows/, including ci.yml's matrix
+#   - the `postgres:16-alpine` service container in ci.yml (keep it on the same
+#     major as the `db` image in docker-compose.yml, which Dependabot does bump)
+
 version: 2
 updates:
   # Application dependencies.
@@ -10,6 +18,26 @@ updates:
       # Batch low-risk dev/test tooling into one PR to cut noise.
       dev-dependencies:
         dependency-type: development
+    labels:
+      - dependencies
+
+  # Base image of the Dockerfile (node:22-slim, both stages). Only Renovate's
+  # default `dockerfile` manager tracked it, until Renovate was disabled (#219).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+
+  # The `db` image in docker-compose.yml (postgres:16-alpine) for the local
+  # stack. Only Renovate's default `docker-compose` manager tracked it, until
+  # Renovate was disabled (#219). The `app` service is built from the
+  # Dockerfile and has no `image:`, so there is nothing else here to look up.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
     labels:
       - dependencies
 
