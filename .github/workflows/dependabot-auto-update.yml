@@ -104,7 +104,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  # Serialise; do NOT cancel in progress — this job mutates refs and must be
+  # Serialize; do NOT cancel in progress — this job mutates refs and must be
   # allowed to finish the PR it is on.
   group: dependabot-auto-update
   cancel-in-progress: false

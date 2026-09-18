@@ -170,7 +170,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     // coords, auth headers, tokens, secrets). See server/lib/logger.ts.
     logger: deps.logger ?? buildLoggerOptions(config),
     bodyLimit: 6 * 1024 * 1024, // photos arrive as base64; keep a sane ceiling
-    // Honour an upstream X-Request-Id (proxy/CDN) for log correlation; otherwise
+    // Honor an upstream X-Request-Id (proxy/CDN) for log correlation; otherwise
     // Fastify generates one. Echoed back on responses below.
     requestIdHeader: 'x-request-id',
     // Versioning: /api/v1/* is an alias for /api/* (rewritten before routing),
@@ -187,7 +187,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('x-api-version', API_VERSION);
   });
 
-  // RED metrics: observe every request's duration, labelled by the route
+  // RED metrics: observe every request's duration, labeled by the route
   // *pattern* (bounded cardinality) and status.
   const metrics = createMetrics();
   app.addHook('onResponse', async (req, reply) => {
@@ -214,7 +214,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         // `upgrade-insecure-requests` is one of helmet's defaults and is
         // inherited by this list. `null` is helmet's way of dropping a default
         // directive, and the e2e harness is the only thing that asks for it:
-        // over plain http://localhost WebKit honours the upgrade, every asset
+        // over plain http://localhost WebKit honors the upgrade, every asset
         // request goes to https:// against a plaintext port, and the app never
         // boots. See serverConfig.cspUpgradeInsecureRequests for the full note.
         ...(config.cspUpgradeInsecureRequests ? {} : { upgradeInsecureRequests: null }),
@@ -487,7 +487,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
     // Full feed (first load or a stale cursor). bbox is pushed down to the store
     // (SQL) for spatial culling at scale. The feed also carries recently-resolved
-    // hazards (greyed client-side) so a fix is visible, not just an absence.
+    // hazards (grayed client-side) so a fix is visible, not just an absence.
     let hazards = await listPublicFeed(repo, nowMs, config.resolvedVisibleDays * DAY_MS, filters.bbox);
     hazards = applyFeedFilters(hazards, filters, nowMs);
 
@@ -705,7 +705,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { routes, source } = await fetchRoutes(from, to, { routingUrl: config.routingUrl }, fetchImpl);
     // After civil twilight, weight poor-visibility hazards higher — an unlit
     // path matters more in the dark. Derived from the request time + the served
-    // place's centre so it's honest and needs no external API.
+    // place's center so it's honest and needs no external API.
     const isDark = isDarkAt(at, PLACE.center.lat, PLACE.center.lng);
     // Corridor slightly wider than the privacy fuzz grid (~70 m cells) so a
     // hazard published a cell away from the true spot still influences scoring.

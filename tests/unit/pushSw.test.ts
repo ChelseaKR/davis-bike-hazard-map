@@ -5,7 +5,7 @@
  * `importScripts` (see vite.config.ts), and jsdom has no ServiceWorkerGlobalScope
  * — so it is evaluated here with a stubbed `self`, and the registered listeners
  * are driven directly. That covers payload parsing (incl. malformed payloads),
- * notification display, and the click-to-focus/open behaviour without a real
+ * notification display, and the click-to-focus/open behavior without a real
  * push service.
  */
 import { readFileSync } from 'node:fs';

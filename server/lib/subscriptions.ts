@@ -31,7 +31,7 @@ export function subscriptionId(endpoint: string): string {
 /**
  * Stored-geometry precision for route watches: half the public fuzz grid
  * (~35 m). Deviations this small are invisible to corridor matching (corridors
- * are ≥ tens of metres) but strip the exact-trace precision we must not keep.
+ * are ≥ tens of meters) but strip the exact-trace precision we must not keep.
  */
 export const WATCH_GEOMETRY_TOLERANCE_METERS = DEFAULT_FUZZ_METERS / 2;
 

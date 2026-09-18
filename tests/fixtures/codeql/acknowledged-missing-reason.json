@@ -1,5 +1,5 @@
 {
-  "_comment": "Fixture for tests/unit/codeqlGate.test.ts. An acknowledgement with no reason must be refused, not accepted as a silent waiver.",
+  "_comment": "Fixture for tests/unit/codeqlGate.test.ts. An acknowledgment with no reason must be refused, not accepted as a silent waiver.",
   "acknowledged": [
     { "ruleId": "js/example", "path": "server/app.ts" }
   ]

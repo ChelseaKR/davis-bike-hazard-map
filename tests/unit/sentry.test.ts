@@ -1,6 +1,6 @@
 /**
  * Server-side Sentry forwarding. The transport (@sentry/node) is mocked so we
- * assert the gate behaviour — nothing is forwarded until a DSN is configured,
+ * assert the gate behavior — nothing is forwarded until a DSN is configured,
  * and once it is, server and client errors are shaped correctly — without ever
  * phoning home. `enabled` is module-level, so these run in order: disabled
  * first, then enabled.
@@ -21,7 +21,7 @@ describe('server Sentry gate', () => {
     vi.clearAllMocks();
   });
 
-  it('captureError is a no-op before initialisation (dev/test never phone home)', () => {
+  it('captureError is a no-op before initialization (dev/test never phone home)', () => {
     captureError(new Error('x'), { hazardId: 'h1' });
     captureClientError({ message: 'render failed' });
     expect(Sentry.captureException).not.toHaveBeenCalled();
@@ -54,7 +54,7 @@ describe('server Sentry gate', () => {
     expect(Sentry.captureException).toHaveBeenLastCalledWith(err, undefined);
   });
 
-  it('honours an env-configured trace sample rate (still non-zero)', () => {
+  it('honors an env-configured trace sample rate (still non-zero)', () => {
     initSentry('https://key@example.ingest/2', 'production', 0.25);
     expect(Sentry.init).toHaveBeenCalledWith(
       expect.objectContaining({ tracesSampleRate: 0.25, sendDefaultPii: false }),

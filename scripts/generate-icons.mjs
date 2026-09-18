@@ -3,7 +3,7 @@
  * zlib + a tiny PNG encoder). Run via `node scripts/generate-icons.mjs`.
  *
  * Produces a brand-green tile with a white pin glyph at the sizes the manifest
- * references. Regenerate whenever the brand colour changes.
+ * references. Regenerate whenever the brand color changes.
  */
 import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -62,7 +62,7 @@ function encodePng(size, draw) {
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
   ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // colour type RGBA
+  ihdr[9] = 6; // color type RGBA
   return Buffer.concat([
     sig,
     chunk('IHDR', ihdr),
@@ -71,7 +71,7 @@ function encodePng(size, draw) {
   ]);
 }
 
-/** A teardrop map-pin with a hole, centred on the tile. */
+/** A teardrop map-pin with a hole, centered on the tile. */
 function pinPixel(size, maskable) {
   const pad = maskable ? size * 0.1 : 0; // keep glyph inside maskable safe zone
   const inner = size - pad * 2;

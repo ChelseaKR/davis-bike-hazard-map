@@ -1,15 +1,15 @@
 /**
  * Photo helpers. Canvas compositing lives in the PhotoEditor component (it is
- * browser-only); the pure, testable maths lives here.
+ * browser-only); the pure, testable math lives here.
  */
 
 /** Why reading a chosen photo failed. A code, not prose — see below. */
 export type PhotoReadFailure = 'unreadable';
 
 /**
- * Photo-read failure as a catalogue-resolvable code (issue #173).
+ * Photo-read failure as a catalog-resolvable code (issue #173).
  *
- * `PhotoEditor` currently discards this error and renders its own catalogued
+ * `PhotoEditor` currently discards this error and renders its own cataloged
  * message, so nothing English leaks today — but the literal was one `catch (e)`
  * away from doing so, and the same reasoning applies as in `geolocation.ts`:
  * this module has no `intl`, so a sentence here is untranslatable by

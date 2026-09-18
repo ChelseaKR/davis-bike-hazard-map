@@ -3,7 +3,7 @@
  * planner.
  *
  * Presets keep the planner fully usable WITHOUT the map (accessibility: a
- * keyboard/screen-reader user can pick endpoints from a labelled <select>) and
+ * keyboard/screen-reader user can pick endpoints from a labeled <select>) and
  * WITHOUT a network (they ship in the bundle), while "Use my location" and
  * tapping the map remain available as enhancements.
  *

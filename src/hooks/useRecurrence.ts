@@ -44,10 +44,10 @@ export function useRecurrence(refreshKey: unknown): RecurrenceState {
   const [state, setState] = useState<RecurrenceState>({ status: 'loading' });
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetchRecurrence().then(
       (badges) => {
-        if (cancelled) return;
+        if (canceled) return;
         setState(
           badges === null
             ? { status: 'unpublished' }
@@ -60,11 +60,11 @@ export function useRecurrence(refreshKey: unknown): RecurrenceState {
         );
       },
       () => {
-        if (!cancelled) setState({ status: 'unavailable' });
+        if (!canceled) setState({ status: 'unavailable' });
       },
     );
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [refreshKey]);
 

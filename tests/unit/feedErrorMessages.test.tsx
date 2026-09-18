@@ -6,7 +6,7 @@
  * verbatim. Both branches were untranslated English: the common one is the
  * SERVER's own sentence (`body.message`, composed by a server with no catalog),
  * and the fallback was the literal `Could not load hazards.` in the hook. The
- * alert around them was catalogued, so a Spanish rider got a translated heading
+ * alert around them was cataloged, so a Spanish rider got a translated heading
  * over an English sentence.
  *
  * An English regex cannot catch that — correct output and defective output are
@@ -72,8 +72,8 @@ describe('feed failure codes resolve through the catalog (#200)', () => {
     // Self-limiting in both directions: a new code with no message fails here
     // rather than rendering as an empty alert, and a message left behind by a
     // deleted code fails too.
-    const catalogued = Object.keys(en).filter((id) => id.startsWith('error.feed.'));
-    expect(catalogued.sort()).toEqual(CODES.map((c) => `error.feed.${c}`).sort());
+    const cataloged = Object.keys(en).filter((id) => id.startsWith('error.feed.'));
+    expect(cataloged.sort()).toEqual(CODES.map((c) => `error.feed.${c}`).sort());
   });
 });
 
@@ -126,7 +126,7 @@ describe('the transport classifies failures instead of describing them', () => {
 });
 
 describe("the rendered alert is the catalog's sentence, not the thrown one", () => {
-  it('ListView announces the catalogued text and never the server sentence', async () => {
+  it('ListView announces the cataloged text and never the server sentence', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse({ error: 'boom', message: SERVER_SENTENCE }, 503)),
@@ -140,7 +140,7 @@ describe("the rendered alert is the catalog's sentence, not the thrown one", () 
     expect(document.body.textContent).not.toContain(SERVER_SENTENCE);
   });
 
-  it('ListView announces the catalogued text when the feed is unreachable', async () => {
+  it('ListView announces the cataloged text when the feed is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
 
     renderWithSentinels(<Harness />);

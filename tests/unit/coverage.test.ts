@@ -5,7 +5,7 @@
  * "this area is safe" (docs/audits/coverage-equity.md). That only works if the
  * set it counts is *reports received*. Counted over the public feed instead —
  * approved-and-unexpired plus recently-resolved — an area whose reports are all
- * awaiting moderation, or have since expired, reads as zero and gets labelled a
+ * awaiting moderation, or have since expired, reads as zero and gets labeled a
  * data desert: the exact inversion of the truth, printed in the one surface
  * built to prevent it. These tests pin the set.
  */
@@ -134,7 +134,7 @@ describe('GET /api/coverage', () => {
 
     // The public feed cannot see a pending report, by design (moderation gate).
     expect(await feedCountFor('North Davis')).toBe(0);
-    // Coverage must, or North Davis is labelled a data desert while a rider is
+    // Coverage must, or North Davis is labeled a data desert while a rider is
     // waiting on the very report that proves it is not one.
     expect(await coverageFor('North Davis')).toBe(1);
   });

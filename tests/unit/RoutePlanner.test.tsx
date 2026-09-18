@@ -326,7 +326,7 @@ async function planIt() {
 }
 
 describe('RoutePlanner rider preference (issue #178)', () => {
-  it('offers every profile as a radio in one labelled group, Standard selected', () => {
+  it('offers every profile as a radio in one labeled group, Standard selected', () => {
     fetchRoute.mockReset();
     render(<RoutePlanner />);
     const group = screen.getByRole('group', { name: 'Route preference' });

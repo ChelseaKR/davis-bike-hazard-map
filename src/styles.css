@@ -2,7 +2,7 @@
  * Davis Bike Hazard Map styles.
  * Mobile-first, high-contrast (readable in sunlight), big touch targets,
  * visible focus, reduced-motion aware, and usable at 200% zoom / 320px width.
- * Colours meet WCAG 2.2 AA contrast for text and UI.
+ * Colors meet WCAG 2.2 AA contrast for text and UI.
  */
 
 :root {
@@ -803,7 +803,7 @@ textarea {
 }
 /* Shown when GET /api/coverage could not be read and the view is falling back
    to the public feed. Deliberately quieter than the desert call-out: it reports
-   a missing measurement, not a finding about a neighbourhood. */
+   a missing measurement, not a finding about a neighborhood. */
 .coverage-partial {
   border: 1px solid var(--line);
   background: var(--bg);

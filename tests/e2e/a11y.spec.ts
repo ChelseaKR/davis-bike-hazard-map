@@ -9,7 +9,7 @@ import {
 } from './helpers.ts';
 
 /**
- * Full-page accessibility pass in a real browser (covers colour-contrast and
+ * Full-page accessibility pass in a real browser (covers color-contrast and
  * page-structure rules that jsdom can't). Merge-blocking: zero violations.
  */
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -68,7 +68,7 @@ test.describe('accessibility', () => {
     await toggle.click();
 
     // The picker is lazily imported, so the click resolves before it mounts.
-    // Wait for Leaflet to have initialised the container — not for tiles, which
+    // Wait for Leaflet to have initialized the container — not for tiles, which
     // come from a third-party origin and must never decide whether CI is green.
     await expect(page.locator('.location-picker-map.leaflet-container')).toBeVisible();
     await expect(page.getByRole('button', { name: /hide map/i })).toHaveAttribute(

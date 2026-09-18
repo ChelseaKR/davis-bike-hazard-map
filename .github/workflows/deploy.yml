@@ -24,7 +24,7 @@ name: Deploy (Fly.io) [no-op until FLY_API_TOKEN is set]
 #   token-check  always runs, reads the secret, publishes present=true|false
 #   deploy       needs token-check, `if: present == 'true'`
 #
-# With no token, `deploy` now reports **skipped** and renders grey in the run's
+# With no token, `deploy` now reports **skipped** and renders gray in the run's
 # job list, instead of a green "Fly.io". `token-check` also emits a workflow
 # warning, so the run summary carries a visible "nothing was deployed" banner
 # rather than an unqualified green check.

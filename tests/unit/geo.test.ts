@@ -46,7 +46,7 @@ describe('fuzzCoordinate', () => {
 
   it('snaps nearby points (same latitude band) into the same published cell', () => {
     // The longitude grid step depends on latitude, so use the same latitude;
-    // two points a few metres apart in longitude collapse to one cell.
+    // two points a few meters apart in longitude collapse to one cell.
     const a = fuzzCoordinate({ lat: 38.5449, lng: -121.74048 }, 100);
     const b = fuzzCoordinate({ lat: 38.5449, lng: -121.74052 }, 100);
     expect(a).toEqual(b);
@@ -105,7 +105,7 @@ describe('fuzzCoordinate (privacy properties over the Davis bbox)', () => {
 });
 
 describe('isWithinPlace', () => {
-  it('accepts the city centre', () => {
+  it('accepts the city center', () => {
     expect(isWithinPlace(PLACE_CENTER)).toBe(true);
   });
 

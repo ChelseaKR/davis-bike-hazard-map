@@ -7,7 +7,7 @@
  * WHY THIS THROWS A CODE AND NOT A SENTENCE (issue #173). A thrown `Error`
  * carries a string, and this module has no `intl` — so any human-readable text
  * put in it is English that no catalog can reach. `RoutePlanner` used to
- * interpolate `err.message` straight into the catalogued `{reason}` slot of
+ * interpolate `err.message` straight into the cataloged `{reason}` slot of
  * `route.error.location`, which meant the wrapper was translated and the
  * payload was not: under an activated Spanish catalog a rider would get half a
  * translated sentence. So the error carries only `code`, and the component that

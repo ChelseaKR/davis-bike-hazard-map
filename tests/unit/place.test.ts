@@ -31,7 +31,7 @@ describe('the shipped Davis pack pins the values it replaced', () => {
     });
   });
 
-  it('keeps the centre, which routing.ts used to duplicate by hand', () => {
+  it('keeps the center, which routing.ts used to duplicate by hand', () => {
     expect(PLACE_CENTER).toEqual({ lat: 38.5449, lng: -121.7405 });
     // `shared/routing.ts` carried its own `DAVIS_LAT = 38.5449` / `DAVIS_LNG =
     // -121.7405` with a comment claiming the values matched, and nothing checked it.
@@ -161,10 +161,10 @@ describe('the loader refuses rather than defaulting', () => {
     expect(() => parsePlacePack(pack, 'stray-landmark')).toThrow(/outside the pack bounds/);
   });
 
-  it('refuses a centre outside the bounds', () => {
+  it('refuses a center outside the bounds', () => {
     const pack = validPack();
     pack.center = { lat: 0, lng: 0 };
-    expect(() => parsePlacePack(pack, 'stray-centre')).toThrow(/center is outside/);
+    expect(() => parsePlacePack(pack, 'stray-center')).toThrow(/center is outside/);
   });
 
   it('refuses an inverted bounding box', () => {
@@ -272,7 +272,7 @@ describe('a second pack drives the same code', () => {
     }
   });
 
-  it('refuses the Davis centre and accepts the synthetic centre — the packs really differ', () => {
+  it('refuses the Davis center and accepts the synthetic center — the packs really differ', () => {
     const davisSchema = placePointSchemaFor(PLACE as PlacePack);
     expect(davisSchema.safeParse(PLACE_CENTER).success).toBe(true);
     expect(davisSchema.safeParse(SYNTHETIC.center).success).toBe(false);

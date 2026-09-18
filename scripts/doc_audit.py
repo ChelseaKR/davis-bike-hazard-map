@@ -342,7 +342,7 @@ def _check_links(docs: Iterable[str]) -> tuple[int, int, list[str]]:
         if path.suffix != ".md":
             continue
         for target in _link_targets(_read_text(path)):
-            # Textual normalisation only: realpath would fold `..` *and*, on some
+            # Textual normalization only: realpath would fold `..` *and*, on some
             # platforms, the case this check exists to catch.
             resolved = Path(os.path.normpath(path.parent / target))
             if not resolved.is_relative_to(ROOT):

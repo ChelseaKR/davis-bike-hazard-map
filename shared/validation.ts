@@ -19,7 +19,7 @@ import {
  */
 export const PLACE_BOUNDS = PLACE.bounds;
 
-/** Centre of the served town — used as the default map view. */
+/** Center of the served town — used as the default map view. */
 export const PLACE_CENTER = PLACE.center;
 
 /** Max size of an uploaded (already-compressed) photo data URL, in bytes. */
@@ -36,7 +36,7 @@ export const geoPointSchema = z.object({
  * A point must be inside a pack's bounding box. Reports elsewhere are almost
  * always GPS errors or spam, and accepting them would pollute a local map.
  *
- * Parameterised over the pack so a second town's bounds can be exercised by the
+ * Parameterized over the pack so a second town's bounds can be exercised by the
  * same tests that exercise Davis's — proof that the rule is pack-driven, not a
  * claim that it is.
  */

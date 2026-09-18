@@ -25,7 +25,7 @@ unmoderated public photo feed** — this is a launch gate, not a nice-to-have.
 
 ## What gets rejected
 
-- Photos of identifiable people or licence plates that weren't blurred.
+- Photos of identifiable people or license plates that weren't blurred.
 - Content that is not a cycling hazard, is abusive, or targets individuals.
 - Obvious spam or out-of-area (outside the Davis bounding box — also rejected at
   intake by validation).

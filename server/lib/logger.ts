@@ -74,7 +74,7 @@ export const LOG_REDACT = { paths: LOG_REDACT_PATHS, censor: '[redacted]' } as c
 /**
  * Build the Fastify logger option for the given config.
  *
- * - Tests: `false` (no request logging noise; unit tests assert behaviour, not
+ * - Tests: `false` (no request logging noise; unit tests assert behavior, not
  *   log output — the redaction contract is tested explicitly instead).
  * - Everything else (incl. production): structured JSON at LOG_LEVEL (default
  *   `info`) with the redaction allow-list above.

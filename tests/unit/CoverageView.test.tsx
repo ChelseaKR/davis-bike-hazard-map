@@ -82,7 +82,7 @@ describe('CoverageView', () => {
     render(<CoverageView hazards={[feedHazard]} />);
 
     await waitFor(() => expect(screen.getByText(/Partial view:/)).toBeInTheDocument());
-    // No area may be labelled a desert from the feed alone.
+    // No area may be labeled a desert from the feed alone.
     expect(screen.queryByText(/Data deserts:/)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/No reports yet — a likely data desert/),

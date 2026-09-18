@@ -41,7 +41,7 @@ function isProcessAlive(pid: number): boolean {
 
 /**
  * How long id-only tombstones are retained (and, equivalently, the maximum
- * delta-poll cursor age the server will honour). A client that polls more
+ * delta-poll cursor age the server will honor). A client that polls more
  * often than this never misses a deletion; one whose cursor is older is served
  * a full feed instead of a lossy delta (see the `/api/hazards` handler). Kept
  * generous so a phone that was merely backgrounded still gets a cheap delta.
@@ -112,7 +112,7 @@ export interface Repository {
   /**
    * Delta feed for the 30s mobile poll: rows that changed since `since` —
    * approved+unexpired rows with `updatedAt >= since`, plus recently-resolved
-   * rows with `resolvedAt >= since` (shown greyed client-side). Newest first.
+   * rows with `resolvedAt >= since` (shown grayed client-side). Newest first.
    */
   listUpdatedSince(since: number, now: number, bbox?: BBox): Promise<StoredHazard[]>;
   /**

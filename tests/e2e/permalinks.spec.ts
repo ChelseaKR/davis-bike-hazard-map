@@ -18,7 +18,7 @@ async function seedApprovedHazard(
       category: 'dangerous_intersection',
       severity: 'high',
       description,
-      // Away from the Davis-centre geolocation other specs report at, so this
+      // Away from the Davis-center geolocation other specs report at, so this
       // marker never clusters with theirs.
       location: { lat: 38.553, lng: -121.72 },
       photo: null,

@@ -6,7 +6,7 @@
  * untranslated English in both of its branches: the common one is
  * `ApiRequestError.message`, i.e. the SERVER's own sentence (`body.message`,
  * composed by a server with no catalog), and the fallback is `String(err)` on a
- * non-`Error` throw. The card around them is catalogued, so a Spanish rider got
+ * non-`Error` throw. The card around them is cataloged, so a Spanish rider got
  * a translated card over an English reason — the same defect #200 removed from
  * the feed, on a second surface.
  *
@@ -93,8 +93,8 @@ describe('queue failure codes resolve through the catalog (#203)', () => {
     // rather than rendering as the absence sentence, and a message left behind
     // by a deleted code fails too. `unrecorded` is deliberately in the list and
     // deliberately NOT in `ApiFailure` — it describes a missing code.
-    const catalogued = Object.keys(en).filter((id) => id.startsWith('error.queue.'));
-    expect(catalogued.sort()).toEqual(
+    const cataloged = Object.keys(en).filter((id) => id.startsWith('error.queue.'));
+    expect(cataloged.sort()).toEqual(
       [...CODES.map((c) => `error.queue.${c}`), 'error.queue.unrecorded'].sort(),
     );
   });
@@ -115,7 +115,7 @@ describe('an absent code is rendered as absence, not as one of the four (#203)',
     }
   });
 
-  it('a code this build does not recognise resolves to absence rather than throwing', () => {
+  it('a code this build does not recognize resolves to absence rather than throwing', () => {
     // The argument comes off an IndexedDB row, so its type is a claim about
     // what this build wrote, not about what is on the device. A `formatMessage`
     // on an undefined descriptor throws; a blank render says nothing at all.
@@ -134,7 +134,7 @@ describe('the device queue records a code, not a sentence (#203)', () => {
     const row = await getReport('a');
     expect(row?.state).toBe('error');
     expect(row?.lastErrorCode).toBe('request');
-    // Retained — it is the only thing that explains an unrecognised code later,
+    // Retained — it is the only thing that explains an unrecognized code later,
     // and a bug report needs the original text. It is simply never displayed.
     expect(row?.lastError).toBe(SERVER_SENTENCE);
   });

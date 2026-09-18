@@ -1,7 +1,7 @@
 # Adapting the map to another town
 
 This map's geography is a **place pack**: one validated JSON file holding the
-bounding box, centre, named areas with their exposure weights, and the landmark
+bounding box, center, named areas with their exposure weights, and the landmark
 presets. `place/davis.json` is the pack this build serves. Widening to another town
 or corridor is meant to be a new pack, not a patch.
 
@@ -92,7 +92,7 @@ than obvious at boot:
 | `elsewhereAreaName` equal to a named area | Every unbucketed report would be counted as that area's. |
 | `exposureWeight` zero, negative, or absent | A number nobody chose enters the exposure denominator. |
 | Inverted bounding box (`min` ≥ `max`) | Accepts nothing, and reads as "no reports here". |
-| Centre outside its own bounds | The default map view opens somewhere the map refuses reports. |
+| Center outside its own bounds | The default map view opens somewhere the map refuses reports. |
 | A landmark outside the bounds | A route preset the report validator would then refuse. |
 | `timeZone` this runtime does not know | Month-by-month trends would have no calendar to bucket in; a default of UTC would move every evening report at a month's end into the next month. |
 | Unknown or misspelled field | See above. |
@@ -145,7 +145,7 @@ to the map's data, and that is a decision about the town, not about the schema.
    checks types, not the numbers in the pack.
 5. **Re-check the copy.** The pack carries `displayName`, `outOfBoundsMessage` and
    `elsewhereAreaName`. Everything else the interface says about Davis by name is
-   still in the translation catalogues (`src/i18n/locales/`), not in the pack.
+   still in the translation catalogs (`src/i18n/locales/`), not in the pack.
 
 ---
 
@@ -162,7 +162,7 @@ tracked on issue #181:
   These are read by whoever calls this deployment's own API; nothing about them
   reaches another system, and correcting them is copy-editing rather than a data
   question.
-- **Licence and attribution text** for the tile layer — `config.tileAttribution` in
+- **License and attribution text** for the tile layer — `config.tileAttribution` in
   `src/config.ts` is a literal with no environment override. It is OpenStreetMap's
   required attribution, so it is correct for any town using OSM tiles and wrong only
   for a deployment that changes tile provider.
@@ -239,5 +239,5 @@ roster and the privacy reading belong.
 `tests/fixtures/place/synthetic-town.json` is a deliberately synthetic second pack
 that the test suite drives through the same bucketing, tallying, landmark-lookup and
 bounds-validation code that serves Davis. It is the falsification for "the map is
-parameterised over its town": if that claim stops being true, those tests fail.
+parameterized over its town": if that claim stops being true, those tests fail.
 It is a fixture, not a town, and not a deployment target.

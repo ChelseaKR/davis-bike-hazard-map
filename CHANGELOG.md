@@ -149,7 +149,7 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   **Measured after the change:** WebKit 11/11 pass, in Linux CI as well as
   locally — the first green run in the workflow's life, 2026-09-10, run
   `34528460145`, `11 passed (30.2s)` with zero flaky. With the directive
-  restored, 11/11 fail again — the same symptom as CI. With a colour-contrast
+  restored, 11/11 fail again — the same symptom as CI. With a color-contrast
   regression planted in `--ink`, 3 of the 6 a11y tests go red naming
   `color-contrast`, so the suite can still fail for the right reason. WebKit
   found no accessibility defect that the Chromium and Firefox runs miss.
@@ -178,7 +178,7 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   report fails to sync (issue #203).** `MyReports` rendered the device queue's
   `lastError` verbatim, and that value is `ApiRequestError.message` -- the
   server's own sentence, composed in English by a server with no catalog -- or
-  `String(err)` on a non-`Error` throw. The card around it was catalogued, so a
+  `String(err)` on a non-`Error` throw. The card around it was cataloged, so a
   Spanish rider got a translated card over an English reason. This is the same
   defect issue #200 removed from the hazard feed, on a second surface.
 
@@ -206,7 +206,7 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   - `tests/unit/queueErrorMessages.test.tsx` formats the whole path under a
     SENTINEL catalog -- an English regex cannot tell correct output from
     defective output when both are English -- and covers a pre-migration row, an
-    unrecognised code, and a report that has not failed.
+    unrecognized code, and a report that has not failed.
 
 - **`sharp` 0.35.3 -> 0.35.4 (`GHSA-rgj7-g3m4-5g8c`, high), for the libheif
   vulnerabilities its prebuilt binaries carry.** The advisory was published
@@ -235,11 +235,11 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   No profile makes a route safe, and the copy that names one must not say it
   does.
 
-  **The weights, stated here because a weight change is a behaviour change.**
+  **The weights, stated here because a weight change is a behavior change.**
   `default` carries no overrides and no multipliers at all, so it is
   byte-identical to the pre-profile ranking rather than merely close to it --
   asserted, not assumed. `family-safest` triples the high-severity base penalty
-  (800 -> 2400 equivalent detour metres) and multiplies `dangerous_intersection`
+  (800 -> 2400 equivalent detour meters) and multiplies `dangerous_intersection`
   by 2.5 and `blocked_lane`, `poor_visibility` and `near_miss` by 1.5. `e-bike`
   raises the base penalty to 1200 (a detour costs a faster bike less time) and
   multiplies `pothole` and `surface_damage` by 1.5 and `glass_debris` by 1.3.
@@ -301,7 +301,7 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   `level` on a result (SARIF 2.1.0 §3.27.10 inherits it from the rule's
   `defaultConfiguration`, and CodeQL keeps its rules in `tool.extensions`, not
   `tool.driver.rules`), so the count was `0` for every input and the step the
-  workflow itself labelled "this is what actually blocks CI now" went green on
+  workflow itself labeled "this is what actually blocks CI now" went green on
   anything — including a run carrying a security-severity 7.8 finding. The gate
   is now `scripts/codeql-gate.mjs`: it resolves severity through the rule table,
   fails closed on a severity it cannot resolve, is scoped to the matrix leg it
@@ -375,10 +375,10 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 - Locale negotiation no longer claims Spanish it can't deliver. `es.json` is
   structure-only (0 of 214 values translated — REVIEW-GATE R3, no unreviewed MT
-  in this civic app), but `negotiate()` matched any *catalogued* locale, so an
+  in this civic app), but `negotiate()` matched any *cataloged* locale, so an
   `es`-preferring browser got `document.documentElement.lang = 'es'` while every
   string on the page still rendered in English via the `defaultMessage` fallback
-  (issue #112). `src/i18n/config.ts` now separates *catalogued* (`SUPPORTED_LANGUAGES`
+  (issue #112). `src/i18n/config.ts` now separates *cataloged* (`SUPPORTED_LANGUAGES`
   — has a JSON file, exercises the gates) from *activated* (`ACTIVATED_LANGUAGES`
   — `negotiate()` will actually select it for a visitor), today `['en']` only.
   `tests/unit/i18nConfig.test.ts` is the regression guard, including a test that
@@ -521,7 +521,7 @@ corresponding subset of these entries moves under that heading.
   field. Seeded hazards now render a "Demo data" marker on every card/popup, the public dashboard
   shows a standing banner whenever a seeded row is in the feed, and the GeoJSON export's
   `properties.source` makes the ODbL-licensed data self-describing so it can't silently redistribute
-  unlabelled fiction. `migrations/0008_hazard_source.sql` backfills existing Postgres rows.
+  unlabeled fiction. `migrations/0008_hazard_source.sql` backfills existing Postgres rows.
 - Offline synchronization no longer retries permanently failed reports every 30 seconds;
   user-triggered retries remain available, and reports orphaned in `syncing` after an interrupted
   submission return to the idempotent retry queue after ten minutes.

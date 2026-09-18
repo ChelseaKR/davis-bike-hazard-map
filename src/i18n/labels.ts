@@ -167,7 +167,7 @@ const queueStateMessages = defineMessages({
 });
 
 /**
- * Failure codes thrown out of `src/lib`, as catalogued messages (issue #173).
+ * Failure codes thrown out of `src/lib`, as cataloged messages (issue #173).
  *
  * `geolocation.ts`, `push.ts` and `photo.ts` are framework-free and have no
  * `intl`, so a thrown `Error` can only carry a machine code. These are where
@@ -222,7 +222,7 @@ const photoErrorMessages = defineMessages({
  * them was: a Spanish rider got a translated heading over an English sentence.
  *
  * These are whole sentences, not fragments, because they stand alone in the
- * alert. `MapView` puts its own catalogued paragraph above the same string.
+ * alert. `MapView` puts its own cataloged paragraph above the same string.
  */
 const feedErrorMessages = defineMessages({
   offline: {
@@ -261,7 +261,7 @@ const feedErrorMessages = defineMessages({
  * not one of the four. A row written before `lastErrorCode` existed is still on
  * real devices — this store is IndexedDB — and picking any of the four for it
  * would publish a reason nothing measured. It also covers a code this build
- * does not recognise, which is the same fact from the other direction: the two
+ * does not recognize, which is the same fact from the other direction: the two
  * remain distinguishable in the stored record (`lastErrorCode` absent, versus
  * present and unknown) and in `lastError`, which is kept as a diagnostic.
  */
@@ -404,7 +404,7 @@ export function routeProfileWeightLines(intl: IntlShape, id: RouteProfileId): st
  * A `YYYY-MM` month key as, in English, "March 2026". The key is already a
  * calendar month in the town's time zone -- the server bucketed it there -- so it
  * is formatted as a mid-month UTC date, which no viewer's own offset can move
- * into a neighbouring month.
+ * into a neighboring month.
  */
 export function monthLabel(intl: IntlShape, key: string): string {
   const [year, month] = key.split('-').map(Number);
@@ -438,7 +438,7 @@ export function queueStateLabel(intl: IntlShape, state: QueueState): string {
  *
  * Takes `string | undefined` rather than `ApiFailure | undefined` on purpose:
  * the argument comes off an IndexedDB row, so its type is a claim about what
- * this build wrote, not about what is on the device. An absent or unrecognised
+ * this build wrote, not about what is on the device. An absent or unrecognized
  * value resolves to `unrecorded` instead of throwing or rendering blank.
  */
 export function queueErrorLabel(intl: IntlShape, code?: string): string {

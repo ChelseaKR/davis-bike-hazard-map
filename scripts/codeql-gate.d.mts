@@ -41,7 +41,7 @@ export interface SarifDocument {
 }
 
 /** A reviewed and accepted finding. Every field is mandatory and non-empty. */
-export interface Acknowledgement {
+export interface Acknowledgment {
   ruleId: string;
   path: string;
   reason: string;
@@ -72,7 +72,7 @@ export function resolveLevel(result: SarifResult, rulesById: Map<string, SarifRu
 export function rulesForRun(run: SarifRun): Map<string, SarifRule>;
 export function gradeSarif(
   documents: SarifDocument[],
-  acknowledgements?: Acknowledgement[],
+  acknowledgments?: Acknowledgment[],
   language?: string,
 ): Grade;
-export function loadAcknowledgements(path: string): Acknowledgement[];
+export function loadAcknowledgments(path: string): Acknowledgment[];

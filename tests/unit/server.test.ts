@@ -1486,7 +1486,7 @@ describe('hazard-aware route planner', () => {
     expect(res.statusCode).toBe(200);
     const plan = res.json().plan;
     // The hazard-aware pick is the detour: the direct route's fresh, high-severity
-    // hazard penalty (~800 equivalent metres) dwarfs the detour's extra 200 m.
+    // hazard penalty (~800 equivalent meters) dwarfs the detour's extra 200 m.
     expect(plan.route.distanceMeters).toBe(1400);
     expect(plan.nearby).toHaveLength(0);
     // A real search over two candidates, one of them clear (issue #163).
@@ -1784,7 +1784,7 @@ describe('saved-route push alerts (feature-flagged)', () => {
 });
 
 describe('resolved hazards stay briefly visible on the feed', () => {
-  it('keeps a resolved hazard (greyed) then drops it after the window', async () => {
+  it('keeps a resolved hazard (grayed) then drops it after the window', async () => {
     const r = await post('/api/reports', baseReport);
     const id = r.json().hazard.id;
     await post(`/api/moderation/${id}`, { decision: 'approve' }, auth());

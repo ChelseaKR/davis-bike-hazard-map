@@ -37,7 +37,7 @@ describe('MapDataNotice', () => {
 
   it('surfaces the underlying failure rather than swallowing it', () => {
     render(<MapDataNotice feedError="server" />);
-    // Distinguishable from the other codes, and catalogued: the map used to
+    // Distinguishable from the other codes, and cataloged: the map used to
     // print the thrown Error's message here, which is the server's own English
     // sentence under a translated paragraph (issue #200).
     expect(screen.getByRole('alert')).toHaveTextContent(/problem on our side/i);

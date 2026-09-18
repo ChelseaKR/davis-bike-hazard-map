@@ -331,19 +331,19 @@ redaction tests auto-gate it (`tests/unit/alerts.test.ts`,
   the new catalogs.
 
 ## FIX-12 — Verify and document the real fuzzing guarantee
-**Pitch:** property-test `fuzzCoordinate` and reconcile the "cell centre" comment with the code's cell-edge behavior.
+**Pitch:** property-test `fuzzCoordinate` and reconcile the "cell center" comment with the code's cell-edge behavior.
 
 - **Why it matters:** `snap()` (`shared/geo.ts:54-56`) computes
   `(Math.round(v/step)+0.5)*step` — published points sit on cell *edges*,
   max displacement ≈ one full step (~70–100 m at Davis latitude), while the
-  doc comment promises the cell centre (max ≈ half a step). No privacy hole
+  doc comment promises the cell center (max ≈ half a step). No privacy hole
   (deterministic, bounded, non-averageable), but the repo's core privacy
   claim is currently *stated* imprecisely and *tested* only by example. For
   a project whose ethos is "measured, not asserted," the flagship privacy
   control deserves a measured bound.
 - **Shape of work:** property tests (max/min displacement over the Davis
   bbox, determinism, non-invertibility of repeated same-spot reports); decide
-  centre vs edge deliberately (centre via `Math.floor(v/step)+0.5` halves
+  center vs edge deliberately (center via `Math.floor(v/step)+0.5` halves
   worst-case *utility* error for map users; either is private) — note any
   change shifts existing published points one cell, so migrate or accept and
   document; update `privacy-notes.md` with the measured figure.

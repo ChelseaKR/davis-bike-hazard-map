@@ -17,7 +17,7 @@ name: e2e-webkit-nightly
 #
 # The cause of the failures was not WebKit and not this site: the e2e harness
 # serves the production build over plain http on localhost, the production CSP
-# carries helmet's default `upgrade-insecure-requests`, and WebKit honours that
+# carries helmet's default `upgrade-insecure-requests`, and WebKit honors that
 # directive on loopback where Chromium and Firefox exempt it. Every asset was
 # fetched over https:// against a plaintext port, so the app never booted. The
 # harness now sets CSP_UPGRADE_INSECURE_REQUESTS=false (playwright.config.ts;

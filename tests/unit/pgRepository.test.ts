@@ -401,7 +401,7 @@ suite('delta feed: memory/Postgres parity', () => {
     hazard({ id: 'unswept', clientId: 'unswept', status: 'approved', updatedAt: NOW - 60 * MIN, expiresAt: NOW - MIN }),
     // Left the map: moderator rejection.
     hazard({ id: 'rejected', clientId: 'rejected', status: 'rejected', updatedAt: NOW - MIN, expiresAt: NOW + MIN }),
-    // Still shown greyed: inside the resolved-visible window.
+    // Still shown grayed: inside the resolved-visible window.
     hazard({ id: 'justFixed', clientId: 'justFixed', status: 'resolved', updatedAt: NOW - MIN, resolvedAt: NOW - MIN, expiresAt: NOW + MIN }),
     // Left the map an hour ago: resolved-visible window ran out. Outside the
     // 10-minute cursor below, inside the wide one.

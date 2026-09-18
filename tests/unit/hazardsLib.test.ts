@@ -188,7 +188,7 @@ describe('listPublicFeed', () => {
   });
 });
 
-describe('hazard source / demo-data labelling (issue #111)', () => {
+describe('hazard source / demo-data labeling (issue #111)', () => {
   it('defaults a real submission to source "report"', async () => {
     const repo = new MemoryRepository();
     const photos = new MemoryPhotoStore();

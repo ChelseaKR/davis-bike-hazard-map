@@ -39,20 +39,20 @@ function ModerationPhoto({ photoUrl, token, alt }: { photoUrl: string; token: st
 
   useEffect(() => {
     let objectUrl: string | null = null;
-    let cancelled = false;
+    let canceled = false;
     setSrc(null);
     setFailed(false);
     fetchModerationPhoto(photoUrl, token)
       .then((url) => {
         objectUrl = url;
-        if (cancelled) URL.revokeObjectURL(url);
+        if (canceled) URL.revokeObjectURL(url);
         else setSrc(url);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!canceled) setFailed(true);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [photoUrl, token]);

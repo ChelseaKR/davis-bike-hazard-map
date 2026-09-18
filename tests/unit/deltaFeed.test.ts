@@ -296,7 +296,7 @@ describe('GET /api/hazards delta feed cursor, bbox and resolved coverage', () =>
 
     const feed = await getFeed(`?updatedSince=${NOW - 5 * MIN}`);
 
-    // Inside resolvedVisibleDays a fix is shown greyed, not removed.
+    // Inside resolvedVisibleDays a fix is shown grayed, not removed.
     expect(feed.hazards.map((h) => h.id)).toContain('fixed');
     expect(feed.deletedIds).not.toContain('fixed');
   });

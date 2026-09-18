@@ -32,7 +32,7 @@ function renderCard(props: Parameters<typeof HazardCard>[0]) {
 }
 
 describe('HazardCard', () => {
-  it('shows the category and severity (text, not colour alone)', () => {
+  it('shows the category and severity (text, not color alone)', () => {
     renderCard({ hazard: hazard(), now: NOW });
     expect(screen.getByRole('heading', { name: /pothole/i })).toBeInTheDocument();
     expect(screen.getAllByText(/high/i).length).toBeGreaterThan(0);

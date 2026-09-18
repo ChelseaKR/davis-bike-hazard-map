@@ -131,7 +131,7 @@ describe('TrendsView', () => {
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/not how often something happened/);
-    expect(text).toMatch(/never to rank neighbourhoods/);
+    expect(text).toMatch(/never to rank neighborhoods/);
   });
 
   it('has no accessibility violations with the table on screen', async () => {

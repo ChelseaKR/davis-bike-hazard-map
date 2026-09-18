@@ -19,7 +19,7 @@ failure modes:
   that the area is safe,"* and the Map caption says *"empty areas mean no
   reports, not guaranteed safety."* Asserted in `tests/unit/ListView.a11y.test.tsx`
   ("frames an empty result as 'no reports', not 'safe'").
-- **Surface, don't infer.** Each hazard is labelled *community-reported, not
+- **Surface, don't infer.** Each hazard is labeled *community-reported, not
   verified by the city* (transparency), and we never infer attributes about
   reporters (no accounts, no profiling).
 - **Coverage view (shipped).** A "Reports by area" tab (`CoverageView` /
@@ -32,7 +32,7 @@ failure modes:
   rejected ones. The public hazard feed carries only approved, unexpired
   hazards plus recently-resolved ones; counted over that set, an area whose
   reports are all still in the moderation queue, or have since expired, shows
-  zero and gets labelled a **data desert** — the exact inversion of the truth,
+  zero and gets labeled a **data desert** — the exact inversion of the truth,
   printed in the one surface built to prevent it. Rejected reports are excluded
   so a spam burst cannot retire an area's data-desert warning. Asserted in
   `tests/unit/coverage.test.ts` and `tests/unit/CoverageView.test.tsx`.
@@ -60,7 +60,7 @@ failure modes:
 
 ## Segments to monitor post-launch
 
-- Reports per Davis neighbourhood / census block over time.
+- Reports per Davis neighborhood / census block over time.
 - Report density vs. known cycling-volume corridors.
 
 ## Checklist

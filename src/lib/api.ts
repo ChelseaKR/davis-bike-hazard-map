@@ -173,7 +173,7 @@ export async function fetchCoverage(): Promise<AreaCount[]> {
  * Reports received per area per month (issue #180): the coverage view's set,
  * split by the month each report was received in the town's time zone. The body
  * also carries the server's own `basis` and `limits` sentences for API consumers;
- * the view renders its own catalogued copy instead.
+ * the view renders its own cataloged copy instead.
  */
 export async function fetchTrends(): Promise<ReportTrends> {
   return request<ReportTrends>('/trends');
@@ -284,7 +284,7 @@ export async function deleteReport(clientId: string): Promise<void> {
   }
 }
 
-/** A browser PushSubscription's serialisable shape. */
+/** A browser PushSubscription's serializable shape. */
 export interface PushSubscriptionPayload {
   endpoint: string;
   keys: { p256dh: string; auth: string };

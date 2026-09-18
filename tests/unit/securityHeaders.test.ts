@@ -20,7 +20,7 @@
  * Hence `serverConfig.cspUpgradeInsecureRequests`, and hence this file. Three
  * things are pinned:
  *
- *  1. the directive is emitted by default (production behaviour is unchanged);
+ *  1. the directive is emitted by default (production behavior is unchanged);
  *  2. turning it off removes that directive and NOTHING else, so the switch
  *     cannot be used to quietly widen the policy;
  *  3. the e2e harness actually sets it. Without (3) the fix is one careless
