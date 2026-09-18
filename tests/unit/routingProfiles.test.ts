@@ -5,7 +5,7 @@
  * hold, and each is a distinct way this could quietly mislead a rider:
  *
  *  1. `default` is unchanged — **byte-for-byte**, not "close enough". A profile
- *     layer that shifted the existing route by a metre would silently re-rank
+ *     layer that shifted the existing route by a meter would silently re-rank
  *     every plan the planner has ever produced.
  *  2. `family-safest` never routes through a high-severity hazard while any
  *     alternative exists. That is an absolute claim, so it is a lexicographic
@@ -181,7 +181,7 @@ describe('`family-safest` refuses a high-severity hazard while an alternative ex
   });
 
   it('takes it at any detour, because the rule is lexicographic and not a weight', () => {
-    // A hundred kilometres. Any finite penalty loses this comparison; the rule
+    // A hundred kilometers. Any finite penalty loses this comparison; the rule
     // is that a high-severity candidate ranks below every clear one, full stop.
     const absurd: Route = { ...clearButLong, distanceMeters: 100_000, durationSeconds: 30_000 };
     const ranked = rankRoutes(

@@ -24,7 +24,7 @@ export interface QueuedReport {
    * The last failure as a DIAGNOSTIC sentence — the server's own English, or
    * the browser's. Never rendered (issue #203); `lastErrorCode` is what the UI
    * resolves. Kept because it is the only thing that survives to explain an
-   * unrecognised code, and because a bug report needs the original text.
+   * unrecognized code, and because a bug report needs the original text.
    */
   lastError?: string;
   /**

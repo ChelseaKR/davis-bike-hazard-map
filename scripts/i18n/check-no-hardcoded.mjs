@@ -33,7 +33,7 @@
 //
 //   Pass B walks the TypeScript AST of every `.ts` file under src/ and flags a
 //   string or template literal that looks like display text — multi-word, or
-//   capitalised and not an identifier/constant — unless it is inside a
+//   capitalized and not an identifier/constant — unless it is inside a
 //   `defineMessages`/`formatMessage` call, is a property key, an import source,
 //   a literal type, or a `'X' in window` feature probe.
 //

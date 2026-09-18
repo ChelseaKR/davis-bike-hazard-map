@@ -85,7 +85,7 @@ jobs:
         # while a security-severity 7.8 finding was present. See the script
         # header and .github/codeql-acknowledged.json.
         #
-        # The matrix language is an argument because one acknowledgement list
+        # The matrix language is an argument because one acknowledgment list
         # serves every leg while each leg sees only its own SARIF. Without it,
         # every leg checked every entry for staleness, so the javascript entry
         # read as stale in the `actions` leg and this job could never be green

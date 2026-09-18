@@ -191,7 +191,7 @@ export const hazardExportSchema = z.object({
         createdAt: z.number().int(),
         updatedAt: z.number().int(),
         // Always present on this export (issue #111) — 'seed' rows must be
-        // self-describing so this data can never redistribute unlabelled
+        // self-describing so this data can never redistribute unlabeled
         // fiction.
         source: z.enum(HAZARD_SOURCES),
       }),
@@ -229,7 +229,7 @@ export const handoffFailuresResponseSchema = z.object({
  * Deliberately a different set from GET /hazards: the feed is what is on the
  * map now, this is what has ever been reported (minus rejected). The coverage
  * view needs the latter, because an area whose reports are all pending or
- * expired has been observed, and must not be labelled a data desert. See
+ * expired has been observed, and must not be labeled a data desert. See
  * areaReportCounts() in server/lib/hazards.ts.
  */
 export const coverageResponseSchema = z.object({

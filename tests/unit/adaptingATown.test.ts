@@ -84,7 +84,7 @@ describe('the tile and routing services are deployment configuration', () => {
 
 describe('the remainder list names what is genuinely still Davis-shaped', () => {
   // Every source path the list points at must still carry the place name. When
-  // one of them is parameterised, this fails -- and the fix is to take it off
+  // one of them is parameterized, this fails -- and the fix is to take it off
   // the list, not to weaken the test. Listing finished work as outstanding is
   // the drift this whole file exists to catch.
   const listed = [
@@ -144,7 +144,7 @@ describe('an OSM note names the deployment, and that name leaves this system', (
     };
   }
 
-  // Behavioural rather than textual: this is what would actually be posted.
+  // Behavioral rather than textual: this is what would actually be posted.
   // Both branches of the back-link are checked, because the one without a
   // configured public base URL is the one that repeats the name a second time.
   //
@@ -179,8 +179,8 @@ describe('an OSM note names the deployment, and that name leaves this system', (
   });
 
   it('the remainder list no longer claims the note body is hard-coded', () => {
-    // The document said this was "listed rather than parameterised". It is
-    // parameterised now, so the bullet must go -- listing finished work as
+    // The document said this was "listed rather than parameterized". It is
+    // parameterized now, so the bullet must go -- listing finished work as
     // outstanding is the same drift as the tile-URL bullet above.
     const bullets = remainderSection()
       .split('\n')

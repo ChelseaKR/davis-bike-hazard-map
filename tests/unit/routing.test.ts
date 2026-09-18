@@ -139,7 +139,7 @@ describe('hazardPenalty', () => {
     expect(mid).toBeCloseTo(near / 2, 0);
   });
 
-  it('penalises high-severity more than low', () => {
+  it('penalizes high-severity more than low', () => {
     const high = hazardPenalty(hazard({ severity: 'high' }), 0, opts());
     const low = hazardPenalty(hazard({ severity: 'low' }), 0, opts());
     expect(high).toBeGreaterThan(low * 3);
@@ -236,7 +236,7 @@ describe('findFastestAlternative', () => {
 // Davis's latitude/longitude, written out here rather than imported. These tests
 // exercise the solar-position math, not the place pack: pinning the coordinates
 // locally keeps the day/night assertions meaningful if the shipped pack ever
-// changes, and `tests/unit/place.test.ts` separately pins that the pack's centre
+// changes, and `tests/unit/place.test.ts` separately pins that the pack's center
 // still holds these same two literals.
 const DAVIS_LAT = 38.5449;
 const DAVIS_LNG = -121.7405;

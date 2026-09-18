@@ -97,7 +97,7 @@ export const serverConfig = {
   routingUrl:
     process.env.ROUTING_URL ?? 'https://router.project-osrm.org/route/v1/cycling',
 
-  /** How long a resolved hazard stays visible (greyed) on the public map, in days. */
+  /** How long a resolved hazard stays visible (grayed) on the public map, in days. */
   resolvedVisibleDays: int('RESOLVED_VISIBLE_DAYS', 7),
 
   /**

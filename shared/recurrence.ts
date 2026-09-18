@@ -379,8 +379,8 @@ export interface RecurrenceBadge {
 /**
  * The recurrence label for each hazard currently on the public map whose site is
  * recurring. Matched on the hazard's own fuzzed cell and category -- the key its
- * record has -- so a hazard is only ever labelled with the history of its own
- * site. A seeded demo hazard is never labelled: it is fiction, and fiction is
+ * record has -- so a hazard is only ever labeled with the history of its own
+ * site. A seeded demo hazard is never labeled: it is fiction, and fiction is
  * neither evidence of recurrence nor something that can recur.
  */
 export function recurrenceBadges(

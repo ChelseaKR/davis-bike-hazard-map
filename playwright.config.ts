@@ -67,7 +67,7 @@ export default defineConfig({
     //
     // CSP_UPGRADE_INSECURE_REQUESTS=false is load-bearing and must not be
     // dropped: this harness serves the production build over plain http on
-    // localhost, and WebKit — unlike Chromium and Firefox — honours
+    // localhost, and WebKit — unlike Chromium and Firefox — honors
     // `upgrade-insecure-requests` on loopback, so with it on, every asset is
     // fetched over https:// against a plaintext port and the app never boots.
     // Nothing under test loads an absolute http:// URL, so the directive is a

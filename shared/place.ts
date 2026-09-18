@@ -32,7 +32,7 @@
  *    `Central Davis`. This is by design and documented in `areas.ts`: the boxes are
  *    approximate and *ordered*, and the first box containing a point wins. A schema
  *    that rejected overlapping areas would reject the only pack this repository
- *    ships. `tests/unit/place.test.ts` pins that ordering behaviour so a future "fix" that turns
+ *    ships. `tests/unit/place.test.ts` pins that ordering behavior so a future "fix" that turns
  *    overlap into an error fails loudly instead of silently reassigning real reports.
  *
  * 2. **Two area boxes extend past the pack bounds.** `North Davis` reaches
@@ -46,7 +46,7 @@
  * duplicate area names (two boxes silently sharing one tally), an
  * `elsewhereAreaName` that collides with a named area (every unbucketed report
  * quietly counted as that area's), a non-positive `exposureWeight`, an inverted
- * bounding box, a centre outside its own bounds, and a landmark outside them — a
+ * bounding box, a center outside its own bounds, and a landmark outside them — a
  * route preset the report validator would refuse.
  */
 import { z } from 'zod';
@@ -103,7 +103,7 @@ function isCanonicalTimeZone(zone: string): boolean {
 
 /**
  * The pack schema. Structural checks only; the cross-field checks that need the
- * whole pack (names unique, centre inside bounds, landmarks inside bounds) run in
+ * whole pack (names unique, center inside bounds, landmarks inside bounds) run in
  * {@link parsePlacePack}, where they can name the offending entry.
  */
 export const placePackSchema = z

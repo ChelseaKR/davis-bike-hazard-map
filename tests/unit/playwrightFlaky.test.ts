@@ -8,7 +8,7 @@
 // concluded `success` over `1 flaky`.
 //
 // This imports each config the way Playwright reads it, with CI set, rather
-// than matching its text, so a key that is commented out, misspelt or set to
+// than matching its text, so a key that is commented out, misspelled or set to
 // `false` cannot satisfy it. It also enumerates the configs from disk, so a
 // third config added later is checked without anyone remembering to list it.
 import { readdirSync } from 'node:fs';

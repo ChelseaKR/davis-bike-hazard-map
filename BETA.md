@@ -171,7 +171,7 @@ Then in the app: file a report → open **Moderate**, sign in with your
   because the job carried `continue-on-error: true`. The cause was not WebKit
   and not this site: the e2e harness serves the production build over plain
   http on localhost, the production CSP carries helmet's default
-  `upgrade-insecure-requests`, and WebKit honours that directive on loopback
+  `upgrade-insecure-requests`, and WebKit honors that directive on loopback
   where Chromium and Firefox exempt it — so every asset was fetched over
   `https://` against a plaintext port and the app never booted. The harness now
   sets `CSP_UPGRADE_INSECURE_REQUESTS=false` and the suite passes 11/11 in

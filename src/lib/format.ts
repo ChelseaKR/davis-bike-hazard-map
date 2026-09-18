@@ -16,12 +16,12 @@ export function timeAgo(timestamp: number, now: number = Date.now()): string {
   return `${months} mo ago`;
 }
 
-/** Format a coordinate for display at neighbourhood precision (~11 m). */
+/** Format a coordinate for display at neighborhood precision (~11 m). */
 export function formatLatLng(lat: number, lng: number): string {
   return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 }
 
-/** Human distance: metres under 1 km, else kilometres with one decimal. */
+/** Human distance: meters under 1 km, else kilometers with one decimal. */
 export function formatDistance(meters: number): string {
   if (!Number.isFinite(meters) || meters < 0) return '—';
   if (meters < 1000) return `${Math.round(meters)} m`;

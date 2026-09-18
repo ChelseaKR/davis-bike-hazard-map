@@ -137,7 +137,7 @@ describe('the device key', () => {
     a.claim('dev-a', 'haz-1', T0);
     b.claim('dev-a', 'haz-1', T0);
     // Both tracked one entry, but under different tokens: neither cap can see
-    // the other's claim. Compared through behaviour rather than by reaching into
+    // the other's claim. Compared through behavior rather than by reaching into
     // the private map.
     expect(a.size).toBe(1);
     expect(b.size).toBe(1);

@@ -55,9 +55,9 @@ describe('ListView (accessibility & parity)', () => {
     expect(screen.getByText(/not that the area is safe/i)).toBeInTheDocument();
   });
 
-  it('surfaces load errors to assistive tech, in the catalogued wording', () => {
+  it('surfaces load errors to assistive tech, in the cataloged wording', () => {
     render(<ListView hazards={[]} loading={false} error="offline" />);
-    // The alert says the catalogued sentence for the code, not a thrown
+    // The alert says the cataloged sentence for the code, not a thrown
     // Error's message (issue #200).
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn't be reached/i);
   });

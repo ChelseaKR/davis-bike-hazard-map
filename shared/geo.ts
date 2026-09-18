@@ -12,7 +12,7 @@ import { PLACE_BOUNDS } from './validation.ts';
 const EARTH_RADIUS_M = 6_371_000;
 const METERS_PER_DEG_LAT = 111_320;
 
-/** Great-circle distance between two points, in metres. */
+/** Great-circle distance between two points, in meters. */
 export function haversineMeters(a: GeoPoint, b: GeoPoint): number {
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
@@ -41,7 +41,7 @@ export const DEFAULT_FUZZ_METERS = 70;
  * published point and cannot be averaged back to the true point.
  *
  * The published point is a fixed per-cell representative (the cell's upper
- * edge), not the geometric centre: it sits within one grid step per axis of the
+ * edge), not the geometric center: it sits within one grid step per axis of the
  * true point, worst case the cell diagonal — √2 · `gridMeters` ≈ 99 m at the
  * default 70 m. Both the bound and the same-cell collapse are property-tested in
  * tests/unit/geo.test.ts; see docs/audits/privacy-notes.md.

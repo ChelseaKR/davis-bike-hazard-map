@@ -316,7 +316,7 @@ parity gate).
 - **Built 2026-09-11 (issue #180), publication flagged off.** The detection is
   derived on read (`shared/recurrence.ts`), not an offline job over stored
   episodes: a stored index would keep a trace of a deleted report. **The
-  real-data gate stands** — with no year of reports nothing is labelled, and both
+  real-data gate stands** — with no year of reports nothing is labeled, and both
   publication surfaces are off (`RECURRENCE_BADGES_PUBLISH`, `CHRONIC_PUBLISH`)
   pending the location-privacy review (#160) and the equity review named above.
   The excellence bar is **partly met and deliberately so**: a label carries the

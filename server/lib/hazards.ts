@@ -311,7 +311,7 @@ export async function listPublic(repo: Repository, now: number, bbox?: BBox): Pr
 /**
  * The public map/list feed: live (approved) hazards PLUS recently-resolved ones,
  * which stay visible for `resolvedVisibleMs` so cyclists can see a hazard was
- * fixed (the client renders them greyed via their `resolved` lifecycle stage).
+ * fixed (the client renders them grayed via their `resolved` lifecycle stage).
  * Routing and the open-data export deliberately use the approved-only
  * `listPublic` instead — you don't route around, or publish, a fixed hazard.
  */
@@ -379,13 +379,13 @@ export async function migrateInlinePhotos(repo: Repository, photos: PhotoStore):
  * public feed would defeat that: the feed carries only approved, unexpired
  * hazards plus recently-resolved ones, so an area whose reports are all still
  * in the moderation queue, or have since expired, or were resolved a while
- * back, would be labelled a *data desert* — the exact inversion of the truth,
+ * back, would be labeled a *data desert* — the exact inversion of the truth,
  * printed in the one surface built to prevent it.
  *
  * So the tally is over every report ever received, minus `rejected` ones. A
  * rejected report is a moderator's finding that it was not a real hazard; if
  * rejected reports counted, a spam burst could silently retire an area's
- * data-desert warning, which is a cheap way to make a neighbourhood look
+ * data-desert warning, which is a cheap way to make a neighborhood look
  * observed when nobody has ever ridden through and reported it.
  *
  * What this discloses: one integer per area, over about six boxes covering

@@ -1,5 +1,5 @@
 /**
- * Face / licence-plate blurring helpers.
+ * Face / license-plate blurring helpers.
  *
  * The Responsible-Tech audit requires that blurring be OFFERED on every photo.
  * We implement it as manual region blur — the cyclist taps/drags a box over a
@@ -51,7 +51,7 @@ export function clampRegion(region: BlurRegion, width: number, height: number): 
  * Pixelate one rectangular region of an RGBA buffer, in place.
  *
  * The region is divided into `blockSize`-square cells; every pixel in a cell is
- * set to the cell's average colour. This is irreversible (unlike a reversible
+ * set to the cell's average color. This is irreversible (unlike a reversible
  * blur kernel) which is what we want for redaction.
  *
  * @param data   RGBA pixel buffer (length === width*height*4), mutated in place.

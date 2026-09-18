@@ -1,6 +1,6 @@
 /**
  * Regression coverage for issue #112: locale negotiation must never select a
- * catalogued-but-untranslated locale. Before `ACTIVATED_LANGUAGES` existed,
+ * cataloged-but-untranslated locale. Before `ACTIVATED_LANGUAGES` existed,
  * `negotiate()` matched any locale with a JSON file — so an `es`-preferring
  * browser got `document.documentElement.lang = 'es'` (IntlProviderShell.tsx
  * keeps `<html lang>` in sync with the negotiated locale) while every string
@@ -23,12 +23,12 @@ import {
 } from '../../src/i18n/config.ts';
 
 describe('locale negotiation only ever activates real, translated locales', () => {
-  it('es is catalogued (has a JSON file, participates in the gates) but not activated', () => {
+  it('es is cataloged (has a JSON file, participates in the gates) but not activated', () => {
     expect(isSupported('es')).toBe(true);
     expect(isActivated('es')).toBe(false);
   });
 
-  it('negotiate() never returns a catalogued-but-unactivated locale, however strongly preferred', () => {
+  it('negotiate() never returns a cataloged-but-unactivated locale, however strongly preferred', () => {
     expect(negotiate(['es'])).toBe('en');
     expect(negotiate(['es-MX', 'es'])).toBe('en');
     // A visitor whose only acceptable languages are all unactivated still gets
@@ -46,7 +46,7 @@ describe('locale negotiation only ever activates real, translated locales', () =
     expect(negotiate([])).toBe(DEFAULT_LOCALE);
   });
 
-  it('every activated locale is also catalogued (ACTIVATED_LANGUAGES is a subset of SUPPORTED_LANGUAGES)', () => {
+  it('every activated locale is also cataloged (ACTIVATED_LANGUAGES is a subset of SUPPORTED_LANGUAGES)', () => {
     for (const code of ACTIVATED_LANGUAGES) {
       expect(Object.prototype.hasOwnProperty.call(SUPPORTED_LANGUAGES, code)).toBe(true);
     }

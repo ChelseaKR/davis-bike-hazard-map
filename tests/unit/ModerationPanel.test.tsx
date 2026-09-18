@@ -93,7 +93,7 @@ beforeEach(() => {
   });
   vi.stubGlobal('fetch', fetchMock);
   // jsdom has no object-URL support; the panel uses it for auth-fetched
-  // photos. Subclassing keeps the real URL behaviour and unstubAllGlobals
+  // photos. Subclassing keeps the real URL behavior and unstubAllGlobals
   // restores the original class untouched.
   class MockURL extends URL {
     static override createObjectURL = vi.fn(() => 'blob:mock-photo');

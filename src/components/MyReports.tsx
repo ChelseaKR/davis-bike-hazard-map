@@ -25,7 +25,7 @@ import { useLabels } from '../i18n/labels.ts';
 import { reportTrail, type TrailStepState } from '../lib/reportTrail.ts';
 
 /**
- * Screen-reader text for each trail step's state (the visual cue is colour).
+ * Screen-reader text for each trail step's state (the visual cue is color).
  *
  * A plain object rather than JSX, so `formatjs/no-literal-string-in-jsx` never
  * saw these four even though this file is in the G2 ratchet's scope — the same

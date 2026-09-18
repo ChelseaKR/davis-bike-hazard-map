@@ -1,7 +1,7 @@
 /**
  * A single hazard, rendered as an accessible card for the list view.
  *
- * Severity is conveyed by shape + text label as well as colour (never colour
+ * Severity is conveyed by shape + text label as well as color (never color
  * alone — accessibility), and every card carries the "reported, not verified"
  * framing the transparency audit requires.
  */
@@ -93,7 +93,7 @@ export function HazardCard({
         </p>
       )}
 
-      {/* A seeded hazard is never labelled: the server does not send one, and the
+      {/* A seeded hazard is never labeled: the server does not send one, and the
           card would not print it if it did -- fiction cannot recur. */}
       {recurrence && hazard.source !== 'seed' && (
         <p className="hazard-recurrence-note">{labels.recurrence(recurrence)}</p>

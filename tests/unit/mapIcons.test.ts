@@ -13,7 +13,7 @@ describe('hazardIcon', () => {
     expect(hazardIcon('low')).toBe(hazardIcon('low'));
   });
 
-  it('uses a distinct colour per severity', () => {
+  it('uses a distinct color per severity', () => {
     const colors = new Set(Object.values(SEVERITY_COLORS));
     expect(colors.size).toBe(3);
   });

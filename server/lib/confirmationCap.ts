@@ -48,7 +48,7 @@
  * - The key is bound to the hazard, so two tokens from one device are not
  *   linkable to each other.
  * - The epoch rotates the secret input, so tokens expire by construction rather
- *   than by anyone remembering to delete them (FIX-10 minimisation).
+ *   than by anyone remembering to delete them (FIX-10 minimization).
  *
  * Nothing here is persisted. The state is per-process and in-memory, exactly like
  * `LoginThrottle` — and with the same caveat, which is real and is stated in the

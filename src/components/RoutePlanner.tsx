@@ -55,7 +55,7 @@ interface RoutePlannerProps {
 
 /**
  * The preference a plan says it was made with, or null when it names nothing
- * this build recognises. A plan is a network response -- or a service-worker
+ * this build recognizes. A plan is a network response -- or a service-worker
  * cached one, and a plan cached before profiles existed (#199) carries no
  * `profile` at all -- so its type is a claim about what some server wrote, not a
  * fact about what arrived. Null renders as "not recorded", never as a preference.

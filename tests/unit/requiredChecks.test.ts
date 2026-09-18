@@ -109,7 +109,7 @@ function matrixLegs(job: Yaml, where: string): Map<string, string>[] {
   if (!matrix || typeof matrix !== 'object') return [new Map()];
 
   // GitHub merges `include` into matching legs and appends the rest, and
-  // `exclude` removes legs. Modelling that wrong would invent or hide check
+  // `exclude` removes legs. Modeling that wrong would invent or hide check
   // names, so refuse rather than approximate.
   for (const unsupported of ['include', 'exclude']) {
     if (unsupported in matrix) {
@@ -334,7 +334,7 @@ describe('required status checks name jobs that exist and can fail', () => {
   });
 
   /**
-   * The other half of (b), and the one nothing here modelled.
+   * The other half of (b), and the one nothing here modeled.
    *
    * A required context satisfied by a muted job is a gate that cannot fail.
    * A NON-required context on a muted job is worse in a quieter way: the

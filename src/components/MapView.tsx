@@ -335,7 +335,7 @@ function FocusMarker({
 /**
  * Patch the accessibility of Leaflet's injected controls (an upstream gap):
  * give the zoom buttons accessible names and wrap the control cluster in a
- * labelled region so the whole map view is axe-clean.
+ * labeled region so the whole map view is axe-clean.
  */
 function MapA11y({ intl }: { intl: IntlShape }) {
   const map = useMap();

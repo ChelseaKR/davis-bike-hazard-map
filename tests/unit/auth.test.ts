@@ -107,13 +107,13 @@ describe('verifyBearerHeader', () => {
 });
 
 /**
- * Pin the SHAPE, not just the behaviour.
+ * Pin the SHAPE, not just the behavior.
  *
- * The behaviour was already correct when CodeQL reported
+ * The behavior was already correct when CodeQL reported
  * `js/user-controlled-bypass` (security-severity 7.8, CWE-807/CWE-290) at
  * `server/app.ts` — the deny branch denied. What was wrong was the shape: an
  * attacker-controlled value decided whether the signature check ran at all.
- * The behavioural tests above would all still pass if someone reintroduced
+ * The behavioral tests above would all still pass if someone reintroduced
  * that split, so this asserts the split is gone. Without it the fix is one
  * refactor away from silently coming back, and the finding with it.
  */

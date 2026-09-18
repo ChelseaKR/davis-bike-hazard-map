@@ -55,17 +55,17 @@ export function TrendsView() {
   const [area, setArea] = useState(ALL_AREAS);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetchTrends().then(
       (loaded) => {
-        if (!cancelled) setTrends(loaded);
+        if (!canceled) setTrends(loaded);
       },
       () => {
-        if (!cancelled) setUnavailable(true);
+        if (!canceled) setUnavailable(true);
       },
     );
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []);
 
@@ -231,7 +231,7 @@ export function TrendsView() {
       <p className="hint coverage-limits">
         <FormattedMessage
           id="trends.limits"
-          defaultMessage="<strong>How to read this:</strong> a month's count is how many reports riders sent, not how dangerous the streets were. An area riders rarely report reads low here whether or not it is safe. It is here to show where reports come from and what happens to them — never to rank neighbourhoods."
+          defaultMessage="<strong>How to read this:</strong> a month's count is how many reports riders sent, not how dangerous the streets were. An area riders rarely report reads low here whether or not it is safe. It is here to show where reports come from and what happens to them — never to rank neighborhoods."
           values={{ strong }}
         />
       </p>

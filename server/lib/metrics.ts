@@ -1,7 +1,7 @@
 /**
  * Prometheus metrics (RED + the moderation backlog gauges) via prom-client.
  *
- * Exposes per-request rate/errors/duration (a histogram, labelled by method,
+ * Exposes per-request rate/errors/duration (a histogram, labeled by method,
  * route pattern, and status) plus Node/process defaults, alongside the
  * moderation-queue gauges that drive the SLA alerts. Route labels use the
  * Fastify route *pattern* (not the raw URL) to keep cardinality bounded.

@@ -10,7 +10,7 @@
 > Every item is tagged **[corroborates …]** (independently re-surfaces something
 > the existing docs already name — triangulation, not noise) or **[NET-NEW]** (the
 > panel surfaced it; the existing roadmap/audits don't cover it). No feature or
-> fact is invented; "values today" and "reuses" point only at code/behaviour that
+> fact is invented; "values today" and "reuses" point only at code/behavior that
 > exists in [`README.md`](../README.md) / [`ARCHITECTURE.md`](./ARCHITECTURE.md) /
 > the [`docs/audits/`](./audits/). **Last assembled: 2026-06-30.**
 
@@ -112,7 +112,7 @@ Effort: **S** ≈ an afternoon · **M** ≈ a day or two · **L** ≈ a week+.
 | **E4** | **Service-area expansion path** — Davis → Yolo County corridors (causeway, county roads) behind the same explicit-bbox policy | P4 | P2 | M | EV-CROWD-WORKS · `davisPointSchema` bbox is a deliberate policy, parameterizable. **[NET-NEW]** |
 | **E5** | **Campus / Unitrans on-ramp** — QR posters at bike racks, orientation/ASUCD tie-in, recurring awareness | P5,P11 | P2 | M | EV-DAVIS, EV-ABANDON (low awareness) · public dashboard + PWA install path exist. **[NET-NEW]** |
 | **E6** | **City-grade prioritization export** — confirmation-weighted, exposure-normalized, keyed to city GIS / work-order IDs | P8,P9 | P2 | M | EV-COLLECTIVE, EV-SKEW · open-data export + precise internal coords exist. **[corroborates open-data export, extends]** |
-| **E7** | **"What got fixed" public wins feed** — highlight resolved hazards over time to sustain momentum | P11,P1,P10 | P3 | S | EV-COLLECTIVE · resolved-lingers (greyed) already shipped. **[corroborates ADR-6, extends]** |
+| **E7** | **"What got fixed" public wins feed** — highlight resolved hazards over time to sustain momentum | P11,P1,P10 | P3 | S | EV-COLLECTIVE · resolved-lingers (grayed) already shipped. **[corroborates ADR-6, extends]** |
 | **E8** | **Trend-over-time view** for council + research (time series, not just a snapshot) | P10,P13 | P3 | M | EV-UNDERREPORT, EV-SKEW · lifecycle timestamps already stored. **[NET-NEW]** |
 | **E9** | **Advocacy embed / campaign kit** on the public dashboard (embeddable widget + seeded known hazards) | P11 | P3 | S–M | EV-CROWD-WORKS · `VITE_PUBLIC_DASHBOARD` + seed script exist. **[corroborates public-dashboard mode, extends]** |
 
@@ -219,7 +219,7 @@ committing engineering:
     (EV-GAMING vs. privacy-notes.md), not a clean win.
   - *E3 low-tech intake widens reach but also the abuse surface* — sequence it after
     R5/R6.
-  - *EV-DANGER's "1,166 in 2024" figure* (cited in advocacy analyses) was **not**
+  - *EV-DANGER's "1,166 in 2024" figure* (cited in advocacy analyzes) was **not**
     used here as a hard stat; the FARS-confirmed, twice-corroborated **1,105 (2022)**
     is the load-bearing number. Re-verify any newer FARS release before quoting.
 

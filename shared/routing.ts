@@ -6,7 +6,7 @@
  * talks same-origin (CSP stays `'self'`, and the route response is cacheable by
  * the service worker for offline reuse). THIS module holds the part that makes
  * the planner *hazard-aware*: given candidate routes and the live hazard feed,
- * it penalises routes that pass close to reported hazards — weighted by severity,
+ * it penalizes routes that pass close to reported hazards — weighted by severity,
  * recency, and community confirmations — and picks the safest reasonable one.
  *
  * Everything here is deterministic and dependency-free so it can be unit-tested
@@ -25,7 +25,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export interface RouteStep {
   /** Human-readable instruction, e.g. "Turn left onto Russell Blvd". */
   instruction: string;
-  /** Length of this step, in metres. */
+  /** Length of this step, in meters. */
   distanceMeters: number;
   /** Where the maneuver happens (for "show on map" / focus). */
   location: GeoPoint;
@@ -54,7 +54,7 @@ export interface ScoredRoute {
   route: Route;
   /** Hazards inside the corridor, closest first. */
   nearby: NearbyHazard[];
-  /** Total weighted hazard penalty, expressed in equivalent metres of detour. */
+  /** Total weighted hazard penalty, expressed in equivalent meters of detour. */
   penalty: number;
   /** Ranking cost: distanceMeters + penalty (lower is better). */
   cost: number;
@@ -73,7 +73,7 @@ export interface RouteConditions {
 export interface RouteScoringOptions {
   /** Corridor half-width (m): hazards within this of the line are considered. */
   corridorMeters: number;
-  /** Penalty (equivalent detour metres) for a fresh high-severity hazard on the line. */
+  /** Penalty (equivalent detour meters) for a fresh high-severity hazard on the line. */
   highPenaltyMeters: number;
   /** Recency half-life (days): a hazard's weight halves every this-many days. */
   recencyHalfLifeDays: number;
@@ -83,7 +83,7 @@ export interface RouteScoringOptions {
   /**
    * The rider profile whose weights apply. Absent means {@link ROUTE_PROFILES}'s
    * `default`, whose multipliers are all exactly 1 -- so an omitted profile is
-   * byte-identical to the pre-profile behaviour, not merely close to it.
+   * byte-identical to the pre-profile behavior, not merely close to it.
    */
   profile?: RouteProfile;
 }
@@ -127,7 +127,7 @@ export interface RouteProfile {
   /**
    * Per-category multipliers on a hazard's penalty. A category absent here is
    * multiplied by exactly 1, which is why `default` is byte-identical to the
-   * pre-profile behaviour rather than merely close to it.
+   * pre-profile behavior rather than merely close to it.
    */
   categoryMultipliers: Partial<Record<HazardCategory, number>>;
   /**
@@ -144,7 +144,7 @@ export interface RouteProfile {
 }
 
 export const ROUTE_PROFILES: Readonly<Record<RouteProfileId, RouteProfile>> = {
-  // Unchanged behaviour, stated as a profile so there is no un-named path.
+  // Unchanged behavior, stated as a profile so there is no un-named path.
   default: {
     id: 'default',
     scoring: {},
@@ -223,7 +223,7 @@ export function conditionWeight(
   return 1;
 }
 
-/** Local equirectangular projection (metres) around a reference latitude. */
+/** Local equirectangular projection (meters) around a reference latitude. */
 function toLocal(p: GeoPoint, refLat: number): { x: number; y: number } {
   const metersPerDegLng = METERS_PER_DEG_LAT * Math.cos((refLat * Math.PI) / 180);
   return { x: p.lng * metersPerDegLng, y: p.lat * METERS_PER_DEG_LAT };
@@ -314,7 +314,7 @@ export function resolveScoringOptions(
 }
 
 /**
- * Penalty (equivalent detour metres) a single hazard adds to a route, given its
+ * Penalty (equivalent detour meters) a single hazard adds to a route, given its
  * closest distance to the line.
  *
  * `opts` must already be RESOLVED -- see {@link resolveScoringOptions}, which is
@@ -455,7 +455,7 @@ export function findFastestAlternative(ranked: ScoredRoute[]): FastestAlternativ
 // `DAVIS_CENTER` — a promise nothing checked, in the module the place-pack issue
 // (#181) forgot to list. They are gone rather than re-homed: every function below
 // already takes `lat`/`lng` as arguments, so this module needs no place data at all,
-// and callers read the centre off the place pack (`PLACE.center`). That keeps this
+// and callers read the center off the place pack (`PLACE.center`). That keeps this
 // scoring module dependency-free — `shared/place.ts` pulls in zod — while removing
 // the possibility of the two values drifting apart.
 
@@ -482,7 +482,7 @@ export function solarAltitudeDeg(epochMs: number, lat: number, lng: number): num
   const m = 357.52911 + t * (35999.05029 - 0.0001537 * t);
   const mRad = toRad(m);
 
-  // Orbital eccentricity and the sun's equation of the centre.
+  // Orbital eccentricity and the sun's equation of the center.
   const e = 0.016708634 - t * (0.000042037 + 0.0000001267 * t);
   const c =
     Math.sin(mRad) * (1.914602 - t * (0.004817 + 0.000014 * t)) +
