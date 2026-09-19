@@ -1,9 +1,15 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { openTab } from './helpers.ts';
+import {
+  answerRoutesWith,
+  openTab,
+  seedApprovedHazard,
+  stubNearbyHazard,
+  stubRoutePlan,
+} from './helpers.ts';
 
 /**
- * Full-page accessibility pass in a real browser (covers colour-contrast and
+ * Full-page accessibility pass in a real browser (covers color-contrast and
  * page-structure rules that jsdom can't). Merge-blocking: zero violations.
  */
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -62,7 +68,7 @@ test.describe('accessibility', () => {
     await toggle.click();
 
     // The picker is lazily imported, so the click resolves before it mounts.
-    // Wait for Leaflet to have initialised the container — not for tiles, which
+    // Wait for Leaflet to have initialized the container — not for tiles, which
     // come from a third-party origin and must never decide whether CI is green.
     await expect(page.locator('.location-picker-map.leaflet-container')).toBeVisible();
     await expect(page.getByRole('button', { name: /hide map/i })).toHaveAttribute(
@@ -70,6 +76,58 @@ test.describe('accessibility', () => {
       'true',
     );
 
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  /**
+   * The route planner with a plan on screen: the preference picker, the result's
+   * preference sentence and weights, the hazard list and the steps caption.
+   *
+   * None of that exists until a route is planned, and the harness's own router
+   * only ever answers with a straight line, so `/api/route` is answered in the
+   * browser. The content is asserted before the scan, because a scan of a result
+   * that never rendered would pass.
+   */
+  test('route planner with a planned route has no WCAG A/AA violations', async ({ page }) => {
+    await answerRoutesWith(page, () =>
+      stubRoutePlan({
+        profile: 'family-safest',
+        profileApplied: true,
+        hazardFreeCandidate: false,
+        nearby: [stubNearbyHazard()],
+      }),
+    );
+    await page.goto('/#/route?profile=family-safest');
+    await page.getByRole('button', { name: /plan a safer route/i }).click();
+
+    await expect(page.locator('.route-profile-result > p.hint')).toHaveText(
+      'Chosen with the Family / cargo bike preference.',
+    );
+    await expect(page.getByRole('heading', { name: 'Hazards still on this route' })).toBeVisible();
+    await expect(page.locator('#route-steps-profile')).toBeVisible();
+    await expect(page.getByRole('radio')).toHaveCount(3);
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  /**
+   * The monthly trends table (issue #180). Content first, as above: a scan of a
+   * view whose table never loaded would pass and say nothing.
+   */
+  test('trends view has no WCAG A/AA violations', async ({ page, request }, testInfo) => {
+    // The table only exists once something has been reported, and this spec can
+    // run against an empty store.
+    await seedApprovedHazard(
+      request,
+      { lat: 38.5585, lng: -121.7288 },
+      `E2E trends a11y (${testInfo.project.name})`,
+    );
+    await page.goto('/');
+    await openTab(page, 'Trends');
+    await expect(page.getByRole('table')).toBeVisible();
+    await expect(page.getByRole('columnheader')).toHaveCount(4);
     const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(results.violations).toEqual([]);
   });

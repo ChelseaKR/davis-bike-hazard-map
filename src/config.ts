@@ -13,7 +13,11 @@ export const config = {
   tileUrl:
     import.meta.env.VITE_TILE_URL ??
     'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  // The tile provider's required attribution markup: "OpenStreetMap" is a
+  // proper noun and the wording is the license's own, carried verbatim into
+  // Leaflet's attribution control.
   tileAttribution:
+    // i18n-exempt: license attribution markup, not translated copy.
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 
   /** Max edge length we downscale uploaded photos to (keeps mobile uploads small). */
@@ -36,7 +40,7 @@ export const config = {
    * Web-push alerts for saved areas. Off by default — turning it on requires
    * VAPID keys + a push service worker handler (see docs). When false the
    * saved-area UI and subscription calls are not rendered, so the PWA's offline
-   * behaviour is unaffected.
+   * behavior is unaffected.
    */
   pushEnabled: import.meta.env.VITE_PUSH_ENABLED === 'true',
 } as const;

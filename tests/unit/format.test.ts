@@ -31,7 +31,7 @@ describe('formatLatLng', () => {
 });
 
 describe('formatDistance', () => {
-  it('uses metres under 1 km and km above', () => {
+  it('uses meters under 1 km and km above', () => {
     expect(formatDistance(0)).toBe('0 m');
     expect(formatDistance(450)).toBe('450 m');
     expect(formatDistance(999)).toBe('999 m');

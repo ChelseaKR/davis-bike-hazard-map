@@ -7,6 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
+import { DEFAULT_RECURRENCE } from '../shared/recurrence.ts';
 
 function int(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -96,8 +97,35 @@ export const serverConfig = {
   routingUrl:
     process.env.ROUTING_URL ?? 'https://router.project-osrm.org/route/v1/cycling',
 
-  /** How long a resolved hazard stays visible (greyed) on the public map, in days. */
+  /** How long a resolved hazard stays visible (grayed) on the public map, in days. */
   resolvedVisibleDays: int('RESOLVED_VISIBLE_DAYS', 7),
+
+  /**
+   * Report trends and recurring sites (issue #180). `GET /api/trends` is always
+   * on: it is the coverage view's set, split by month, over the same six areas.
+   * The two surfaces below publish more than anything public does today, so both
+   * are OFF until someone decides they should be on. Either can be flipped
+   * without a code change, and `buildApp` refuses a threshold under which
+   * "recurring" would be false.
+   */
+  recurrence: {
+    /**
+     * `GET /api/chronic`, a ranking of places by how often they were reported.
+     * Off, the route answers 404 without reading the store. The issue's own gate:
+     * a year of real data and an equity review before any ranking of places is
+     * published (docs/audits/coverage-equity.md).
+     */
+    rankingPublish: process.env.CHRONIC_PUBLISH === 'true',
+    /**
+     * "Reported here in N separate episodes since <month>" on the map and list.
+     * Off by default because it publishes the cell-level history of reports that
+     * have LEFT the map -- where reports came from, at ~70 m, for months back.
+     * That is a location-privacy decision (#160) before it is a feature.
+     */
+    badgesPublish: process.env.RECURRENCE_BADGES_PUBLISH === 'true',
+    minEpisodes: int('RECURRENCE_MIN_EPISODES', DEFAULT_RECURRENCE.minEpisodes),
+    windowDays: int('RECURRENCE_WINDOW_DAYS', DEFAULT_RECURRENCE.windowDays),
+  },
 
   /**
    * Web-push alerts for saved areas/routes. OFF by default — needs VAPID keys to
@@ -144,6 +172,30 @@ export const serverConfig = {
   /** Where the built client lives, for the server to serve in production. */
   clientDir: process.env.CLIENT_DIR ?? './dist',
   serveClient: process.env.SERVE_CLIENT === 'true' || isProd,
+
+  /**
+   * Emit the CSP `upgrade-insecure-requests` directive (one of helmet's
+   * defaults; the explicit directive list in server/app.ts inherits it).
+   *
+   * ON by default, which is right for the deployed site: fly terminates TLS,
+   * every page is served over https, and the directive costs nothing.
+   *
+   * It is *fatal* when the same server is reached over plain `http://`.
+   * `upgrade-insecure-requests` rewrites every subresource URL in the document
+   * to `https://`, and WebKit applies it on loopback — Chromium and Firefox
+   * exempt `localhost` as a potentially-trustworthy origin, WebKit does not.
+   * So on `http://localhost:PORT` WebKit fetches `https://localhost:PORT/assets/*`,
+   * every one dies in a TLS handshake against a plaintext port, `#root` stays
+   * empty and every locator times out. That is the whole reason the WebKit
+   * nightly had never passed once in 55 runs (2026-07-18..2026-09-10); see
+   * `.github/workflows/e2e-webkit-nightly.yml`.
+   *
+   * The e2e harness therefore sets `CSP_UPGRADE_INSECURE_REQUESTS=false`
+   * (playwright.config.ts). Nothing under test loads an absolute `http://`
+   * URL, so the directive is a no-op for those pages in every browser — it is
+   * the one CSP directive whose removal cannot change what the suite observes.
+   */
+  cspUpgradeInsecureRequests: process.env.CSP_UPGRADE_INSECURE_REQUESTS !== 'false',
 
   rateLimit: {
     max: int('RATE_LIMIT_MAX', 120), // requests

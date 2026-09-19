@@ -31,7 +31,7 @@ describe('the shipped Davis pack pins the values it replaced', () => {
     });
   });
 
-  it('keeps the centre, which routing.ts used to duplicate by hand', () => {
+  it('keeps the center, which routing.ts used to duplicate by hand', () => {
     expect(PLACE_CENTER).toEqual({ lat: 38.5449, lng: -121.7405 });
     // `shared/routing.ts` carried its own `DAVIS_LAT = 38.5449` / `DAVIS_LNG =
     // -121.7405` with a comment claiming the values matched, and nothing checked it.
@@ -70,6 +70,18 @@ describe('the shipped Davis pack pins the values it replaced', () => {
     expect(PLACE.outOfBoundsMessage).toBe('Location must be within Davis, CA.');
     expect(ELSEWHERE_AREA).toBe('Elsewhere in Davis');
   });
+
+  it('keeps the deployment name that the OSM note body used to hard-code', () => {
+    // A literal, for the same reason as every figure above: this string is
+    // written into notes posted to OpenStreetMap, which are public and
+    // permanent, so a silent change to it is a change to published data. The
+    // value is exactly the wording `server/lib/osmNotes.ts` used to carry.
+    expect(PLACE.deploymentName).toBe('Davis Bike Hazard Map');
+    // And it is not the same field as `displayName`: one names the town, the
+    // other names the service. Collapsing them would put "Davis, CA" into a
+    // sentence that reads "via the Davis, CA".
+    expect(PLACE.displayName).toBe('Davis, CA');
+  });
 });
 
 describe('the loader refuses rather than defaulting', () => {
@@ -95,8 +107,10 @@ describe('the loader refuses rather than defaulting', () => {
     'packVersion',
     'id',
     'displayName',
+    'deploymentName',
     'bounds',
     'center',
+    'timeZone',
     'outOfBoundsMessage',
     'elsewhereAreaName',
     'areas',
@@ -105,6 +119,17 @@ describe('the loader refuses rather than defaulting', () => {
     const pack = validPack();
     delete pack[field];
     expect(() => parsePlacePack(pack, `missing-${field}`)).toThrow(PlacePackError);
+  });
+
+  it('refuses a time zone this runtime does not know, rather than bucketing months in UTC', () => {
+    for (const zone of ['America/Davis', 'PST', 'UTC+8', '']) {
+      const pack = validPack();
+      pack.timeZone = zone;
+      expect(() => parsePlacePack(pack, `zone-${zone}`), zone).toThrow(PlacePackError);
+    }
+    const pack = validPack();
+    pack.timeZone = 'America/Los_Angeles';
+    expect(parsePlacePack(pack, 'zone-ok').timeZone).toBe('America/Los_Angeles');
   });
 
   it('refuses a zero or negative exposure weight', () => {
@@ -136,10 +161,10 @@ describe('the loader refuses rather than defaulting', () => {
     expect(() => parsePlacePack(pack, 'stray-landmark')).toThrow(/outside the pack bounds/);
   });
 
-  it('refuses a centre outside the bounds', () => {
+  it('refuses a center outside the bounds', () => {
     const pack = validPack();
     pack.center = { lat: 0, lng: 0 };
-    expect(() => parsePlacePack(pack, 'stray-centre')).toThrow(/center is outside/);
+    expect(() => parsePlacePack(pack, 'stray-center')).toThrow(/center is outside/);
   });
 
   it('refuses an inverted bounding box', () => {
@@ -247,7 +272,7 @@ describe('a second pack drives the same code', () => {
     }
   });
 
-  it('refuses the Davis centre and accepts the synthetic centre — the packs really differ', () => {
+  it('refuses the Davis center and accepts the synthetic center — the packs really differ', () => {
     const davisSchema = placePointSchemaFor(PLACE as PlacePack);
     expect(davisSchema.safeParse(PLACE_CENTER).success).toBe(true);
     expect(davisSchema.safeParse(SYNTHETIC.center).success).toBe(false);

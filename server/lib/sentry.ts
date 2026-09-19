@@ -11,7 +11,7 @@ import * as Sentry from '@sentry/node';
 let enabled = false;
 
 /**
- * Initialise Sentry (no-op without a DSN).
+ * Initialize Sentry (no-op without a DSN).
  *
  * `tracesSampleRate` is non-zero by default so performance traces flow
  * (OBSERVABILITY-STANDARD flags a `0` rate); callers pass the env-configured

@@ -70,9 +70,9 @@ server/    Fastify API (intake, moderation, lifecycle, 311 hand-off) that also
 
 - The **List view** is a full, keyboard- and screen-reader-operable equivalent
   of the map and renders the exact same filtered dataset (parity gate).
-- Severity is conveyed by **shape + text + colour**, never colour alone.
+- Severity is conveyed by **shape + text + color**, never color alone.
 - Automated axe gates run at two levels: component-level (jsdom, WCAG A/AA) in
-  unit tests and full-page (real browser, incl. colour-contrast) in Playwright.
+  unit tests and full-page (real browser, incl. color-contrast) in Playwright.
 
 ## Architecture Decision Records (ADRs)
 

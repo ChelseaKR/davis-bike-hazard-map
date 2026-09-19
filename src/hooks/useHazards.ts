@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Hazard, HazardFilters } from '../../shared/types.ts';
-import { fetchHazards } from '../lib/api.ts';
+import { apiFailureOf, fetchHazards, type ApiFailure } from '../lib/api.ts';
 import { applyFilters, sortByPriority } from '../lib/filters.ts';
 
 /**
@@ -20,7 +20,16 @@ interface UseHazardsResult {
   hazards: Hazard[];
   all: Hazard[];
   loading: boolean;
-  error: string | null;
+  /**
+   * Why the last load failed, as a code — never a sentence (issue #200).
+   *
+   * This was `string | null`, set from `err.message`, and `App` passed it
+   * straight to `ListView`'s `role="alert"` and `MapView`'s feed notice, which
+   * rendered it verbatim. In the common branch that message is the SERVER's
+   * English sentence; in the fallback it was a literal here. Callers resolve
+   * this code through `feedErrorLabel()` in `src/i18n/labels.ts`.
+   */
+  error: ApiFailure | null;
   /** Epoch ms of the last successful fetch, or null before the first one. */
   lastUpdatedAt: number | null;
   refresh: () => Promise<void>;
@@ -35,7 +44,7 @@ interface UseHazardsResult {
 export function useHazards(filters: HazardFilters): UseHazardsResult {
   const [all, setAll] = useState<Hazard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiFailure | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   // Delta-poll cursor: the serverTime of our last successful fetch. Null until
   // the first full load, which forces that first fetch to be a full one.
@@ -59,7 +68,9 @@ export function useHazards(filters: HazardFilters): UseHazardsResult {
       sinceRef.current = feed.serverTime ?? null;
       setLastUpdatedAt(Date.now());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load hazards.');
+      // The thrown error's message is a diagnostic and stays in the console;
+      // what crosses into React state is the code the display layer catalogs.
+      setError(apiFailureOf(err));
     } finally {
       setLoading(false);
     }

@@ -10,7 +10,7 @@
 > Every item is tagged **[corroborates …]** (independently re-surfaces something
 > the existing docs already name — triangulation, not noise) or **[NET-NEW]** (the
 > panel surfaced it; the existing roadmap/audits don't cover it). No feature or
-> fact is invented; "values today" and "reuses" point only at code/behaviour that
+> fact is invented; "values today" and "reuses" point only at code/behavior that
 > exists in [`README.md`](../README.md) / [`ARCHITECTURE.md`](./ARCHITECTURE.md) /
 > the [`docs/audits/`](./audits/). **Last assembled: 2026-06-30.**
 
@@ -23,7 +23,7 @@
 
 ---
 
-## Delivery status — reconciled 2026-07-11 (R3 receipts/retry landed 2026-07-17)
+## Delivery status — reconciled 2026-07-11 (R3 receipts/retry landed 2026-07-17; E2 profiles 2026-09-11)
 
 This file is an evidence-driven option set, not a promise that every idea is an
 active engineering ticket. The active implementation lane has been drained; the
@@ -32,10 +32,10 @@ below rather than being represented as silently open work.
 
 | State | Items | Evidence / gate |
 | --- | --- | --- |
-| **Delivered** | R1, R2, R4, R9, R11, E1, E7 | Duplicate nudge + confirmations; reporter trail; normalized coverage; manual + optional `FaceDetector` blur; durable Web Push delivery; near-miss taxonomy; recently resolved hazards remain visible. |
+| **Delivered** | R1, R2, R4, R9, R11, E1, E2, E7, E8 | Duplicate nudge + confirmations; reporter trail; normalized coverage; manual + optional `FaceDetector` blur; durable Web Push delivery; near-miss taxonomy; rider routing profiles, requestable by `GET /api/route?profile=` (#199) and chosen in the planner (#178); recently resolved hazards remain visible; reports-by-month trends (E8, #180), with the recurring-site machinery shipped behind two flags that default off. |
 | **Delivered foundation; external completion remains** | R3, R7 | R3's receipt/retry machinery now ships (2026-07-17): every forward attempt records a `HandoffDelivery` receipt, failures retry on an exponential schedule, exhausted hand-offs surface as moderator dead letters (`GET /api/moderation/handoff-failures` + panel re-send), and `dbhm_handoff_failures_total` counts failed attempts — all exercisable in dry-run. What still requires a real provider contract is *actual delivery to the city* (credentials/endpoint — ⛔ external). R7: privacy copy and accessible/photo-optional capture ship, while the human screen-reader walkthrough remains review-gated. |
 | **Operations/partner-gated** | R8, E5 | Self-hosted routing requires hosting and an OSM extract; the campus on-ramp requires a real UC Davis/Unitrans partner and distribution plan. |
-| **Future options, not activated commitments** | R5, R6, R10, R12, E2, E3, E4, E6, E8, E9 | These require additional product scope, threat-model decisions, real-user validation, operating capacity, or partner/legal review. Promote one to an implementation ticket only when its gate and owner are explicit. |
+| **Future options, not activated commitments** | R5, R6, R10, R12, E3, E4, E6, E9 | These require additional product scope, threat-model decisions, real-user validation, operating capacity, or partner/legal review. Promote one to an implementation ticket only when its gate and owner are explicit. |
 
 The detailed entries below remain as the decision record and evidence base. The
 status table is authoritative when older prose says a delivered foundation is
@@ -112,7 +112,7 @@ Effort: **S** ≈ an afternoon · **M** ≈ a day or two · **L** ≈ a week+.
 | **E4** | **Service-area expansion path** — Davis → Yolo County corridors (causeway, county roads) behind the same explicit-bbox policy | P4 | P2 | M | EV-CROWD-WORKS · `davisPointSchema` bbox is a deliberate policy, parameterizable. **[NET-NEW]** |
 | **E5** | **Campus / Unitrans on-ramp** — QR posters at bike racks, orientation/ASUCD tie-in, recurring awareness | P5,P11 | P2 | M | EV-DAVIS, EV-ABANDON (low awareness) · public dashboard + PWA install path exist. **[NET-NEW]** |
 | **E6** | **City-grade prioritization export** — confirmation-weighted, exposure-normalized, keyed to city GIS / work-order IDs | P8,P9 | P2 | M | EV-COLLECTIVE, EV-SKEW · open-data export + precise internal coords exist. **[corroborates open-data export, extends]** |
-| **E7** | **"What got fixed" public wins feed** — highlight resolved hazards over time to sustain momentum | P11,P1,P10 | P3 | S | EV-COLLECTIVE · resolved-lingers (greyed) already shipped. **[corroborates ADR-6, extends]** |
+| **E7** | **"What got fixed" public wins feed** — highlight resolved hazards over time to sustain momentum | P11,P1,P10 | P3 | S | EV-COLLECTIVE · resolved-lingers (grayed) already shipped. **[corroborates ADR-6, extends]** |
 | **E8** | **Trend-over-time view** for council + research (time series, not just a snapshot) | P10,P13 | P3 | M | EV-UNDERREPORT, EV-SKEW · lifecycle timestamps already stored. **[NET-NEW]** |
 | **E9** | **Advocacy embed / campaign kit** on the public dashboard (embeddable widget + seeded known hazards) | P11 | P3 | S–M | EV-CROWD-WORKS · `VITE_PUBLIC_DASHBOARD` + seed script exist. **[corroborates public-dashboard mode, extends]** |
 
@@ -219,7 +219,7 @@ committing engineering:
     (EV-GAMING vs. privacy-notes.md), not a clean win.
   - *E3 low-tech intake widens reach but also the abuse surface* — sequence it after
     R5/R6.
-  - *EV-DANGER's "1,166 in 2024" figure* (cited in advocacy analyses) was **not**
+  - *EV-DANGER's "1,166 in 2024" figure* (cited in advocacy analyzes) was **not**
     used here as a hard stat; the FARS-confirmed, twice-corroborated **1,105 (2022)**
     is the load-bearing number. Re-verify any newer FARS release before quoting.
 

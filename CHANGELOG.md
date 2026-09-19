@@ -9,6 +9,274 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **Reports by month, and recurring sites (issue #180; research roadmap E8,
+  ideation EXP-13).** A `Trends` tab counts how many hazards were reported in each
+  month and what has happened to those reports since. The recurring-site machinery
+  ships with it and publishes nothing by default.
+
+  **The trend is the coverage view's set with a month on it** -- every report
+  received except rejected ones, less seeded demo data -- so `GET /api/trends` and
+  `GET /api/coverage` count one set, and a test holds them to each other area by
+  area. Three rules keep it honest. Months are the town's calendar months: a report
+  filed at 6 p.m. on 31 March in Davis is a March report and is already 1 April in
+  UTC, so the place pack now carries a required, canonical `timeZone` (an alias
+  like `PST` is refused, because ICU resolves it and another engine may not).
+  `confirmed` and `resolved` are cohort counts -- what has happened to that month's
+  reports so far -- because when a confirmation happened is deliberately not
+  stored: a durable confirmation log would be a movement trace of a cyclist (#187).
+  And a month in which nothing was received anywhere is left out and counted in
+  `omittedMonths`, never printed as zero, because this service cannot tell a quiet
+  month from one it was not running in -- with the beta paused (#161) that is a
+  live possibility, not a hypothetical.
+
+  **Episodes are derived on read, never stored.** There is no episode table and no
+  migration: a stored index would be a second copy of what the lifecycle timestamps
+  already say, and it would keep a trace of a report whose reporter deleted it,
+  which the privacy page promises it does not. A site is one fuzzed ~70 m cell and
+  one category; an episode is a stretch in which at least one approved report there
+  was open, and a report made while another was open joins it. Only moderated, real
+  reports count: pending, rejected and seeded rows never do, each asserted against a
+  sibling fixture that does recur, so an exclusion cannot pass for another reason.
+
+  **Both new publication surfaces are off by default, and refuse without reading
+  the store.** `RECURRENCE_BADGES_PUBLISH` gates the "reported here in N separate
+  episodes since <month>" labels, because they publish the cell-level history of
+  reports that have LEFT the map -- where reports came from, at ~70 m, months back
+  -- and that is a location-privacy decision (#160) before it is a feature.
+  `CHRONIC_PUBLISH` gates the ranking, which is the issue's own gate: a year of real
+  data and an equity review. Off, both answer 404 `not_published`, and the client
+  shows nothing and says nothing, because a deployment's own configuration is not an
+  outage. A label that could not be LOADED is a third state, and the list and the map
+  both say so -- a hazard without a label must not read as "never reported here
+  before".
+
+  `Repository.listLifecycle` reads only what an aggregate needs -- category, the
+  fuzzed cell, status, timestamps, confirmations, provenance -- so the precise
+  point, the description, the photo and the moderation log never enter the process
+  for a trend. The Postgres query names those columns and no others, and a
+  both-stores test holds the two adapters to the same records.
+
+- **The route planner has a rider-preference picker (issue #178), so the
+  profiles #199 made requestable can finally be chosen in the app.** Three radio
+  options -- *Standard*, *Family / cargo bike*, *E-bike* -- each described by the
+  weights it applies. Those sentences are composed from `ROUTE_PROFILES` and
+  `DEFAULT_SCORING` (`routeProfileWeightLines`, `src/i18n/labels.ts`) rather than
+  written per profile, so a weight change changes what a rider reads in the same
+  commit. `tests/unit/routeProfileCopy.test.ts` holds the copy to the table in
+  both directions, and fails the day a profile gains a scoring override the copy
+  does not describe. No label or rule calls a preference safe; the one use of the
+  word in the picker is the sentence saying none of them makes a route safe.
+
+  **The result names the preference the server planned with, not the one the
+  picker shows now, and says what it did in each state `profileApplied` can
+  report:** *chosen with* it when more than one route was weighed; *had nothing to
+  choose between* when the road network offered one route; *did not choose this*
+  on the straight-line fallback. A plan that records none -- the service worker
+  can serve one cached before profiles existed, and it carries no `profile` field
+  -- says so, rather than naming a preference or crashing. Changing the
+  preference after planning says which one the route on screen was planned with.
+
+  **The preference is part of the permalink:** `#/route?profile=e-bike`, on the
+  route tab only, and omitted for `default`, so every earlier route link and
+  every cached plan URL is unchanged. An unknown value, `constructor` included,
+  is dropped the way an invalid filter is.
+
+  **The e2e harness now runs with `ROUTING_URL` empty**, so the planner answers
+  with its straight-line fallback at once and with no network. The default is the
+  public OSRM demo server; no e2e test on `main` had planned a route, and the
+  first one would have made a third party's uptime part of a required check.
+  States the fallback cannot produce are driven by answering `/api/route` in the
+  browser.
+
+  Spanish for the new strings is owed under REVIEW-GATE R3, like every other
+  string: `es` stays structure-only, with no machine translation.
+
+- **The nightly WebKit e2e job now passes, and can now be seen when it does
+  not.** `e2e-webkit-nightly` reported `success` on **55 of 55 runs** between
+  its first run on 2026-07-18 and 2026-09-10, while the job inside it —
+  `End-to-end (WebKit, non-blocking)` — **failed on 55 of 55**. A job-level
+  `continue-on-error: true` makes the *workflow's* conclusion green whatever
+  the job did, so `gh run list` showed an unbroken column of green over a check
+  that had never once passed. WebKit accessibility on this site had therefore
+  never been verified, and the nightly built to verify it had been broken since
+  the day it was created.
+
+  **The cause was neither WebKit nor this site.** The e2e harness serves the
+  production build over plain `http://localhost:8788`; the production CSP
+  carries helmet's default `upgrade-insecure-requests`; and WebKit applies that
+  directive on loopback, where Chromium and Firefox exempt `localhost` as a
+  potentially-trustworthy origin. So under WebKit every `/assets/*.js` fetch
+  went to `https://localhost:8788/…`, died in a TLS handshake against a
+  plaintext port, and left `#root` empty — all 11 e2e tests timed out on a
+  locator, six of them the axe scans.
+
+  - `serverConfig.cspUpgradeInsecureRequests` (env
+    `CSP_UPGRADE_INSECURE_REQUESTS`) gates the directive. **It defaults to on,
+    so the deployed CSP is unchanged**; `playwright.config.ts` sets it off,
+    because nothing under test loads an absolute `http://` URL and it is the
+    one directive whose removal cannot change what the suite observes.
+    `tests/unit/securityHeaders.test.ts` pins all three claims: the directive
+    is emitted by default, turning it off removes that directive **and nothing
+    else**, and the harness actually sets the variable.
+  - `continue-on-error: true` is gone from the nightly, and the job is renamed
+    `End-to-end (WebKit, nightly)`. Nothing needed the mute — a scheduled
+    workflow produces no status check on a pull request and cannot block a
+    merge — and `protect-main` still requires `End-to-end (Chromium +
+    Firefox)`, not this one. The job also writes a one-line verdict to the run
+    summary so a reader gets an answer without downloading the trace artifact.
+  - `tests/unit/requiredChecks.test.ts` gains a guard that **no** job in the
+    tree is muted (declared allowance list, empty, self-limiting in both
+    directions), and its "this detector is not inert" control no longer points
+    at the live WebKit job — that control's only negative example used to be a
+    real defect, so fixing the defect would have silently disarmed it.
+
+  - **One test then had to stop racing the harness.** With the CSP fixed, Linux
+    WebKit ran 10 of 11 and `offline: a report is saved, then syncs when back
+    online` failed on 1 of 3 runs and was rescued by the retry on the other 2 —
+    a coin-flip nightly, which is the same disease as a muted one. Reading the
+    queue row out of IndexedDB in the CI browser: it reached
+    `{"state":"syncing","attempts":0}` at **+575ms** and was still there at
+    **+15,611ms**, with **no `/api/reports` request event emitted at all**. The
+    request never left the browser: `setOffline(false)` returns before WebKit
+    will carry a new one, and `startSync` fires its first tick within ~500ms of
+    load. Nothing inside the test's 15s poll can rescue that, because the app's
+    own recovery for a hung request is `STALE_SYNCING_MS` — 10 minutes,
+    deliberately generous so a real photo upload on slow mobile data is never
+    re-sent. The test now proves the interface is carrying traffic before
+    reopening the app. **No assertion changed and no timeout was raised**;
+    Chromium and Firefox satisfy the new poll on its first try.
+
+  **Measured after the change:** WebKit 11/11 pass, in Linux CI as well as
+  locally — the first green run in the workflow's life, 2026-09-10, run
+  `34528460145`, `11 passed (30.2s)` with zero flaky. With the directive
+  restored, 11/11 fail again — the same symptom as CI. With a color-contrast
+  regression planted in `--ink`, 3 of the 6 a11y tests go red naming
+  `color-contrast`, so the suite can still fail for the right reason. WebKit
+  found no accessibility defect that the Chromium and Firefox runs miss.
+
+- **`js-yaml` 4.3.1 -> 4.3.2 and `browserslist` 4.28.6 -> 4.28.9, the two open
+  HIGH Dependabot alerts** (`#47`, `#31`). Both are transitive dev-only
+  dependencies -- neither is in `package.json`, neither reaches the running
+  server or the shipped bundle -- so this is a lockfile-only change; nothing in
+  `dependencies` moves.
+  - `js-yaml` is pulled in by the lint toolchain; `browserslist` by the build's
+    target resolution.
+  - The diff is the two packages plus the five that `browserslist` itself
+    depends on (`baseline-browser-mapping`, `caniuse-lite`,
+    `electron-to-chromium`, `node-releases`, `update-browserslist-db`) -- its
+    own closure, not unrelated lock drift. `baseline-browser-mapping` 2.11.22
+    incidentally closes the moderate alert `#43` (patched at 2.11.0).
+  - **Still open, and not fixable on its own:** the moderate alerts on `vitest`
+    and `@vitest/mocker` (`#45`, `#44`, patched at 4.1.11).
+    `@vitest/coverage-v8@4.1.10` pins its `vitest` peer to the **exact**
+    version, so `npm update vitest` is a no-op -- measured, the lock does not
+    move. Both must be bumped in one commit. `@vitest/coverage-v8@4.1.11`
+    exists, so the fix is available; it is deliberately not in this PR, which
+    is scoped to the highs.
+
+- **"My reports" no longer shows a rider the server's English sentence when a
+  report fails to sync (issue #203).** `MyReports` rendered the device queue's
+  `lastError` verbatim, and that value is `ApiRequestError.message` -- the
+  server's own sentence, composed in English by a server with no catalog -- or
+  `String(err)` on a non-`Error` throw. The card around it was cataloged, so a
+  Spanish rider got a translated card over an English reason. This is the same
+  defect issue #200 removed from the hazard feed, on a second surface.
+
+  **Neither i18n gate could observe it.** G2's pass A flags string *literals* in
+  JSX and `{r.lastError}` is an expression; pass B scans `src/lib/api.ts`, where
+  the literal carries an `i18n-exempt` reason naming this issue. Each gate was
+  correct about its own file and nothing related the two.
+
+  `sync.ts` now records the transport's `ApiFailure` code as `lastErrorCode`,
+  and `MyReports` resolves it through `queueErrorLabel()` in
+  `src/i18n/labels.ts` -- the shape #173 and #200 established. The server
+  sentence is kept on the row as a diagnostic and is never rendered.
+
+  - **A row written before this change is read as absent, not guessed at.**
+    `lastErrorCode` is a NEW key rather than a repurposed `lastError`, because
+    the queue is IndexedDB and rows written by an earlier build are on real
+    devices. Those rows resolve to `error.queue.unrecorded` -- "this device
+    didn't record a reason it can show you" -- which is deliberately not one of
+    the four codes: picking `offline` for a row that never measured a connection
+    would publish a reason nothing observed.
+  - **The reason line is now unconditional under a failed report.** The old
+    guard was `state === 'error' && r.lastError`, so a row with no sentence
+    printed a card reading "Couldn't sync" with nothing under it, which reads
+    the same as a report that is fine.
+  - `tests/unit/queueErrorMessages.test.tsx` formats the whole path under a
+    SENTINEL catalog -- an English regex cannot tell correct output from
+    defective output when both are English -- and covers a pre-migration row, an
+    unrecognized code, and a report that has not failed.
+
+- **`sharp` 0.35.3 -> 0.35.4 (`GHSA-rgj7-g3m4-5g8c`, high), for the libheif
+  vulnerabilities its prebuilt binaries carry.** The advisory was published
+  2026-09-08 at 21:25 UTC; `Security (dependency audit + secret scan)` last
+  passed on `main` at `bb9e709` ten hours earlier, against this same
+  `package-lock.json`. So the gate went red on a calendar, not on a commit, and
+  the change here is the lockfile only -- `package.json` already asks for
+  `^0.35.3`, which resolves 0.35.4.
+  - **The vulnerable decoder is reachable from an upload, so this is not a
+    theoretical high.** `server/lib/image.ts` reads the bytes out of the
+    submitted data URL and hands them straight to `sharp()`; the declared MIME
+    type is never consulted, and `sharp.format.heif.input.buffer` is `true` in
+    the prebuilt binary this project installs. A crafted HEIC or AVIF upload
+    therefore reaches libheif before any of the guards below it
+    (`limitInputPixels`, `failOn: 'error'`, the re-encode to JPEG), all of which
+    act on a decode that has already happened.
+  - What actually changes is the bundled library: `@img/sharp-libvips-*`
+    1.3.2 -> 1.3.3, which is libheif 1.23.2. Verified by loading the installed
+    binary rather than by reading the lock.
+
+- Named rider routing profiles on the planner (issue #178, E2): `default`,
+  `family-safest` and `e-bike`, requested as `GET /api/route?profile=`. A
+  profile is a stated preference over **reported** hazards and nothing more --
+  it cannot invent a hazard, cannot suppress one, and never changes what the
+  rider is told is on the route (`nearby` is the same list under every profile).
+  No profile makes a route safe, and the copy that names one must not say it
+  does.
+
+  **The weights, stated here because a weight change is a behavior change.**
+  `default` carries no overrides and no multipliers at all, so it is
+  byte-identical to the pre-profile ranking rather than merely close to it --
+  asserted, not assumed. `family-safest` triples the high-severity base penalty
+  (800 -> 2400 equivalent detour meters) and multiplies `dangerous_intersection`
+  by 2.5 and `blocked_lane`, `poor_visibility` and `near_miss` by 1.5. `e-bike`
+  raises the base penalty to 1200 (a detour costs a faster bike less time) and
+  multiplies `pothole` and `surface_damage` by 1.5 and `glass_debris` by 1.3.
+  Reviewed against `docs/audits/residual-risk.md`: these move how much a
+  *reported* hazard costs, and none of them changes what is collected, what is
+  published, or the residual risk that reports are a biased sample of the road.
+
+  **"`family-safest` never routes through a high-severity hazard when any
+  alternative exists" is enforced lexicographically, not by a large weight.** A
+  candidate carrying a high-severity corridor hazard ranks below every candidate
+  carrying none, whatever the distance; cost decides only inside each group. Any
+  finite penalty, however large, is beaten by a long enough detour, and the
+  endpoints nobody tried are exactly where that would have surfaced. With no
+  clear alternative the profile still returns the least-bad route.
+
+  **An unknown profile is a 400 naming the ones that exist, never a silent
+  default.** A rider who asked for `family-safest` and was quietly given the
+  default route would be told the map had avoided things it had not.
+
+  **The plan reports `profileApplied` in three states**, the same discipline
+  `hazardFreeCandidate` uses since #163: `null` on the straight-line fallback
+  (no road graph was searched, so no profile routed anything), `false` when the
+  graph returned a single candidate (the weights applied but chose nothing), and
+  `true` only when more than one candidate was ranked. An echo of the requested
+  profile is not evidence that it did anything.
+
+  Two defects in the new code were found by its own tests before it shipped:
+  `resolveRouteProfile` used an index-and-check, so `constructor` and
+  `toString` resolved to inherited members instead of being refused; and
+  `hazardPenalty` -- exported and called directly -- read the scoring options
+  straight through while `scoreRoute` merged the profile's overrides, so one
+  profile produced a 3x penalty through one entry point and 1x through the
+  other. Both readers now go through `resolveScoringOptions`.
+
+  The profile picker in `RoutePlanner` is not built yet; this is the engine and
+  the API.
+
 - The moderator "resolve" decision has an entry point (issue #140). It was
   fully built server-side and completely unreachable from the app:
   `shared/statusMachine.ts` makes `pending → resolved` and `approved →
@@ -33,7 +301,7 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   `level` on a result (SARIF 2.1.0 §3.27.10 inherits it from the rule's
   `defaultConfiguration`, and CodeQL keeps its rules in `tool.extensions`, not
   `tool.driver.rules`), so the count was `0` for every input and the step the
-  workflow itself labelled "this is what actually blocks CI now" went green on
+  workflow itself labeled "this is what actually blocks CI now" went green on
   anything — including a run carrying a security-severity 7.8 finding. The gate
   is now `scripts/codeql-gate.mjs`: it resolves severity through the rule table,
   fails closed on a severity it cannot resolve, is scoped to the matrix leg it
@@ -107,10 +375,10 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 - Locale negotiation no longer claims Spanish it can't deliver. `es.json` is
   structure-only (0 of 214 values translated — REVIEW-GATE R3, no unreviewed MT
-  in this civic app), but `negotiate()` matched any *catalogued* locale, so an
+  in this civic app), but `negotiate()` matched any *cataloged* locale, so an
   `es`-preferring browser got `document.documentElement.lang = 'es'` while every
   string on the page still rendered in English via the `defaultMessage` fallback
-  (issue #112). `src/i18n/config.ts` now separates *catalogued* (`SUPPORTED_LANGUAGES`
+  (issue #112). `src/i18n/config.ts` now separates *cataloged* (`SUPPORTED_LANGUAGES`
   — has a JSON file, exercises the gates) from *activated* (`ACTIVATED_LANGUAGES`
   — `negotiate()` will actually select it for a visitor), today `['en']` only.
   `tests/unit/i18nConfig.test.ts` is the regression guard, including a test that
@@ -253,7 +521,7 @@ corresponding subset of these entries moves under that heading.
   field. Seeded hazards now render a "Demo data" marker on every card/popup, the public dashboard
   shows a standing banner whenever a seeded row is in the feed, and the GeoJSON export's
   `properties.source` makes the ODbL-licensed data self-describing so it can't silently redistribute
-  unlabelled fiction. `migrations/0008_hazard_source.sql` backfills existing Postgres rows.
+  unlabeled fiction. `migrations/0008_hazard_source.sql` backfills existing Postgres rows.
 - Offline synchronization no longer retries permanently failed reports every 30 seconds;
   user-triggered retries remain available, and reports orphaned in `syncing` after an interrupted
   submission return to the idempotent retry queue after ten minutes.

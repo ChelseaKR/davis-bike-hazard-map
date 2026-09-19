@@ -2,6 +2,7 @@
   "packVersion": 1,
   "id": "synthetic-town",
   "displayName": "Synthetic Town (test fixture)",
+  "deploymentName": "Synthetic Town Bike Hazard Map",
   "bounds": {
     "minLat": 10.0,
     "maxLat": 10.4,
@@ -9,6 +10,7 @@
     "maxLng": 20.4
   },
   "center": { "lat": 10.2, "lng": 20.2 },
+  "timeZone": "Africa/Ndjamena",
   "outOfBoundsMessage": "Location must be within Synthetic Town.",
   "elsewhereAreaName": "Elsewhere in Synthetic Town",
   "areas": [

@@ -258,7 +258,7 @@ export function PhotoEditor({ onComplete, onCancel }: PhotoEditorProps) {
             role="img"
             aria-label={intl.formatMessage({
               id: 'photoEditor.canvasAria',
-              defaultMessage: 'Photo preview. Drag across faces or licence plates to blur them.',
+              defaultMessage: 'Photo preview. Drag across faces or license plates to blur them.',
             })}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}

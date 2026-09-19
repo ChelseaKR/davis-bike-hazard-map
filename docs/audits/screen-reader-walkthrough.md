@@ -33,7 +33,7 @@ role + name match and the task is completable without sighted cues.
 | Step | Expected announcement | Backing affordance |
 |------|----------------------|--------------------|
 | Open Report | "Report a hazard, form" | `<form aria-label>` in `ReportForm` |
-| Type select | "Type, combo box" | labelled `<select>` |
+| Type select | "Type, combo box" | labeled `<select>` |
 | Severity | "Severity, radio group" → each option as radio | `role="radiogroup"` + radios |
 | Use my location | on success: "Location set …" announced (polite) | `aria-live="polite"` location readout |
 | Location error | error announced immediately | `role="alert"` on the geolocation error |
@@ -46,7 +46,7 @@ role + name match and the task is completable without sighted cues.
 | Step | Expected announcement | Backing affordance |
 |------|----------------------|--------------------|
 | Open List | "Hazard list" reachable; cards as list items | `ListView` (independent of the map) |
-| A card | category heading, "moderate severity" (text, not colour), "Community-reported — not verified" | `HazardCard` text + visually-hidden severity |
+| A card | category heading, "moderate severity" (text, not color), "Community-reported — not verified" | `HazardCard` text + visually-hidden severity |
 | Empty state | "No hazards match …" — **not** "you are safe" | coverage-equity framing |
 | Filter result count | count change announced (polite) | `role="status" aria-live="polite"` on FilterCounts |
 
@@ -54,7 +54,7 @@ role + name match and the task is completable without sighted cues.
 
 | Step | Expected announcement | Backing affordance |
 |------|----------------------|--------------------|
-| Open Moderate | "Moderator sign-in"; "Username, edit"; "Password, edit, secure" | labelled inputs, `autocomplete` |
+| Open Moderate | "Moderator sign-in"; "Username, edit"; "Password, edit, secure" | labeled inputs, `autocomplete` |
 | Wrong credentials | "Wrong username or password" announced | `role="alert"` |
 | Signed in | "Signed in as <name>"; "Pending review (N)" | live text |
 | Approve | item leaves the queue; "queue is clear" when empty | queue re-render |

@@ -8,8 +8,8 @@
  * GRACEFULLY: with no backend reachable it returns a single straight-line
  * "fallback" route so the UI (and tests) still work without a live router.
  *
- * The hazard-avoidance maths lives in shared/routing.ts; this file is only
- * "fetch candidate routes and normalise them".
+ * The hazard-avoidance math lives in shared/routing.ts; this file is only
+ * "fetch candidate routes and normalize them".
  */
 import type { GeoPoint } from '../../shared/types.ts';
 import type { Route, RouteStep } from '../../shared/routing.ts';
@@ -126,7 +126,7 @@ export function describeStep(step: OsrmStep): string {
  * Refusing the whole route rather than the offending field is the point. A route
  * missing one step's distance is a route we cannot describe, and presenting it as
  * complete is the failure this repository keeps finding in its own output. The
- * fallback that replaces it is a straight line, is labelled `source: 'fallback'`
+ * fallback that replaces it is a straight line, is labeled `source: 'fallback'`
  * in the plan, and says so to the rider.
  */
 function osrmToRoute(r: OsrmRoute): Route | null {

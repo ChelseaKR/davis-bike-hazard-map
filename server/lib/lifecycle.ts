@@ -64,7 +64,7 @@ export function applyHandoffStatus(
 
   const patch: Partial<StoredHazard> = { handoff, updatedAt: now };
   // Delivery receipt (R3): any synced-back status proves the city has the
-  // report, so the receipt becomes `acked` and pending retries are cancelled —
+  // report, so the receipt becomes `acked` and pending retries are canceled —
   // even if an earlier transport attempt had been marked failed (the sync-back
   // is the stronger evidence).
   if (hazard.handoffDelivery) {

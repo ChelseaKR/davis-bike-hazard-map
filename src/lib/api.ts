@@ -6,33 +6,84 @@
  */
 import { getDeviceId } from './deviceId.ts';
 import { config } from '../config.ts';
-import type {
-  ApiError,
-  GeoPoint,
-  Hazard,
-  HazardFilters,
-  ReportSubmission,
+import {
+  DEFAULT_ROUTE_PROFILE_ID,
+  type ApiError,
+  type GeoPoint,
+  type Hazard,
+  type HazardFilters,
+  type ReportSubmission,
+  type RouteProfileId,
 } from '../../shared/types.ts';
 import type { RoutePlan } from '../../shared/routing.ts';
 import type { Watch } from '../../shared/alerts.ts';
 import type { AreaCount } from '../../shared/areas.ts';
+import type { RecurrenceBadge, ReportTrends } from '../../shared/recurrence.ts';
+
+/**
+ * Why a request failed, as a machine code rather than a sentence (issue #200,
+ * the shape issue #173 established for `geolocation.ts` / `push.ts` /
+ * `photo.ts`).
+ *
+ * `message` here is a DIAGNOSTIC: it is the server's own sentence when it sent
+ * one, and the server composes it in English with no catalog behind it. It used
+ * to be rendered verbatim to a rider — `useHazards` put it straight into
+ * `ListView`'s `role="alert"` — so under an activated Spanish catalog the
+ * wrapper was translated and the payload was not. Display code resolves `code`
+ * through `feedErrorLabel()` in `src/i18n/labels.ts` instead, and the sentence
+ * is kept only for diagnostics.
+ */
+export type ApiFailure = 'offline' | 'request' | 'server' | 'parse';
 
 export class ApiRequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code: ApiFailure,
     readonly body?: ApiError,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = 'ApiRequestError';
   }
 }
 
+/**
+ * The failure code for an HTTP status. 5xx is the server; everything else that
+ * reached the server and came back not-ok is the request. `status` is retained
+ * on the error, so nothing here loses information.
+ */
+function failureFor(status: number): ApiFailure {
+  return status >= 500 ? 'server' : 'request';
+}
+
+/**
+ * Classify anything thrown out of this module for display.
+ *
+ * Lives here rather than in the hook because the mapping is a property of the
+ * transport, and because a caller that reaches for `err.message` is the defect
+ * this exists to remove — there is one place to look for the code.
+ */
+export function apiFailureOf(err: unknown): ApiFailure {
+  return err instanceof ApiRequestError ? err.code : 'offline';
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${config.apiBase}${path}`, {
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-    ...init,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${config.apiBase}${path}`, {
+      headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+      ...init,
+    });
+  } catch (cause) {
+    // `fetch` rejects only for a transport failure: offline, DNS, TLS, a
+    // connection dropped mid-flight. There is no status and no server sentence,
+    // and the browser's own text is vendor English in no catalog — so it is kept
+    // as `cause` and never displayed, exactly as #173 did with
+    // `GeolocationPositionError.message`.
+    // i18n-exempt: a diagnostic message, never rendered; display resolves `code`
+    throw new ApiRequestError('network request failed', 0, 'offline', undefined, { cause });
+  }
 
   if (!res.ok) {
     let body: ApiError | undefined;
@@ -42,14 +93,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // non-JSON error body — ignore
     }
     throw new ApiRequestError(
+      // No rider-facing surface renders this sentence. The feed resolves `code`
+      // through `feedErrorLabel`, and "My reports" resolves the device queue's
+      // stored code through `queueErrorLabel` (issue #203, which is what this
+      // comment used to name as the one place it still reached a screen).
+      // i18n-exempt: a transport diagnostic; the display path resolves `code`
       body?.message ?? `Request failed (${res.status})`,
       res.status,
+      failureFor(res.status),
       body,
     );
   }
 
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  try {
+    return (await res.json()) as T;
+  } catch (cause) {
+    // A 200 whose body is not the JSON this client expects. Reported as its own
+    // code rather than as a transport failure: "the server answered and the
+    // answer was unreadable" is a different thing to tell a rider than "you are
+    // offline", and collapsing them is how a parse bug reads as a network blip.
+    // i18n-exempt: a diagnostic message, never rendered; display resolves `code`
+    throw new ApiRequestError('response body was not valid JSON', res.status, 'parse', undefined, {
+      cause,
+    });
+  }
 }
 
 /** Optional delta-poll cursor layered on top of the display filters. */
@@ -101,6 +169,45 @@ export async function fetchCoverage(): Promise<AreaCount[]> {
   return areas;
 }
 
+/**
+ * Reports received per area per month (issue #180): the coverage view's set,
+ * split by the month each report was received in the town's time zone. The body
+ * also carries the server's own `basis` and `limits` sentences for API consumers;
+ * the view renders its own cataloged copy instead.
+ */
+export async function fetchTrends(): Promise<ReportTrends> {
+  return request<ReportTrends>('/trends');
+}
+
+/**
+ * Recurrence labels for the hazards on the map (issue #180), or `null` when this
+ * deployment does not publish them.
+ *
+ * `null` is "not published" and it is not a failure: labels are off by default,
+ * and a page that said "could not be loaded" on every default deployment would be
+ * reporting its own configuration as an outage. A transport or server error still
+ * throws, so the caller keeps "none here by design" apart from "none could load".
+ */
+export async function fetchRecurrence(): Promise<RecurrenceBadge[] | null> {
+  try {
+    const { badges } = await request<{ badges: RecurrenceBadge[] }>('/hazards/recurrence');
+    if (!Array.isArray(badges)) {
+      // A 200 whose body is not the labels this client expects -- an older or
+      // newer server. Reported as a parse failure, the same code the feed uses,
+      // so the page says labels could not be loaded rather than treating a body
+      // it could not read as "this deployment publishes none".
+      // i18n-exempt: a diagnostic message, never rendered; display resolves `code`
+      throw new ApiRequestError('recurrence body carried no badges array', 200, 'parse');
+    }
+    return badges;
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 404 && err.body?.error === 'not_published') {
+      return null;
+    }
+    throw err;
+  }
+}
+
 /** Submit a report. Idempotent on `clientId`, so retries are safe. */
 export async function submitReport(
   submission: ReportSubmission,
@@ -120,7 +227,7 @@ export async function submitReport(
  * would tell a rider their confirmation was lost when it had already landed.
  */
 export async function confirmHazard(id: string): Promise<{ hazard: Hazard; counted: boolean }> {
-  return request<{ hazard: Hazard; counted: boolean }>(`/hazards/${id}/confirm`, {
+  return request<{ hazard: Hazard; counted: boolean }>(/* i18n-exempt: URL path, not display copy */ `/hazards/${id}/confirm`, {
     method: 'POST',
     body: JSON.stringify({ deviceId: getDeviceId() }),
   });
@@ -129,9 +236,21 @@ export async function confirmHazard(id: string): Promise<{ hazard: Hazard; count
 /**
  * Plan a hazard-aware cycling route between two points. Same-origin (the server
  * proxies the OSRM backend), so the response is service-worker cacheable.
+ *
+ * `profile` is the rider preference (issue #178). The default is omitted rather
+ * than sent: the server reads an absent profile as `default`, and leaving it off
+ * keeps the URL -- and so the service worker's cached plan for it -- identical to
+ * every plan requested before profiles existed.
  */
-export async function fetchRoute(from: GeoPoint, to: GeoPoint): Promise<RoutePlan> {
-  const q = `from=${from.lat},${from.lng}&to=${to.lat},${to.lng}`;
+export async function fetchRoute(
+  from: GeoPoint,
+  to: GeoPoint,
+  profile: RouteProfileId = DEFAULT_ROUTE_PROFILE_ID,
+): Promise<RoutePlan> {
+  // i18n-exempt: query string, not display copy
+  let q = `from=${from.lat},${from.lng}&to=${to.lat},${to.lng}`;
+  // i18n-exempt: query string, not display copy
+  if (profile !== DEFAULT_ROUTE_PROFILE_ID) q += `&profile=${encodeURIComponent(profile)}`;
   const { plan } = await request<{ plan: RoutePlan }>(`/route?${q}`);
   return plan;
 }
@@ -165,7 +284,7 @@ export async function deleteReport(clientId: string): Promise<void> {
   }
 }
 
-/** A browser PushSubscription's serialisable shape. */
+/** A browser PushSubscription's serializable shape. */
 export interface PushSubscriptionPayload {
   endpoint: string;
   keys: { p256dh: string; auth: string };
@@ -226,7 +345,7 @@ export async function fetchModerationQueue(
 ): Promise<ModerationQueuePage> {
   const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   return request<ModerationQueuePage>(`/moderation/queue${qs}`, {
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: /* i18n-exempt: RFC 9110 HTTP auth scheme token, not display copy */ `Bearer ${token}` },
   });
 }
 
@@ -241,10 +360,11 @@ export async function fetchModerationPhoto(
   token: string,
 ): Promise<string> {
   const res = await fetch(photoUrl, {
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: /* i18n-exempt: RFC 9110 HTTP auth scheme token, not display copy */ `Bearer ${token}` },
   });
   if (!res.ok) {
-    throw new ApiRequestError(`Photo request failed (${res.status})`, res.status);
+    // i18n-exempt: moderator-only diagnostic behind a login; never on a rider's screen
+    throw new ApiRequestError(`Photo request failed (${res.status})`, res.status, failureFor(res.status));
   }
   return URL.createObjectURL(await res.blob());
 }
@@ -272,7 +392,7 @@ export interface HandoffFailure {
 export async function fetchHandoffFailures(token: string): Promise<HandoffFailure[]> {
   const { failures } = await request<{ failures: HandoffFailure[] }>(
     '/moderation/handoff-failures',
-    { headers: { authorization: `Bearer ${token}` } },
+    { headers: { authorization: /* i18n-exempt: RFC 9110 HTTP auth scheme token, not display copy */ `Bearer ${token}` } },
   );
   return failures;
 }
@@ -282,9 +402,9 @@ export async function fetchHandoffFailures(token: string): Promise<HandoffFailur
  * the server records a fresh delivery receipt for the attempt).
  */
 export async function retryHandoff(id: string, token: string): Promise<void> {
-  await request<unknown>(`/moderation/${id}/handoff`, {
+  await request<unknown>(/* i18n-exempt: URL path, not display copy */ `/moderation/${id}/handoff`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: /* i18n-exempt: RFC 9110 HTTP auth scheme token, not display copy */ `Bearer ${token}` },
   });
 }
 
@@ -297,7 +417,7 @@ export async function decideModeration(
 ): Promise<{ hazard: Hazard }> {
   return request<{ hazard: Hazard }>(`/moderation/${id}`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: /* i18n-exempt: RFC 9110 HTTP auth scheme token, not display copy */ `Bearer ${token}` },
     body: JSON.stringify({ decision, reason }),
   });
 }
@@ -319,9 +439,9 @@ export async function suggestOsmNote(
   id: string,
   token: string,
 ): Promise<{ result: OsmNoteResult; hazard: Hazard }> {
-  return request<{ result: OsmNoteResult; hazard: Hazard }>(`/moderation/${id}/osm-note`, {
+  return request<{ result: OsmNoteResult; hazard: Hazard }>(/* i18n-exempt: URL path, not display copy */ `/moderation/${id}/osm-note`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: /* i18n-exempt: RFC 9110 HTTP auth scheme token, not display copy */ `Bearer ${token}` },
     body: JSON.stringify({}),
   });
 }

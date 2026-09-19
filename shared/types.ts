@@ -20,6 +20,20 @@ export const HAZARD_CATEGORIES = [
 export type HazardCategory = (typeof HAZARD_CATEGORIES)[number];
 
 /**
+ * Named rider routing profiles (E2). The *weights* live in `shared/routing.ts`;
+ * only the vocabulary lives here, beside the other domain vocabularies, because
+ * `shared/validation.ts` needs the id list and `routing.ts` transitively imports
+ * `validation.ts` through `geo.ts`. Declaring it there made a runtime import
+ * cycle that `tsc` accepted -- the type side is erased -- and that only the test
+ * run exposed, as `ROUTE_PROFILE_IDS is not iterable`.
+ */
+export const ROUTE_PROFILE_IDS = ['default', 'family-safest', 'e-bike'] as const;
+export type RouteProfileId = (typeof ROUTE_PROFILE_IDS)[number];
+
+/** The profile a request gets when it asks for none. */
+export const DEFAULT_ROUTE_PROFILE_ID: RouteProfileId = 'default';
+
+/**
  * Categories that can plausibly describe a PERMANENT, OSM-mappable feature and
  * are therefore eligible for the moderator-triggered OSM Notes feedback loop
  * (EXP-08). Shared so the client shows the action only for these and the server

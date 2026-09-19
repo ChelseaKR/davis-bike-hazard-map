@@ -39,7 +39,7 @@ Please include, as far as you can:
 - the impact you believe it has, and
 - any suggested remediation.
 
-Expect an acknowledgement within a few days. This is a volunteer project, so please be patient and
+Expect an acknowledgment within a few days. This is a volunteer project, so please be patient and
 do not disclose publicly until a fix is available.
 
 ### Privacy issues are security issues (responsible disclosure)

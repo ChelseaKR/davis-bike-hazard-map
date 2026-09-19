@@ -6,7 +6,7 @@
  * no `intl`, and a thrown `Error` carries a string rather than a message
  * descriptor. The result was a wrapper that was translated and a payload that
  * was not: `RoutePlanner` interpolated `err.message` — the browser's own
- * English, or ours — straight into the catalogued `{reason}` slot of
+ * English, or ours — straight into the cataloged `{reason}` slot of
  * `route.error.location`. Under an activated Spanish catalog a rider would get
  * half a translated sentence.
  *

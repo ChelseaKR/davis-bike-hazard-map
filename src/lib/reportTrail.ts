@@ -147,7 +147,7 @@ export function reportTrail(
   // 311 hand-off only appears once a moderator forwarded it to the city.
   //
   // `handoff.stage` is the CITY's view of the ticket and reads `submitted` from
-  // the instant a forward is ATTEMPTED, dry-run or not, so labelling this step
+  // the instant a forward is ATTEMPTED, dry-run or not, so labeling this step
   // from the stage alone told the reporter their report had reached the city
   // when nothing had left the server (issue #162). `handoff.delivery` is the
   // record of what the transport actually did, so it decides the wording — and,
@@ -180,7 +180,7 @@ export function reportTrail(
         key: 'city',
         label: t(messages.citySentLabel),
         state: cityDone ? 'done' : 'current',
-        // The catalogued hand-off stage labels (i18n/labels.ts), not the raw
+        // The cataloged hand-off stage labels (i18n/labels.ts), not the raw
         // English `HANDOFF_STAGE_LABELS` from shared/types.ts — the same six
         // phrases were already translatable and this file was routing round
         // them (issue #164).

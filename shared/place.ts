@@ -32,7 +32,7 @@
  *    `Central Davis`. This is by design and documented in `areas.ts`: the boxes are
  *    approximate and *ordered*, and the first box containing a point wins. A schema
  *    that rejected overlapping areas would reject the only pack this repository
- *    ships. `tests/unit/place.test.ts` pins that ordering behaviour so a future "fix" that turns
+ *    ships. `tests/unit/place.test.ts` pins that ordering behavior so a future "fix" that turns
  *    overlap into an error fails loudly instead of silently reassigning real reports.
  *
  * 2. **Two area boxes extend past the pack bounds.** `North Davis` reaches
@@ -46,7 +46,7 @@
  * duplicate area names (two boxes silently sharing one tally), an
  * `elsewhereAreaName` that collides with a named area (every unbucketed report
  * quietly counted as that area's), a non-positive `exposureWeight`, an inverted
- * bounding box, a centre outside its own bounds, and a landmark outside them — a
+ * bounding box, a center outside its own bounds, and a landmark outside them — a
  * route preset the report validator would refuse.
  */
 import { z } from 'zod';
@@ -84,8 +84,26 @@ const areaSchema = z
 const landmarkSchema = z.strictObject({ name: z.string().min(1), point: pointSchema });
 
 /**
+ * Whether a string is a CANONICAL IANA time zone name this runtime knows -- the
+ * zone the trend view buckets months in (issue #180).
+ *
+ * Canonical, not merely accepted: ICU resolves legacy aliases such as `PST`, and
+ * which aliases a runtime accepts varies by engine. The pack is validated in the
+ * browser as well as on the server, so an alias one runtime resolves and another
+ * refuses would load on the server and stop the client at import. Requiring the
+ * name to round-trip through `resolvedOptions()` unchanged rules that out.
+ */
+function isCanonicalTimeZone(zone: string): boolean {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone }).resolvedOptions().timeZone === zone;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The pack schema. Structural checks only; the cross-field checks that need the
- * whole pack (names unique, centre inside bounds, landmarks inside bounds) run in
+ * whole pack (names unique, center inside bounds, landmarks inside bounds) run in
  * {@link parsePlacePack}, where they can name the offending entry.
  */
 export const placePackSchema = z
@@ -95,8 +113,28 @@ export const placePackSchema = z
       .string()
       .regex(/^[a-z0-9][a-z0-9-]*$/, 'pack id must be lowercase kebab-case'),
     displayName: z.string().min(1),
+    // What this deployment calls itself, in the one place a second town can state
+    // it. `displayName` names the *place* ("Davis, CA") and is used in copy about
+    // the town; this names the *service*, and it is the string that leaves the
+    // system: `server/lib/osmNotes.ts` writes it into notes posted to
+    // OpenStreetMap, which are public and permanent. Required, like everything
+    // else here, because a default would publish one town's name over another's
+    // hazards and nothing in the output would say so.
+    deploymentName: z.string().min(1),
     bounds: boundsSchema,
     center: pointSchema,
+    // The town's IANA time zone. Month-by-month trends (issue #180) are bucketed in
+    // it: a report filed at 6 p.m. on 31 March in Davis is a March report, and is
+    // already 1 April in UTC. Required, like every other field, because a default of
+    // UTC would move every evening report at a month's end into the next month and
+    // nothing in the table would say so.
+    timeZone: z
+      .string()
+      .min(1)
+      .refine(
+        isCanonicalTimeZone,
+        'timeZone must be a canonical IANA zone name this runtime knows, e.g. America/Los_Angeles',
+      ),
     outOfBoundsMessage: z.string().min(1),
     elsewhereAreaName: z.string().min(1),
     areas: z.array(areaSchema).min(1),

@@ -31,6 +31,7 @@ import {
   alertSubscriptionSchema,
 } from '../shared/validation.ts';
 import { PLACE } from '../shared/place.ts';
+import { assertRecurrenceOptions } from '../shared/recurrence.ts';
 import { SEVERITY_RANK, type Hazard, type Severity } from '../shared/types.ts';
 import type { ValidatedHazardFilters } from '../shared/validation.ts';
 import {
@@ -38,6 +39,7 @@ import {
   hasHazardFreeCandidate,
   findFastestAlternative,
   isDarkAt,
+  resolveRouteProfile,
   type RoutePlan,
 } from '../shared/routing.ts';
 import { serverConfig } from './config.ts';
@@ -62,7 +64,13 @@ import { openapiSpec } from './openapi.ts';
 const API_VERSION = '1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 import {
+  RECURRING_SITES_BASIS,
+  REPORTS_NOT_GROUND_TRUTH,
+  TRENDS_BASIS,
   areaReportCounts,
+  recurrenceBadgesFor,
+  recurringSiteRanking,
+  reportTrendsFor,
   confirmHazard,
   createHazard,
   listModerationQueue,
@@ -144,6 +152,9 @@ const ttlOpts = (config: typeof serverConfig) => ({
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const config = deps.config ?? serverConfig;
   const now = deps.now ?? (() => Date.now());
+  // Refuse to boot with a threshold under which "recurring" would be false (one
+  // episode), rather than publish single reports as recurring sites (#180).
+  assertRecurrenceOptions(config.recurrence);
   const fetchImpl = deps.fetchImpl ?? fetch;
   const { repo } = deps;
   const photos = deps.photos ?? new MemoryPhotoStore();
@@ -159,7 +170,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     // coords, auth headers, tokens, secrets). See server/lib/logger.ts.
     logger: deps.logger ?? buildLoggerOptions(config),
     bodyLimit: 6 * 1024 * 1024, // photos arrive as base64; keep a sane ceiling
-    // Honour an upstream X-Request-Id (proxy/CDN) for log correlation; otherwise
+    // Honor an upstream X-Request-Id (proxy/CDN) for log correlation; otherwise
     // Fastify generates one. Echoed back on responses below.
     requestIdHeader: 'x-request-id',
     // Versioning: /api/v1/* is an alias for /api/* (rewritten before routing),
@@ -176,7 +187,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('x-api-version', API_VERSION);
   });
 
-  // RED metrics: observe every request's duration, labelled by the route
+  // RED metrics: observe every request's duration, labeled by the route
   // *pattern* (bounded cardinality) and status.
   const metrics = createMetrics();
   app.addHook('onResponse', async (req, reply) => {
@@ -200,6 +211,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
+        // `upgrade-insecure-requests` is one of helmet's defaults and is
+        // inherited by this list. `null` is helmet's way of dropping a default
+        // directive, and the e2e harness is the only thing that asks for it:
+        // over plain http://localhost WebKit honors the upgrade, every asset
+        // request goes to https:// against a plaintext port, and the app never
+        // boots. See serverConfig.cspUpgradeInsecureRequests for the full note.
+        ...(config.cspUpgradeInsecureRequests ? {} : { upgradeInsecureRequests: null }),
       },
     },
     crossOriginEmbedderPolicy: false,
@@ -469,7 +487,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
     // Full feed (first load or a stale cursor). bbox is pushed down to the store
     // (SQL) for spatial culling at scale. The feed also carries recently-resolved
-    // hazards (greyed client-side) so a fix is visible, not just an absence.
+    // hazards (grayed client-side) so a fix is visible, not just an absence.
     let hazards = await listPublicFeed(repo, nowMs, config.resolvedVisibleDays * DAY_MS, filters.bbox);
     hazards = applyFeedFilters(hazards, filters, nowMs);
 
@@ -592,23 +610,102 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       .send(body);
   });
 
+  // --- Trends: reports received per area per month (E8, issue #180) ---
+  // The coverage view's set with a month on it: every report received except
+  // rejected ones, less seeded demo data, bucketed by the month it was received in
+  // the town's time zone. A month in which nothing was received anywhere is left
+  // out (`omittedMonths`), never printed as zero. Aggregate counts over the same
+  // six areas coverage publishes; no ids, cells or per-report data.
+  app.get('/api/trends', async (req, reply) => {
+    const trends = await reportTrendsFor(repo);
+    const body = JSON.stringify({ ...trends, basis: TRENDS_BASIS, limits: REPORTS_NOT_GROUND_TRUTH });
+    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+    return reply
+      .header('etag', etag)
+      .header('cache-control', 'no-cache')
+      .header('content-type', 'application/json')
+      .send(body);
+  });
+
+  // --- Recurrence labels for hazards on the map (EXP-13, issue #180) ---
+  // OFF by default (config.recurrence.badgesPublish): a label publishes the
+  // cell-level history of reports that have left the map. Off, this answers 404
+  // `not_published` WITHOUT reading the store, and the client shows no label and
+  // no failure -- "not published" is not "could not load".
+  app.get('/api/hazards/recurrence', async (req, reply) => {
+    if (!config.recurrence.badgesPublish) {
+      return reply.status(404).header('cache-control', 'no-cache').send({
+        error: 'not_published',
+        message: 'Recurrence labels are not published on this deployment.',
+      });
+    }
+    const { minEpisodes, windowDays } = config.recurrence;
+    const badges = await recurrenceBadgesFor(repo, now(), config.resolvedVisibleDays * DAY_MS, {
+      minEpisodes,
+      windowDays,
+    });
+    const body = JSON.stringify({ badges, minEpisodes, windowDays, timeZone: PLACE.timeZone });
+    const etag = `"${createHash('sha1').update(body).digest('base64')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return reply.status(304).send();
+    }
+    return reply
+      .header('etag', etag)
+      .header('cache-control', 'no-cache')
+      .header('content-type', 'application/json')
+      .send(body);
+  });
+
+  // --- Ranking of recurring sites (EXP-13, issue #180) ---
+  // OFF by default (CHRONIC_PUBLISH), per the issue's own gate: a year of real
+  // data and an equity review before any ranking of places is published. Always
+  // mounted, so the OpenAPI contract test sees the route it documents; off, it
+  // answers 404 `not_published` before the store is read, so no ranking is ever
+  // computed, let alone served.
+  app.get('/api/chronic', async (_req, reply) => {
+    if (!config.recurrence.rankingPublish) {
+      return reply.status(404).header('cache-control', 'no-cache').send({
+        error: 'not_published',
+        message: 'The ranking of recurring sites is not published on this deployment.',
+      });
+    }
+    const { minEpisodes, windowDays } = config.recurrence;
+    const sites = await recurringSiteRanking(repo, now(), { minEpisodes, windowDays });
+    return reply.header('cache-control', 'no-cache').send({
+      sites,
+      minEpisodes,
+      windowDays,
+      timeZone: PLACE.timeZone,
+      basis: RECURRING_SITES_BASIS,
+      limits: REPORTS_NOT_GROUND_TRUTH,
+    });
+  });
+
   // --- Hazard-aware bike route planner ---
   // Proxies an OSRM cycling backend (server-side, so the browser stays
   // same-origin / offline-cacheable), then re-ranks the candidate routes to
   // prefer ones that avoid reported hazards (weighted by severity + recency).
   app.get('/api/route', async (req) => {
     const q = (req.query ?? {}) as Record<string, unknown>;
-    const { from, to } = routeRequestSchema.parse({
+    // `profile` is passed through raw so an unknown value reaches the enum and
+    // becomes a 400 naming it. Defaulting it here would turn a typo into a silent
+    // default-profile route, which is the thing the schema exists to refuse.
+    const { from, to, profile: profileId } = routeRequestSchema.parse({
       from: parsePoint(q.from),
       to: parsePoint(q.to),
+      ...(q.profile === undefined ? {} : { profile: q.profile }),
     });
+    const profile = resolveRouteProfile(profileId);
 
     const at = now();
     const hazards = await listPublic(repo, at);
     const { routes, source } = await fetchRoutes(from, to, { routingUrl: config.routingUrl }, fetchImpl);
     // After civil twilight, weight poor-visibility hazards higher — an unlit
     // path matters more in the dark. Derived from the request time + the served
-    // place's centre so it's honest and needs no external API.
+    // place's center so it's honest and needs no external API.
     const isDark = isDarkAt(at, PLACE.center.lat, PLACE.center.lng);
     // Corridor slightly wider than the privacy fuzz grid (~70 m cells) so a
     // hazard published a cell away from the true spot still influences scoring.
@@ -616,6 +713,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       now: at,
       corridorMeters: 45,
       conditions: { isDark },
+      profile,
     });
     const best = ranked[0];
 
@@ -635,6 +733,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       hazardFreeCandidate: source === 'fallback' ? null : hasHazardFreeCandidate(ranked),
       fastestAlternative: findFastestAlternative(ranked),
       ...(isDark ? { nightWeighting: true } : {}),
+      profile: profileId,
+      // Not an echo of the request. `null` on the straight-line fallback because
+      // no road graph was searched, and `false` when the graph returned a single
+      // candidate: the weights were applied, but a route nothing chose between is
+      // not a route the profile selected. Same three-state discipline as
+      // `hazardFreeCandidate` above, and for the same reason (#163).
+      profileApplied: source === 'fallback' ? null : routes.length > 1,
     };
     return { plan };
   });
@@ -941,6 +1046,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       {
         enabled: config.osmNotesEnabled,
         apiUrl: config.osmNotesApiUrl,
+        // From the pack, not from a literal here: this string is written into a
+        // note posted to OpenStreetMap, which is public and permanent, so it has
+        // to be the name of the town actually running this build (see #181).
+        deploymentName: PLACE.deploymentName,
       },
       fetchImpl,
     );

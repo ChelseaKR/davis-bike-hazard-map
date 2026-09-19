@@ -13,6 +13,7 @@
  *   - MemoryRepository   — tests and zero-config dev.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import type { LifecycleRecord } from '../../shared/recurrence.ts';
 import { dirname, resolve } from 'node:path';
 import { transition } from '../../shared/statusMachine.ts';
 import { logBootError } from './logger.ts';
@@ -40,7 +41,7 @@ function isProcessAlive(pid: number): boolean {
 
 /**
  * How long id-only tombstones are retained (and, equivalently, the maximum
- * delta-poll cursor age the server will honour). A client that polls more
+ * delta-poll cursor age the server will honor). A client that polls more
  * often than this never misses a deletion; one whose cursor is older is served
  * a full feed instead of a lossy delta (see the `/api/hazards` handler). Kept
  * generous so a phone that was merely backgrounded still gets a cheap delta.
@@ -111,7 +112,7 @@ export interface Repository {
   /**
    * Delta feed for the 30s mobile poll: rows that changed since `since` —
    * approved+unexpired rows with `updatedAt >= since`, plus recently-resolved
-   * rows with `resolvedAt >= since` (shown greyed client-side). Newest first.
+   * rows with `resolvedAt >= since` (shown grayed client-side). Newest first.
    */
   listUpdatedSince(since: number, now: number, bbox?: BBox): Promise<StoredHazard[]>;
   /**
@@ -158,6 +159,15 @@ export interface Repository {
   deleteById(id: string): Promise<boolean>;
   /** Moderation backlog stats for observability (cheap; no photos loaded). */
   pendingStats(): Promise<PendingStats>;
+  /**
+   * Every hazard except rejected ones, as the minimal record report trends and
+   * recurring sites read (issue #180): category, the FUZZED public cell,
+   * status, timestamps, confirmations and provenance. Never the precise point,
+   * the description, the photo or the moderation log, so an aggregate built on
+   * it cannot leak what it was never handed. Ordered by (createdAt, id), ids in
+   * code-unit order, identically in both stores.
+   */
+  listLifecycle(): Promise<LifecycleRecord[]>;
   /** Liveness of the backing store (readiness probe). Throws/false if down. */
   ping(): Promise<boolean>;
   /** Release resources (e.g. a connection pool). Optional. */
@@ -215,6 +225,22 @@ export function departureTime(
       // expired | rejected — updatedAt is the moment of the transition.
       return h.updatedAt;
   }
+}
+
+/** The minimal lifecycle record for a stored hazard (see `Repository.listLifecycle`). */
+export function toLifecycleRecord(h: StoredHazard): LifecycleRecord {
+  return {
+    id: h.id,
+    category: h.category,
+    cell: { lat: h.publicLocation.lat, lng: h.publicLocation.lng },
+    status: h.status,
+    createdAt: h.createdAt,
+    updatedAt: h.updatedAt,
+    expiresAt: h.expiresAt,
+    resolvedAt: h.resolvedAt ?? null,
+    confirmations: h.confirmations,
+    source: h.source ?? 'report',
+  };
 }
 
 export class MemoryRepository implements Repository {
@@ -399,6 +425,15 @@ export class MemoryRepository implements Repository {
       }
     }
     return { count, oldestCreatedAt };
+  }
+
+  async listLifecycle(): Promise<LifecycleRecord[]> {
+    // Code-unit id order, matching the Postgres store's COLLATE "C".
+    const idOrder = (a: string, b: string) => (a > b ? 1 : a < b ? -1 : 0);
+    return [...this.store.values()]
+      .filter((h) => h.status !== 'rejected')
+      .sort((a, b) => a.createdAt - b.createdAt || idOrder(a.id, b.id))
+      .map(toLifecycleRecord);
   }
 
   async ping(): Promise<boolean> {

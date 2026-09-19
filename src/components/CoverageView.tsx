@@ -13,7 +13,7 @@
  * RECEIVED, minus rejected ones. Not the public hazard feed. The feed carries
  * only approved, unexpired hazards plus recently-resolved ones, so an area
  * whose reports are all still in the moderation queue, or have since expired,
- * would show zero and be labelled a data desert — asserting the exact opposite
+ * would show zero and be labeled a data desert — asserting the exact opposite
  * of the truth in the one surface built to stop absence reading as safety.
  *
  * When that call fails (offline, server down) the view falls back to what is in
@@ -54,23 +54,23 @@ export function CoverageView({ hazards }: { hazards: Hazard[] }) {
   const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetchCoverage()
       .then((areas) => {
-        if (!cancelled) setReceived(areas);
+        if (!canceled) setReceived(areas);
       })
       .catch(() => {
-        if (!cancelled) setUnavailable(true);
+        if (!canceled) setUnavailable(true);
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []);
 
   // Three states, and no count is ever printed under a claim it cannot support:
   //   loading     - say so; print no per-area numbers at all, because the only
   //                 numbers available are the feed's and they are not "reports".
-  //   unavailable - print the feed's numbers, labelled as the feed, no flags.
+  //   unavailable - print the feed's numbers, labeled as the feed, no flags.
   //   loaded      - print reports received, with the data-desert flags.
   // Flags (data desert, over/under-reported) are only ever derived from reports
   // received. Never from the feed - see the module comment.
@@ -169,7 +169,7 @@ export function CoverageView({ hazards }: { hazards: Hazard[] }) {
       <p className="hint coverage-limits">
         <FormattedMessage
           id="coverage.limits"
-          defaultMessage={'<strong>How to read this:</strong> the "estimated ridership" comparison is a rough heuristic, not measured exposure data, and can itself be biased. It\'s here to stop scarce reports being mistaken for safety — never to rank neighbourhoods. Absence of reports is absence of <em>reports</em>, not absence of hazards.'}
+          defaultMessage={'<strong>How to read this:</strong> the "estimated ridership" comparison is a rough heuristic, not measured exposure data, and can itself be biased. It\'s here to stop scarce reports being mistaken for safety — never to rank neighborhoods. Absence of reports is absence of <em>reports</em>, not absence of hazards.'}
           values={{
             strong: (chunks) => <strong>{chunks}</strong>,
             em: (chunks) => <em>{chunks}</em>,

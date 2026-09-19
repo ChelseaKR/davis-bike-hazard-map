@@ -79,7 +79,7 @@ const BEARER = 'Bearer ';
  * which put an attacker-controlled value in a condition that decides whether
  * the verification step runs at all — CodeQL `js/user-controlled-bypass`
  * (CWE-807/CWE-290, security-severity 7.8) flagged exactly that line. The
- * behaviour was safe (the false branch denies), but the shape is the one that
+ * behavior was safe (the false branch denies), but the shape is the one that
  * goes wrong the moment someone adds an `else`, and a security gate that has
  * to be argued with on every scan is a gate nobody reads.
  *

@@ -61,28 +61,31 @@ describe('syncOnce', () => {
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'queued',
       attempts: 1,
+      lastErrorCode: 'offline',
       lastError: 'network down',
     });
   });
 
   it('errors out permanently on a 4xx (non-429) rejection', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
-    const submit = vi.fn().mockRejectedValue(new ApiRequestError('bad', 400));
+    const submit = vi.fn().mockRejectedValue(new ApiRequestError('bad', 400, 'request'));
     await syncOnce({ getPending: async () => [queued()], update, submit });
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'error',
       attempts: 1,
+      lastErrorCode: 'request',
       lastError: 'bad',
     });
   });
 
   it('treats 429 as transient', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
-    const submit = vi.fn().mockRejectedValue(new ApiRequestError('slow down', 429));
+    const submit = vi.fn().mockRejectedValue(new ApiRequestError('slow down', 429, 'request'));
     await syncOnce({ getPending: async () => [queued()], update, submit });
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'queued',
       attempts: 1,
+      lastErrorCode: 'request',
       lastError: 'slow down',
     });
   });
@@ -98,6 +101,7 @@ describe('syncOnce', () => {
     expect(update).toHaveBeenLastCalledWith('c1', {
       state: 'error',
       attempts: MAX_SYNC_ATTEMPTS,
+      lastErrorCode: 'offline',
       lastError: 'still down',
     });
   });

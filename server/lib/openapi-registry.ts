@@ -21,6 +21,7 @@ import {
   HANDOFF_DELIVERY_KINDS,
   HANDOFF_STAGES,
   type Hazard,
+  ROUTE_PROFILE_IDS,
 } from '../../shared/types.ts';
 import {
   geoPointSchema,
@@ -190,7 +191,7 @@ export const hazardExportSchema = z.object({
         createdAt: z.number().int(),
         updatedAt: z.number().int(),
         // Always present on this export (issue #111) — 'seed' rows must be
-        // self-describing so this data can never redistribute unlabelled
+        // self-describing so this data can never redistribute unlabeled
         // fiction.
         source: z.enum(HAZARD_SOURCES),
       }),
@@ -228,11 +229,69 @@ export const handoffFailuresResponseSchema = z.object({
  * Deliberately a different set from GET /hazards: the feed is what is on the
  * map now, this is what has ever been reported (minus rejected). The coverage
  * view needs the latter, because an area whose reports are all pending or
- * expired has been observed, and must not be labelled a data desert. See
+ * expired has been observed, and must not be labeled a data desert. See
  * areaReportCounts() in server/lib/hazards.ts.
  */
 export const coverageResponseSchema = z.object({
   areas: z.array(z.object({ name: z.string(), count: z.number().int().nonnegative() })),
+});
+
+const monthSchema = z.string().regex(/^\d{4}-\d{2}$/).openapi({ description: 'YYYY-MM, in `timeZone`' });
+const cellSchema = z.object({ lat: z.number(), lng: z.number() });
+
+/**
+ * Body of GET /trends -- reports received per area per month (issue #180).
+ * Cohorts, not flows: `confirmed` and `resolved` are what has happened to the
+ * month's reports so far. Months with nothing received anywhere are omitted.
+ */
+export const trendsResponseSchema = z.object({
+  timeZone: z.string(),
+  months: z.array(
+    z.object({
+      month: monthSchema,
+      areas: z.array(
+        z.object({
+          name: z.string(),
+          received: z.number().int().nonnegative(),
+          confirmed: z.number().int().nonnegative(),
+          resolved: z.number().int().nonnegative(),
+        }),
+      ),
+    }),
+  ),
+  omittedMonths: z.number().int().nonnegative(),
+  seedExcluded: z.number().int().nonnegative(),
+  basis: z.string(),
+  limits: z.string(),
+});
+
+/** Body of GET /hazards/recurrence when recurrence labels are published. */
+export const recurrenceResponseSchema = z.object({
+  badges: z.array(
+    z.object({ hazardId: z.string(), episodes: z.number().int().min(2), since: monthSchema }),
+  ),
+  minEpisodes: z.number().int().min(2),
+  windowDays: z.number().positive(),
+  timeZone: z.string(),
+});
+
+/** Body of GET /chronic when the ranking is published. No record ids. */
+export const chronicResponseSchema = z.object({
+  sites: z.array(
+    z.object({
+      category: z.enum(HAZARD_CATEGORIES),
+      cell: cellSchema,
+      area: z.string(),
+      episodes: z.number().int().min(2),
+      since: monthSchema,
+      episodeMonths: z.array(monthSchema),
+    }),
+  ),
+  minEpisodes: z.number().int().min(2),
+  windowDays: z.number().positive(),
+  timeZone: z.string(),
+  basis: z.string(),
+  limits: z.string(),
 });
 
 const json = (schema: z.ZodTypeAny) => ({ 'application/json': { schema } });
@@ -334,6 +393,55 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'get',
+  path: '/trends',
+  tags: ['public'],
+  summary: 'Reports received per area per month (E8, issue #180)',
+  description:
+    'The /coverage set with a month on it: every report received except rejected ones, ' +
+    'less seeded demo data (counted in `seedExcluded`), bucketed by the month it was ' +
+    'received in the town time zone. `confirmed` and `resolved` are cohort counts -- what ' +
+    'has happened to that month\'s reports so far. A month with no report received anywhere ' +
+    'is omitted and counted in `omittedMonths`, never reported as zero. Aggregate counts only.',
+  responses: {
+    200: { description: 'per-area monthly tallies', content: json(trendsResponseSchema) },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/hazards/recurrence',
+  tags: ['public'],
+  summary: 'Recurrence labels for hazards on the public map (EXP-13, issue #180)',
+  description:
+    'For each hazard currently on the public feed whose cell and category were reported in ' +
+    'at least `minEpisodes` separate episodes within `windowDays`: the episode count and the ' +
+    'month the first counted episode opened. Not published by default ' +
+    '(RECURRENCE_BADGES_PUBLISH): it discloses the cell-level history of reports that have ' +
+    'left the map. When off, 404 with error `not_published`, and the store is not read.',
+  responses: {
+    200: { description: 'recurrence labels', content: json(recurrenceResponseSchema) },
+    404: { description: 'not published on this deployment', content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/chronic',
+  tags: ['public'],
+  summary: 'Ranking of recurring sites (EXP-13, issue #180), unpublished by default',
+  description:
+    'Sites (a public ~70 m cell and a category) reported in at least `minEpisodes` separate ' +
+    'episodes within `windowDays`, most episodes first. Ranks by how often riders reported a ' +
+    'place, never by danger. Not published unless CHRONIC_PUBLISH is on: 404 with error ' +
+    '`not_published`, and the store is not read.',
+  responses: {
+    200: { description: 'recurring sites', content: json(chronicResponseSchema) },
+    404: { description: 'not published on this deployment', content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
   path: '/route',
   tags: ['routing'],
   summary: 'Hazard-aware cycling route plan (proxies OSRM, re-ranks to avoid hazards)',
@@ -341,11 +449,30 @@ registry.registerPath({
     query: z.object({
       from: z.string().openapi({ description: 'lat,lng (within Davis)' }),
       to: z.string().openapi({ description: 'lat,lng (within Davis)' }),
+      profile: z
+        .enum(ROUTE_PROFILE_IDS)
+        .optional()
+        .openapi({
+          description:
+            'Rider weighting profile (E2). Omitted means `default`. A profile is a ' +
+            'stated preference over REPORTED hazards, not a claim about risk: no ' +
+            'profile makes a route safe. `family-safest` weights intersections and ' +
+            'blocked lanes higher and will not choose a route carrying a ' +
+            'high-severity reported hazard while any alternative exists; `e-bike` ' +
+            'weights surface hazards higher and accepts a longer detour. The plan ' +
+            'reports `profileApplied` — `null` on the straight-line fallback, where ' +
+            'no road graph was searched, and `false` when only one candidate came ' +
+            'back, so an echo of the requested profile is never mistaken for the ' +
+            'weighting having chosen anything.',
+        }),
     }),
   },
   responses: {
     200: { description: 'a RoutePlan (chosen route geometry + turn-by-turn steps + hazards on route)' },
-    400: { description: 'endpoints missing or outside Davis', content: errorContent },
+    400: {
+      description: 'endpoints missing or outside Davis, or an unknown routing profile',
+      content: errorContent,
+    },
   },
 });
 

@@ -10,7 +10,7 @@ import {
   updateReport,
   type QueuedReport,
 } from './db.ts';
-import { submitReport, ApiRequestError } from './api.ts';
+import { submitReport, ApiRequestError, apiFailureOf } from './api.ts';
 import { config } from '../config.ts';
 
 export interface SyncDeps {
@@ -65,6 +65,12 @@ export async function syncOnce(deps: Partial<SyncDeps> = {}): Promise<SyncResult
       await update(report.clientId, {
         state: permanent || exhausted ? 'error' : 'queued',
         attempts,
+        // The CODE is what "My reports" renders, through `queueErrorLabel()`
+        // (issue #203). `lastError` used to be rendered verbatim, and it is the
+        // server's own sentence composed in English by a server with no
+        // catalog — so a Spanish rider got a translated card around an English
+        // reason. It is kept here as a diagnostic and is never displayed.
+        lastErrorCode: apiFailureOf(err),
         lastError: err instanceof Error ? err.message : String(err),
       });
     }

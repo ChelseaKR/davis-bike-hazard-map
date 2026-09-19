@@ -138,7 +138,7 @@ next**, and **Adopts / walks** (the one thing that wins or loses them).
 
 ### P2 — Trevor, parent towing two kids on a cargo bike
 - **Goal:** get the *safest* route to preschool, even if it's slower — he's hauling precious cargo.
-- **Values today:** the **hazard-avoiding route planner** (OSRM cycling route re-ranked by severity × recency × confirmations) and that it returns a **turn-by-turn list**, not only a map line; **severity shown by shape + text + colour**, so danger reads at a glance.
+- **Values today:** the **hazard-avoiding route planner** (OSRM cycling route re-ranked by severity × recency × confirmations) and that it returns a **turn-by-turn list**, not only a map line; **severity shown by shape + text + color**, so danger reads at a glance.
 - **Gets stuck:** the route optimizes around *reported* hazards but he can't ask for "kid-safe": avoid high-severity *and* unprotected arterials regardless of reports. He worries empty areas look safe when they're just unobserved.
 - **Wants next:** a **"safest / family" routing preference**; a way to weight *near-miss / scary-intersection* reports (the leading-indicator class BikeMaps shows is ~62% of submissions) — not just physical debris.
 - **Adopts if:** the route is one he'd actually put his kids on. **Walks if:** it sends them down a road that's clear of potholes but obviously hostile.
@@ -166,7 +166,7 @@ next**, and **Adopts / walks** (the one thing that wins or loses them).
 
 ### P6 — Dolores, low-vision daily rider & screen-reader user
 - **Goal:** use the **list view** as a complete, first-class path — she never touches the map.
-- **Values today:** **map + list parity** (the List renders the exact same filtered dataset, keyboard- and SR-operable); **severity by shape + text**, never colour alone; the **coverage view's honest empty state** ("none reported here — *not* that the area is safe"); axe gates at component **and** full-page level.
+- **Values today:** **map + list parity** (the List renders the exact same filtered dataset, keyboard- and SR-operable); **severity by shape + text**, never color alone; the **coverage view's honest empty state** ("none reported here — *not* that the area is safe"); axe gates at component **and** full-page level.
 - **Gets stuck:** *filing* a report — especially the **photo / blur editor** — is a canvas interaction she's unsure she can complete non-visually; she can't tell if the precise location was captured right; she worries about whether streamed status updates are announced politely.
 - **Wants next:** a **fully SR-narrated capture + blur flow** (or a documented photo-optional path), explicit `aria-live` on lifecycle changes, and the committed human VoiceOver/NVDA pass finished (it's still review-gated pre-launch).
 - **Adopts if:** she can *report*, not just *read*, entirely by keyboard + SR. **Walks if:** the map is accessible but the capture flow is a visual-only wall.
@@ -197,7 +197,7 @@ next**, and **Adopts / walks** (the one thing that wins or loses them).
 ### P10 — Councilmember Okafor, council / policy staff
 - **Goal:** point safety dollars at evidence, and defend the choice publicly.
 - **Values today:** the **coverage-by-area view** that lists **every** area including zero-report ones with explicit "under-reported, not safe" framing; the "**community-reported, not verified by the city**" labeling; **open data + open methodology** they can cite.
-- **Gets stuck:** the press (or an opponent) could wield the map as "these streets are dangerous, those are fine" — exactly the representational-bias failure the under-reporting literature warns about. Coverage is uneven by neighbourhood and income.
+- **Gets stuck:** the press (or an opponent) could wield the map as "these streets are dangerous, those are fine" — exactly the representational-bias failure the under-reporting literature warns about. Coverage is uneven by neighborhood and income.
 - **Wants next:** an **equity-aware view** (reports normalized by ridership/population; explicit "data desert" call-outs); a plain-language methodology note for public meetings; trend-over-time, not just a snapshot.
 - **Adopts if:** it survives a hostile reading at a council meeting. **Walks if:** it can be screenshotted into a misleading "safe vs. dangerous" map.
 

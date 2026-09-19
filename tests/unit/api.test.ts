@@ -156,6 +156,19 @@ describe('fetchRoute', () => {
     expect(plan).toEqual({ source: 'osrm' });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/route?from=38.54,-121.74&to=38.55,-121.73');
   });
+
+  it('sends a non-default rider preference, and leaves the default off the URL (issue #178)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ plan: { source: 'osrm' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchRoute({ lat: 38.54, lng: -121.74 }, { lat: 38.55, lng: -121.73 }, 'family-safest');
+    await fetchRoute({ lat: 38.54, lng: -121.74 }, { lat: 38.55, lng: -121.73 }, 'default');
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/route?from=38.54,-121.74&to=38.55,-121.73&profile=family-safest',
+    );
+    // Identical to a request made before profiles existed, so the service
+    // worker's cached plan for it is still the one that answers offline.
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/route?from=38.54,-121.74&to=38.55,-121.73');
+  });
 });
 
 describe('alerts api', () => {

@@ -18,7 +18,7 @@ import { subscribeAlert, unsubscribeAlert, type PushSubscriptionPayload } from '
 export type PushRegistrationFailure = 'unsupported' | 'permissionNotGranted';
 
 /**
- * Registration failure as a catalogue-resolvable code (issue #173).
+ * Registration failure as a catalog-resolvable code (issue #173).
  *
  * This module has no `intl`, and a thrown `Error` carries a string rather than
  * a message descriptor, so an English sentence here is text no catalog can
@@ -59,7 +59,7 @@ export function urlBase64ToUint8Array(base64: string): Uint8Array {
   return out;
 }
 
-/** Serialise a browser PushSubscription into our API payload. Pure. */
+/** Serialize a browser PushSubscription into our API payload. Pure. */
 export function toPayload(sub: PushSubscription): PushSubscriptionPayload {
   const json = sub.toJSON();
   return {

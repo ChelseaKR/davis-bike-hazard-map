@@ -1,7 +1,7 @@
 # Adapting the map to another town
 
 This map's geography is a **place pack**: one validated JSON file holding the
-bounding box, centre, named areas with their exposure weights, and the landmark
+bounding box, center, named areas with their exposure weights, and the landmark
 presets. `place/davis.json` is the pack this build serves. Widening to another town
 or corridor is meant to be a new pack, not a patch.
 
@@ -54,8 +54,10 @@ build: it runs the loader for its own sake and exits non-zero.
   "packVersion": 1,
   "id": "davis",                       // lowercase kebab-case
   "displayName": "Davis, CA",
+  "deploymentName": "Davis Bike Hazard Map", // what the service calls itself; leaves the system in OSM notes
   "bounds":  { "minLat": …, "maxLat": …, "minLng": …, "maxLng": … },
   "center":  { "lat": …, "lng": … },   // must be inside bounds
+  "timeZone": "America/Los_Angeles",   // IANA zone; month-by-month trends are bucketed in it
   "outOfBoundsMessage": "Location must be within Davis, CA.",
   "elsewhereAreaName": "Elsewhere in Davis",
   "areas":     [ { "name": …, "minLat": …, "maxLat": …, "minLng": …, "maxLng": …, "exposureWeight": … } ],
@@ -90,8 +92,9 @@ than obvious at boot:
 | `elsewhereAreaName` equal to a named area | Every unbucketed report would be counted as that area's. |
 | `exposureWeight` zero, negative, or absent | A number nobody chose enters the exposure denominator. |
 | Inverted bounding box (`min` ≥ `max`) | Accepts nothing, and reads as "no reports here". |
-| Centre outside its own bounds | The default map view opens somewhere the map refuses reports. |
+| Center outside its own bounds | The default map view opens somewhere the map refuses reports. |
 | A landmark outside the bounds | A route preset the report validator would then refuse. |
+| `timeZone` this runtime does not know | Month-by-month trends would have no calendar to bucket in; a default of UTC would move every evening report at a month's end into the next month. |
 | Unknown or misspelled field | See above. |
 | Empty `areas` or `landmarks` | A coverage view with nothing to bucket into. |
 
@@ -142,7 +145,7 @@ to the map's data, and that is a decision about the town, not about the schema.
    checks types, not the numbers in the pack.
 5. **Re-check the copy.** The pack carries `displayName`, `outOfBoundsMessage` and
    `elsewhereAreaName`. Everything else the interface says about Davis by name is
-   still in the translation catalogues (`src/i18n/locales/`), not in the pack.
+   still in the translation catalogs (`src/i18n/locales/`), not in the pack.
 
 ---
 
@@ -154,17 +157,12 @@ tracked on issue #181:
 
 - **Interface copy** naming Davis, in `src/i18n/locales/en.json` — the app title, the
   coverage hint, the map's `aria-label`, and the two out-of-bounds messages.
-- **Server-side text that names Davis and leaves this system.** This is the one to
-  read twice, because it is not interface copy and it is not reversible:
-  `server/lib/osmNotes.ts` writes *"reported by cyclists via the Davis Bike Hazard
-  Map"* and *"Davis Bike Hazard Map reference &lt;id&gt;"* into the body of a note
-  **posted to OpenStreetMap**, which is public and permanent. A second town running
-  its own pack would publish that town's hazards into OSM under Davis's name.
-  `server/openapi.ts`'s API title and several `server/lib/openapi-registry.ts`
-  descriptions say Davis too; those are only served, not published outward.
-  What a second deployment should call itself is a naming decision, not a
-  substitution, which is why this is listed rather than parameterised.
-- **Licence and attribution text** for the tile layer — `config.tileAttribution` in
+- **Server-side text that names Davis but is only ever served.** `server/openapi.ts`'s
+  API title and several `server/lib/openapi-registry.ts` descriptions say Davis.
+  These are read by whoever calls this deployment's own API; nothing about them
+  reaches another system, and correcting them is copy-editing rather than a data
+  question.
+- **License and attribution text** for the tile layer — `config.tileAttribution` in
   `src/config.ts` is a literal with no environment override. It is OpenStreetMap's
   required attribution, so it is correct for any town using OSM tiles and wrong only
   for a deployment that changes tile provider.
@@ -176,6 +174,17 @@ tracked on issue #181:
   variable away.
 - **Serving two towns from one deployment.** Selection picks one pack per build and
   per process; there is no per-request town.
+
+**Taken off this list because it was fixed, not because it was wrong:** the note
+body **posted to OpenStreetMap**. It used to write *"reported by cyclists via the
+Davis Bike Hazard Map"* and *"Davis Bike Hazard Map reference &lt;id&gt;"* from two
+literals in `server/lib/osmNotes.ts`, so a second town would have published its
+hazards into OSM — public, permanent, and not retractable by redeploying — under
+Davis's name. This document argued that what a second deployment calls itself is a
+naming decision rather than a substitution, and that is right; the answer is that
+the pack is where a town states it. `deploymentName` is a required pack field, so a
+second town writes its own name and a pack that omits one does not load at all.
+Nothing here invents a name for anybody.
 
 **Not on this list, and previously on it in error:** the **tile and routing service
 URLs**. `VITE_TILE_URL` (`src/config.ts`), `ROUTING_URL` and `OSM_NOTES_API_URL`
@@ -230,5 +239,5 @@ roster and the privacy reading belong.
 `tests/fixtures/place/synthetic-town.json` is a deliberately synthetic second pack
 that the test suite drives through the same bucketing, tallying, landmark-lookup and
 bounds-validation code that serves Davis. It is the falsification for "the map is
-parameterised over its town": if that claim stops being true, those tests fail.
+parameterized over its town": if that claim stops being true, those tests fail.
 It is a fixture, not a town, and not a deployment target.

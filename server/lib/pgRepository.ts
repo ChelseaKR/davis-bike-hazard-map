@@ -13,7 +13,8 @@
  */
 import { Pool, type PoolClient } from 'pg';
 import type { StoredHazard, ModerationAction, PhotoRef, HandoffDelivery } from './types.ts';
-import type { HandoffInfo } from '../../shared/types.ts';
+import type { HandoffInfo, HazardSource } from '../../shared/types.ts';
+import type { LifecycleRecord } from '../../shared/recurrence.ts';
 import {
   decodePendingCursor,
   encodePendingCursor,
@@ -350,6 +351,44 @@ export class PostgresRepository implements Repository {
       count: Number(row?.count ?? 0),
       oldestCreatedAt: row?.oldest != null ? Number(row.oldest) : null,
     };
+  }
+
+  async listLifecycle(): Promise<LifecycleRecord[]> {
+    // Only the columns a trend or a recurrence reads. precise_lat/precise_lng,
+    // description, photo_mime and moderation are never selected, so they never
+    // enter this process for an aggregate. COLLATE "C" pins the id tiebreak to
+    // byte order, matching the memory store's code-unit compare.
+    const res = await this.pool.query<{
+      id: string;
+      category: string;
+      public_lat: number;
+      public_lng: number;
+      status: string;
+      created_at: string;
+      updated_at: string;
+      expires_at: string;
+      resolved_at: string | null;
+      confirmations: number;
+      source: string | null;
+    }>(
+      `SELECT id, category, public_lat, public_lng, status, created_at, updated_at,
+              expires_at, resolved_at, confirmations, source
+       FROM hazards WHERE status <> 'rejected'
+       ORDER BY created_at, id COLLATE "C"`,
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      category: r.category as LifecycleRecord['category'],
+      cell: { lat: r.public_lat, lng: r.public_lng },
+      status: r.status as LifecycleRecord['status'],
+      createdAt: Number(r.created_at),
+      updatedAt: Number(r.updated_at),
+      expiresAt: Number(r.expires_at),
+      resolvedAt: r.resolved_at != null ? Number(r.resolved_at) : null,
+      confirmations: r.confirmations,
+      // Same defensive default as rowToHazard: never read a missing value as seed.
+      source: (r.source as HazardSource | null) ?? 'report',
+    }));
   }
 
   async ping(): Promise<boolean> {

@@ -6,7 +6,7 @@ deployment target, and nothing in it is a claim about anywhere.
 It exists so the test suite can drive a *second* pack through the same code that
 serves Davis. Its geography is a made-up rectangle far from Davis, chosen so that a
 point valid in one pack is invalid in the other — which is what makes "the map is
-parameterised over its town" a checked fact rather than a claim. It also overlaps
+parameterized over its town" a checked fact rather than a claim. It also overlaps
 its own two areas on purpose, so the ordered-boxes rule is exercised by more than
 the shipped pack.
 

@@ -9,11 +9,11 @@ keyboard and screen-reader users.
 | Surface | Tool | Scope | Result |
 |---------|------|-------|--------|
 | Report form, Filters, List, Moderation sign-in, PhotoEditor | axe-core (jsdom) | WCAG A/AA structural | **0 violations** |
-| Map view (full page) | @axe-core/playwright (Chromium) | WCAG A/AA incl. colour-contrast | **0 violations** |
-| List view (full page) | @axe-core/playwright (Chromium) | WCAG A/AA incl. colour-contrast | **0 violations** |
-| Report form (full page) | @axe-core/playwright (Chromium) | WCAG A/AA incl. colour-contrast | **0 violations** |
+| Map view (full page) | @axe-core/playwright (Chromium) | WCAG A/AA incl. color-contrast | **0 violations** |
+| List view (full page) | @axe-core/playwright (Chromium) | WCAG A/AA incl. color-contrast | **0 violations** |
+| Report form (full page) | @axe-core/playwright (Chromium) | WCAG A/AA incl. color-contrast | **0 violations** |
 
-Colour-contrast and other layout-dependent rules run only in the real-browser
+Color-contrast and other layout-dependent rules run only in the real-browser
 (Playwright) pass; jsdom has no layout engine, so the component pass excludes
 them by design (documented in `tests/axe.ts`).
 
@@ -23,8 +23,8 @@ Leaflet injects its own controls (zoom buttons, attribution) with known upstream
 a11y gaps. We did not exclude them from the scan — we fixed them:
 
 - Zoom buttons get programmatic names (`aria-label`) via `MapA11y` in `MapView`.
-- The attribution link gets an AA-contrast colour override in `styles.css`.
-- The control cluster is wrapped in a labelled region.
+- The attribution link gets an AA-contrast color override in `styles.css`.
+- The control cluster is wrapped in a labeled region.
 
 The map is still not the only way in: **every map capability has an equal,
 fully accessible List view** that renders the identical filtered dataset
@@ -40,8 +40,8 @@ fully accessible List view** that renders the identical filtered dataset
 | Moderate | Tab to "Moderate" → username + password → queue → Approve/Reject | Pass (full-page axe: `a11y.spec.ts › moderation sign-in`) |
 
 - Visible focus: global `:focus-visible` outline (3px). 
-- Severity uses shape (▲ ◆ ⬢) + text label + colour.
-- `prefers-reduced-motion` honoured (animations reduced to ~0ms).
+- Severity uses shape (▲ ◆ ⬢) + text label + color.
+- `prefers-reduced-motion` honored (animations reduced to ~0ms).
 - Skip link to content; semantic landmarks (`header`/`nav`/`main`/`footer`).
 
 ## Checklist
@@ -49,7 +49,7 @@ fully accessible List view** that renders the identical filtered dataset
 - [x] Zero automated axe violations (component + full-page) — **auto-gated** (CI: `a11y`, `e2e`).
 - [x] Keyboard completion of every primary task — **auto-gated** (Playwright keyboard test).
 - [x] Map/list parity (same data, list independent of map) — **auto-gated** (unit test).
-- [x] Severity not by colour alone — **review-gated** (this report).
+- [x] Severity not by color alone — **review-gated** (this report).
 - [x] Screen-reader **walkthrough script** committed + code-level SR affordances verified and regression-guarded — see [`screen-reader-walkthrough.md`](./screen-reader-walkthrough.md).
 - [ ] Human VoiceOver + NVDA pass against that script — **review-gated** (final sign-off before public launch; script is ready to run).
 

@@ -22,7 +22,7 @@
  * Every function here takes the pack as an optional last argument, defaulting to
  * the served pack. That is not decoration: it is how the tests drive a synthetic
  * second town through this exact code, which is the only way "the map is
- * parameterised over its town" can be a checked fact rather than a claim.
+ * parameterized over its town" can be a checked fact rather than a claim.
  */
 import { PLACE, type PlaceArea, type PlacePack } from './place.ts';
 

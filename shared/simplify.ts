@@ -12,14 +12,14 @@
  *
  * Distances use the same local planar approximation as
  * `distanceToRouteMeters` (`shared/routing.ts`): lat/lng scaled by
- * metres-per-degree at the segment's latitude — exact enough at city scale.
+ * meters-per-degree at the segment's latitude — exact enough at city scale.
  */
 import type { GeoPoint } from './types.ts';
 import { pointToSegmentMeters } from './routing.ts';
 
 /**
  * Simplify a polyline with Douglas–Peucker: keep only the points that deviate
- * more than `toleranceMeters` from the line through their neighbours.
+ * more than `toleranceMeters` from the line through their neighbors.
  *
  * Guarantees: the first and last points are always kept, and every dropped
  * point lies within `toleranceMeters` of the simplified polyline. Iterative

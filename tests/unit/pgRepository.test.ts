@@ -401,7 +401,7 @@ suite('delta feed: memory/Postgres parity', () => {
     hazard({ id: 'unswept', clientId: 'unswept', status: 'approved', updatedAt: NOW - 60 * MIN, expiresAt: NOW - MIN }),
     // Left the map: moderator rejection.
     hazard({ id: 'rejected', clientId: 'rejected', status: 'rejected', updatedAt: NOW - MIN, expiresAt: NOW + MIN }),
-    // Still shown greyed: inside the resolved-visible window.
+    // Still shown grayed: inside the resolved-visible window.
     hazard({ id: 'justFixed', clientId: 'justFixed', status: 'resolved', updatedAt: NOW - MIN, resolvedAt: NOW - MIN, expiresAt: NOW + MIN }),
     // Left the map an hour ago: resolved-visible window ran out. Outside the
     // 10-minute cursor below, inside the wide one.
@@ -436,6 +436,22 @@ suite('delta feed: memory/Postgres parity', () => {
 
   const ids = (list: StoredHazard[]) => list.map((h) => h.id).sort();
   const sorted = (list: string[]) => [...list].sort();
+
+  it('listLifecycle returns the same records from both stores, and never a precise point', async () => {
+    const [mem, store] = await bothStores();
+    const fromMemory = await mem.listLifecycle();
+    expect(await store.listLifecycle()).toEqual(fromMemory);
+    // Not vacuous: every fixture row except the rejected one, in both.
+    expect(fromMemory.map((r) => r.id).sort()).toEqual(
+      rows.filter((r) => r.status !== 'rejected').map((r) => r.id).sort(),
+    );
+    for (const record of fromMemory) {
+      const row = rows.find((r) => r.id === record.id);
+      expect(record.cell).toEqual(row?.publicLocation);
+      expect(record.cell).not.toEqual(row?.preciseLocation);
+      expect(Object.keys(record)).not.toContain('description');
+    }
+  });
 
   it('listUpdatedSince returns the same rows from both stores', async () => {
     const [mem, store] = await bothStores();

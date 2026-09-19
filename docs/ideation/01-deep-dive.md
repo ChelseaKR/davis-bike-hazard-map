@@ -108,7 +108,7 @@ source:
 8. **Small doc/code mismatch in the fuzzing math**: `snap()` in
    `shared/geo.ts:54-56` computes `(Math.round(v/step)+0.5)*step`, which
    publishes a cell *edge* (max displacement ≈ one full grid step, ~70–100 m),
-   while the comment says "centre of a fixed grid cell" (max ≈ half a step).
+   while the comment says "center of a fixed grid cell" (max ≈ half a step).
    Deterministic and privacy-safe either way, but the documented guarantee and
    the measured one differ. (FIX-12)
 9. **Branch divergence as integration debt.** The research docs *and* the

@@ -20,7 +20,11 @@ import esCatalog from './locales/es.json';
  * start shipping its scaffolding.
  */
 export const SUPPORTED_LANGUAGES = {
+  // A language picker names each language in its own language, so these are
+  // correct in every locale: translating them is the bug, not leaving them.
+  // i18n-exempt: language endonym.
   en: 'English',
+  // i18n-exempt: endonym, as above.
   es: 'Español',
 } as const;
 
@@ -31,14 +35,14 @@ export const DEFAULT_LOCALE: LanguageCode = 'en';
 
 /**
  * Locales `negotiate()` will actually select for a visitor — a strict subset
- * of `SUPPORTED_LANGUAGES`. A locale is *catalogued* (has a JSON file, so the
+ * of `SUPPORTED_LANGUAGES`. A locale is *cataloged* (has a JSON file, so the
  * gates and tooling stay exercised) before it is *activated* (a real visitor
  * can land in it).
  *
- * `es` is catalogued, not activated: `es.json` is structure-only (0 of 214
+ * `es` is cataloged, not activated: `es.json` is structure-only (0 of 214
  * values translated — REVIEW-GATE R3, docs/I18N.md — "no unreviewed MT" ships
  * in this civic app). Before this list existed, `negotiate()` matched against
- * every catalogued locale, so an `es`-preferring browser got
+ * every cataloged locale, so an `es`-preferring browser got
  * `document.documentElement.lang = 'es'` while every string on the page still
  * rendered in English via the `defaultMessage` fallback — a real mismatch a
  * screen reader or translation tool would trust (issue #112).
@@ -79,7 +83,7 @@ export function loadMessages(locale: LanguageCode): Record<string, string> {
 }
 
 /**
- * Type guard: is `tag` a *catalogued* locale (has a JSON file)? This is
+ * Type guard: is `tag` a *cataloged* locale (has a JSON file)? This is
  * broader than "negotiable" — see `isActivated` — and exists for tooling that
  * genuinely wants every declared locale (e.g. a future "Español (coming
  * soon)" listing), not the set a visitor can actually be placed into.
@@ -90,7 +94,7 @@ export function isSupported(tag: string): tag is LanguageCode {
 
 /**
  * Negotiate an *activated* locale from an ordered list of BCP-47 language
- * ranges — never a merely-catalogued one (see `ACTIVATED_LANGUAGES`).
+ * ranges — never a merely-cataloged one (see `ACTIVATED_LANGUAGES`).
  *
  * Today the source is the browser (`navigator.languages`); a server can pass a
  * parsed `Accept-Language` list here when G11 negotiation lands (Phase 3). Uses

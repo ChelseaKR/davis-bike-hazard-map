@@ -8,7 +8,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useOnline } from '../../src/hooks/useOnline.ts';
 
 describe('useOnline', () => {
-  it('initialises from navigator.onLine and reacts to online/offline events', () => {
+  it('initializes from navigator.onLine and reacts to online/offline events', () => {
     const { result } = renderHook(() => useOnline());
     expect(typeof result.current).toBe('boolean');
 

@@ -13,8 +13,10 @@ const BASE_URL = `http://localhost:${PORT}`;
 // Browser selection: local runs use Chromium only (fast, one install).
 //   E2E_BROWSERS=chromium,firefox   explicit comma list (takes precedence)
 //   E2E_ALL_BROWSERS=1              chromium + firefox + webkit
-// CI runs chromium+firefox as a required gate and webkit as a separate
-// non-blocking job (Linux-WebKit needs a fix — see the e2e-webkit CI job).
+// CI runs chromium+firefox as the required gate and webkit as a separate
+// nightly job (.github/workflows/e2e-webkit-nightly.yml) — advisory, because
+// the pre-launch Safari/iOS pass is a device pass, but no longer non-blocking:
+// the nightly reports its own failure.
 const ALL = {
   chromium: { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   firefox: { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
@@ -35,6 +37,15 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // A test that failed and then passed on the retry above is reported `flaky`,
+  // and Playwright exits 0 on flaky unless told otherwise — so the retry turns
+  // an intermittent failure into a green check that records nothing but a log
+  // line. That has already happened on this config: the WebKit nightly of
+  // 2026-09-10 (run 34527424825) concluded `success` over `1 flaky`, a 15s
+  // predicate timeout in the offline capture->sync spec. In CI the retry still
+  // runs and `trace: 'on-first-retry'` still captures the failed attempt; the
+  // run fails. Locally there is no retry, so a flake is already a failure.
+  failOnFlakyTests: !!process.env.CI,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
 
   use: {
@@ -53,9 +64,34 @@ export default defineConfig({
     // ships in production builds).
     // ALLOW_INMEMORY lets this production-mode server boot without a database
     // (e2e uses a throwaway in-memory store).
+    //
+    // CSP_UPGRADE_INSECURE_REQUESTS=false is load-bearing and must not be
+    // dropped: this harness serves the production build over plain http on
+    // localhost, and WebKit — unlike Chromium and Firefox — honors
+    // `upgrade-insecure-requests` on loopback, so with it on, every asset is
+    // fetched over https:// against a plaintext port and the app never boots.
+    // Nothing under test loads an absolute http:// URL, so the directive is a
+    // no-op here in every browser. Pinned by tests/unit/securityHeaders.test.ts.
+    //
+    // ROUTING_URL= (empty) is load-bearing as well: an empty routing URL makes
+    // the planner answer with its straight-line fallback, immediately and with
+    // no network. The default is the public OSRM demo server, and a third party's
+    // uptime must never decide whether this suite is green -- the rule the map
+    // picker scan already applies to tiles. A spec that needs a real multi-route
+    // answer stubs `/api/route` in the browser instead
+    // (tests/e2e/route-profiles.spec.ts).
+    //
+    // The rate limits are raised for the same kind of reason. Every request in
+    // this suite comes from one IP inside one 60-second window, and the server's
+    // production defaults (120 requests/minute, 30 reports/hour) are a property
+    // of the deployment, not of anything under test: nothing in tests/e2e
+    // asserts a 429. Left at the defaults, CI failed with a moderation approve
+    // answering 429 and a page whose own feed request was refused -- a limit the
+    // suite hit by being a suite, reported as a broken feature.
     command:
       'cross-env PWA_DISABLE=true npm run build && cross-env NODE_ENV=production ' +
-      'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret ' +
+      'ALLOW_INMEMORY=true SESSION_SECRET=e2e-secret CSP_UPGRADE_INSECURE_REQUESTS=false ROUTING_URL= ' +
+      'RATE_LIMIT_MAX=100000 REPORTS_PER_HOUR=100000 CONFIRMATIONS_PER_HOUR=100000 ' +
       'MODERATOR_USERNAME=e2e MODERATOR_PASSWORD=e2e-password ' +
       `PORT=${PORT} API_PORT=${PORT} DATABASE_PATH= tsx server/index.ts`,
     url: `${BASE_URL}/api/health`,
