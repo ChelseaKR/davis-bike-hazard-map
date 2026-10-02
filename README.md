@@ -173,6 +173,11 @@ Re-assessed on 2026-08-21 against portfolio-standards **v2.0.0** (released
 2026-08-09), which tightened several gates relative to the v1.0.1 pin this repo
 previously declared against.
 
+The pin moved to **v3.0.0** (released 2026-10-02) on 2026-10-02, when upstream
+re-verified the standards that had passed their recheck date. The rows below are
+still the 2026-08-21 assessment; they have not yet been re-assessed against
+v3.0.0's new controls.
+
 | Standard | State | Project-specific evidence |
 |---|---|---|
 | Responsible-Tech Framework | Applies | [`docs/RESPONSIBLE-TECH-AUDITS.md`](./docs/RESPONSIBLE-TECH-AUDITS.md) and dated artifacts under [`docs/audits/`](./docs/audits/); three of those artifacts are still stamped 2026-05-31 and predate the 311 retry layer and seeded-hazard labeling |
