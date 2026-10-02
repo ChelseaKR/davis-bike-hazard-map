@@ -42,6 +42,10 @@ def main() -> int:
     args = parser.parse_args()
 
     checker = args.standards_dir / "automation" / "conformance_check.py"
+    # From v3.0.0 the checker imports sibling modules from its own directory
+    # (``import report_only``), which only resolve when that directory is on
+    # the import path, as it is when the script is run directly.
+    sys.path.insert(0, str(checker.parent.resolve()))
     spec = importlib.util.spec_from_file_location("portfolio_conformance", checker)
     if spec is None or spec.loader is None:
         print(f"error: cannot load standards checker at {checker}", file=sys.stderr)

@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   # The trust boundary lives in portfolio-standards, pinned to the exact commit
-  # the v2.0.0 tag points at, so this repo cannot drift from the reviewed
+  # the v3.0.0 tag points at, so this repo cannot drift from the reviewed
   # authorizer. It resolves the dispatched tag, verifies the annotated tag's SSH
   # signature against .github/allowed_signers, proves the tagged commit is an
   # ancestor of main, and returns immutable identifiers. The old
@@ -42,10 +42,10 @@ jobs:
     # a checkable finding — an inline `zizmor: ignore` comment does NOT suppress this (tested:
     # the crash happens before any finding exists to filter), and `rules.impostor-commit.disable`
     # would silence the audit for every third-party action in every workflow, not just this line.
-    # Tracked as a real CI gap in issue #131. The pin is manually verified instead: e9cddff...bcebf3
-    # is the exact commit the signed v2.0.0 tag points at (checked directly against
+    # Tracked as a real CI gap in issue #131. The pin is manually verified instead: 250a426...64b49e
+    # is the exact commit the signed v3.0.0 tag points at (checked directly against
     # portfolio-standards before this line was written). Re-verify by hand on every re-pin.
-    uses: ChelseaKR/portfolio-standards/.github/workflows/release-authorize.yml@e9cddffff4e9f685642f4ac2c90ddbca12bcebf3  # v2.0.0
+    uses: ChelseaKR/portfolio-standards/.github/workflows/release-authorize.yml@250a426ee2dcba62ec93d243844cd6514d64b49e  # v3.0.0
     permissions:
       contents: read
     with:

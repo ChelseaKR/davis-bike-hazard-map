@@ -42,13 +42,17 @@ jobs:
       - name: Check out this repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Full history and tags: from v3.0.0 the citation_cff check (DOC-08)
+          # judges CITATION.cff's version against the tag list, and a shallow
+          # checkout without tags reports it as not measured, which --strict fails.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Fetch pinned standards (private, read-only deploy key)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ChelseaKR/portfolio-standards
-          ref: v2.0.0                      # bump in lockstep with .standards-version
+          ref: v3.0.0                      # bump in lockstep with .standards-version
           ssh-key: ${{ secrets.STANDARDS_DEPLOY_KEY }}
           path: .standards
           persist-credentials: false

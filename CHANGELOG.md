@@ -9,6 +9,19 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **Standards pin moved from portfolio-standards `v2.0.0` to `v3.0.0`.** The
+  `standards` check had been failing on `main` because three v2.0.0 standards
+  (Code Quality, Quality & Metrics, and the Responsible-Tech Framework) were past
+  their 92-day recheck; upstream re-verified them and released v3.0.0 on
+  2026-10-02. The pin moved in `.standards-version` and `standards.yml`, and the
+  release authorizer in `release.yml` now points at the commit the v3.0.0 tag
+  names. `scripts/check-portfolio-conformance.py` puts the checker's own
+  directory on the import path, because v3.0.0's checker imports a sibling
+  module. `standards.yml` checks this repository out with full history and tags,
+  as the v3.0.0 citation check needs. `CITATION.cff` no longer records a
+  `date-released` for 0.1.0: no tag names that version, and v3.0.0's DOC-08 check
+  fails a release date on an unreleased version.
+
 - **Reports by month, and recurring sites (issue #180; research roadmap E8,
   ideation EXP-13).** A `Trends` tab counts how many hazards were reported in each
   month and what has happened to those reports since. The recurring-site machinery
