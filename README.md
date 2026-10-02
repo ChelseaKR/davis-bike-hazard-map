@@ -174,9 +174,11 @@ Re-assessed on 2026-08-21 against portfolio-standards **v2.0.0** (released
 previously declared against.
 
 The pin moved to **v3.0.0** (released 2026-10-02) on 2026-10-02, when upstream
-re-verified the standards that had passed their recheck date. The rows below are
-still the 2026-08-21 assessment; they have not yet been re-assessed against
-v3.0.0's new controls.
+re-verified the standards that had passed their recheck date, and then to the
+**v3.0.1** patch release (re-verified stamps, text corrections and tooling fixes;
+no control, threshold or gate change) the same day. The rows below are still the
+2026-08-21 assessment; they have not yet been re-assessed against v3.0.0's new
+controls.
 
 | Standard | State | Project-specific evidence |
 |---|---|---|

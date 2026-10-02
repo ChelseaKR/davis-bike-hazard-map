@@ -9,6 +9,13 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **Standards pin moved from portfolio-standards `v3.0.0` to `v3.0.1`.** v3.0.1
+  is a patch release (re-verified stamps, text corrections and tooling fixes)
+  with no control, threshold or gate change. The pin moved in
+  `.standards-version` and `standards.yml`, and the release authorizer in
+  `release.yml` now points at `96822bb`, the commit the signed v3.0.1 tag names;
+  its `release-authorize.yml` is byte-identical to the one at v3.0.0.
+
 - **Standards pin moved from portfolio-standards `v2.0.0` to `v3.0.0`.** The
   `standards` check had been failing on `main` because three v2.0.0 standards
   (Code Quality, Quality & Metrics, and the Responsible-Tech Framework) were past
