@@ -9,6 +9,22 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
 
 ## [Unreleased]
 
+- **Five portfolio-standards controls that start counting on 2026-10-19 now
+  pass.** `third-party-scripts.json` lists what the public pages may load from
+  third parties: no scripts, and OpenStreetMap's tile servers for map images.
+  `tests/unit/thirdPartyScripts.test.ts` holds every committed and built page,
+  the served Content-Security-Policy and the privacy page to it, with negative
+  controls (SEC-43). The policy's `font-src` no longer inherits helmet's
+  `https:` default, which allowed fonts from any host; the site uses system
+  fonts only. The privacy page now says what OpenStreetMap receives when it
+  serves map tiles. `html-validate` (standard preset) checks the committed and
+  built pages in CI (CQ-49). `CONTRACTS.md` lists the storage keys, routes,
+  published fields, tables and environment variables that must not be renamed
+  without a migration (DOC-23). A failed push-to-main deploy now opens or
+  comments on one reused GitHub issue (CICD-31). One British spelling is fixed,
+  and `.codespellrc` records GitHub's own `cancelled` spelling and the npm
+  lockfile as exceptions (DOC-22).
+
 - **Standards pin moved from portfolio-standards `v3.0.0` to `v3.0.1`.** v3.0.1
   is a patch release (re-verified stamps, text corrections and tooling fixes)
   with no control, threshold or gate change. The pin moved in

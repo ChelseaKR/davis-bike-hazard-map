@@ -209,6 +209,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         styleSrc: ["'self'", "'unsafe-inline'"], // Leaflet injects inline styles
         imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org'],
         connectSrc: ["'self'"],
+        // helmet's default is `'self' https: data:`, which lets a page load a
+        // font from any https host. The site uses system fonts only, so no
+        // third-party font host is allowed (SEC-43, third-party-scripts.json).
+        fontSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
         // `upgrade-insecure-requests` is one of helmet's defaults and is

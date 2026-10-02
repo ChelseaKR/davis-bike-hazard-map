@@ -1,0 +1,13 @@
+{
+  "privacy_page": "public/privacy.html",
+  "first_party_hosts": ["davis-bike-hazard-map.fly.dev"],
+  "scripts": [],
+  "third_party_hosts": [
+    {
+      "vendor": "OpenStreetMap",
+      "host": "*.tile.openstreetmap.org",
+      "loads": "map tile images (no scripts)",
+      "receives": "the visitor's IP address and the map tiles requested"
+    }
+  ]
+}
