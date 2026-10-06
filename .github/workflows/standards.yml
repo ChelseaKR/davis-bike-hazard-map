@@ -65,5 +65,20 @@ jobs:
       - name: Standards freshness gate
         run: python3 .standards/automation/check_staleness.py --standards-dir .standards
 
+      # DOC-22 (American English) runs codespell, and the checker fails closed
+      # when it cannot find one: with nothing installed, the control read
+      # "codespell not found" on every run, which the checker counts as a
+      # failure once DOC-22 is scored (2026-10-19). The runner has no codespell
+      # and no uvx. Install the release the pinned standards pin by hash, with
+      # no dependencies, into a venv under RUNNER_TEMP, which the runner
+      # empties after every job.
+      - name: Install codespell for DOC-22 (hash-pinned by the pinned standards)
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/codespell"
+          "${RUNNER_TEMP}/codespell/bin/pip" install --quiet --disable-pip-version-check \
+            --require-hashes --no-deps -r .standards/automation/requirements-codespell.txt
+
       - name: Standards conformance gate
+        env:
+          CODESPELL: ${{ runner.temp }}/codespell/bin/codespell
         run: python3 scripts/check-portfolio-conformance.py --standards-dir .standards

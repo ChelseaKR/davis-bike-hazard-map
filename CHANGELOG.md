@@ -23,7 +23,10 @@ RELEASE-AND-VERSIONING is currently a declared gap, tracked for the first `v0.1.
   without a migration (DOC-23). A failed push-to-main deploy now opens or
   comments on one reused GitHub issue (CICD-31). One British spelling is fixed,
   and `.codespellrc` records GitHub's own `cancelled` spelling and the npm
-  lockfile as exceptions (DOC-22).
+  lockfile as exceptions (DOC-22). `standards.yml` installs the codespell
+  release the pinned standards pin by hash before the conformance gate: the
+  runner has none, and the checker counts a check that could not run as a
+  failure.
 
 - **Standards pin moved from portfolio-standards `v3.0.0` to `v3.0.1`.** v3.0.1
   is a patch release (re-verified stamps, text corrections and tooling fixes)
