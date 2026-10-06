@@ -25,6 +25,7 @@ import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { parse, type DefaultTreeAdapterTypes } from "parse5";
 import { buildApp } from "../../server/app.ts";
 import { MemoryRepository } from "../../server/lib/repository.ts";
 import { serverConfig } from "../../server/config.ts";
@@ -122,6 +123,33 @@ const FETCH_ATTRS = [
 ];
 const NAVIGATION_ONLY = new Set(["A", "AREA"]);
 
+/**
+ * The exact source text of every `<script>` element, in document order.
+ *
+ * An allowlisted loader is pinned by its exact source text, so the match is
+ * over the page's own bytes, not a parser's re-serialization (which rewrites
+ * `async` as `async=""`). The bytes come from the HTML parser's source
+ * offsets, not from a regular expression over the markup: a regex cannot tell
+ * a commented-out tag from a live one, and misses end tags the HTML tokenizer
+ * accepts (CodeQL js/bad-tag-filter, js/incomplete-multi-character-sanitization).
+ * Template contents are skipped, as `querySelectorAll` skips them.
+ */
+function rawScriptTags(html: string): string[] {
+  const out: string[] = [];
+  const walk = (node: DefaultTreeAdapterTypes.ParentNode): void => {
+    for (const child of node.childNodes) {
+      if (!("tagName" in child)) continue;
+      if (child.tagName === "script" && child.sourceCodeLocation) {
+        const { startOffset, endOffset } = child.sourceCodeLocation;
+        out.push(html.slice(startOffset, endOffset));
+      }
+      walk(child);
+    }
+  };
+  walk(parse(html, { sourceCodeLocationInfo: true }));
+  return out;
+}
+
 /** Every way `html` breaks the allowlist; empty means the page holds to it. */
 export function pageViolations(html: string, list: Allowlist): string[] {
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -129,13 +157,9 @@ export function pageViolations(html: string, list: Allowlist): string[] {
   const isAllowed = (host: string) => allowed.some((p) => hostMatches(host, p));
   const out: string[] = [];
 
-  // An allowlisted loader is pinned by its exact source text, so match the
-  // page's own bytes, not the parser's re-serialization (which rewrites
-  // `async` as `async=""`). Raw tags and parsed elements are in the same order.
-  const raw =
-    html
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi) ?? [];
+  // jsdom's DOMParser is parse5 too, so the raw tags and the parsed elements
+  // are in the same order; the count check holds that assumption.
+  const raw = rawScriptTags(html);
   const scripts = Array.from(doc.querySelectorAll("script"));
   if (raw.length !== scripts.length) {
     out.push(
