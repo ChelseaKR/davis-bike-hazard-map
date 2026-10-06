@@ -108,3 +108,37 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy --remote-only
+
+  alert-on-failure:
+    # CICD-31: a push to main deploys with nobody watching, so a failed deploy
+    # must reach a person. This job runs only when a job it waits on failed
+    # (a skipped deploy, with no token set, is not a failure), and reports into
+    # one reused issue: it comments on the open "Deploy (Fly.io) failed" issue
+    # if there is one, and opens it otherwise. A job-level `failure()` gate
+    # needs `needs:`; without it the job would run first and never see one.
+    name: Alert on deploy failure
+    needs: [token-check, deploy]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write # open or comment on the one reused deploy-failure issue
+    steps:
+      - name: Open or update the deploy-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          TRIGGER: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          title="Deploy (Fly.io) failed"
+          body="The Fly.io deploy workflow failed (trigger: ${TRIGGER}, commit ${COMMIT_SHA}). Run: ${RUN_URL}"
+          number="$(gh issue list --state open --search "\"${title}\" in:title" --json number,title \
+            --jq "map(select(.title == \"${title}\")) | first | .number // empty")"
+          if [ -n "${number}" ]; then
+            gh issue comment "${number}" --body "${body}"
+          else
+            gh issue create --title "${title}" --body "${body}"
+          fi

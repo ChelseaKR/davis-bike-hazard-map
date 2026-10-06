@@ -73,6 +73,8 @@ jobs:
         run: npm run lint
       - name: Lint CSS — logical properties (i18n G10, INTERNATIONALIZATION-STANDARD §4/§8)
         run: npm run lint:css
+      - name: Validate HTML against the spec (CQ-49, html-validate standard preset)
+        run: npm run lint:html
       - name: i18n gates — G1 utf8 · G2 extract+no-hardcoded · G3 bcp47 · G5/G6 parity · G12 cldr-pin
         run: npm run i18n:gates
       - name: Typecheck
@@ -88,6 +90,8 @@ jobs:
         run: npm run a11y
       - name: Build
         run: npm run build
+      - name: Validate built HTML against the spec (CQ-49)
+        run: npm run lint:html:dist
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
