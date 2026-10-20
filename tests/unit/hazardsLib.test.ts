@@ -354,6 +354,41 @@ describe('createRepository', () => {
     await repo.close();
   });
 
+  it('acquires a fresh lock atomically and records our pid', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    expect(existsSync(`${path}.lock`)).toBe(false);
+    const repo = new JsonFileRepository(path);
+    expect(readFileSync(`${path}.lock`, 'utf8')).toBe(String(process.pid));
+    await repo.close();
+  });
+
+  it('refuses a lock held by another live process and leaves it intact', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    // The parent process is alive and is not us.
+    writeFileSync(`${path}.lock`, String(process.ppid), 'utf8');
+    expect(() => new JsonFileRepository(path)).toThrow(/locked by a live process/);
+    expect(readFileSync(`${path}.lock`, 'utf8')).toBe(String(process.ppid));
+  });
+
+  it('fails closed on a second acquire while the first holds, keeping the first lock (race)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
+    tmpDirs.push(dir);
+    const path = join(dir, 'hazards.json');
+    const first = new JsonFileRepository(path);
+    try {
+      expect(() => new JsonFileRepository(path)).toThrow(/single-process|already open|locked/i);
+      expect(() => new JsonFileRepository(path)).toThrow(/single-process|already open|locked/i);
+      // The loser never clobbered the winner's lock.
+      expect(readFileSync(`${path}.lock`, 'utf8')).toBe(String(process.pid));
+    } finally {
+      await first.close();
+    }
+  });
+
   it('close() releases the lock so a new instance can open (FIX-13)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dbhm-'));
     tmpDirs.push(dir);
