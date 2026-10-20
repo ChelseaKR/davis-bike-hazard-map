@@ -483,18 +483,27 @@ export class JsonFileRepository extends MemoryRepository {
     }
     const dir = dirname(this.path);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    if (existsSync(this.lockPath)) {
-      const holder = Number.parseInt(readFileSync(this.lockPath, 'utf8').trim(), 10);
-      if (Number.isInteger(holder) && holder !== process.pid && isProcessAlive(holder)) {
-        throw new Error(
-          `JsonFileRepository: ${this.path} is locked by a live process (pid ${holder}). ` +
-            `Running two processes on one data file corrupts it (single-process only). ` +
-            `Stop the other process, or delete ${this.lockPath} if it is stale.`,
-        );
+    // Atomic exclusive create ('wx' = O_CREAT|O_EXCL): no check-then-write window.
+    // On EEXIST, inspect the holder; reclaim a stale lock and retry exactly once.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        writeFileSync(this.lockPath, String(process.pid), { encoding: 'utf8', flag: 'wx' });
+        break;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+        const holder = Number.parseInt(readFileSync(this.lockPath, 'utf8').trim(), 10);
+        if (Number.isInteger(holder) && holder !== process.pid && isProcessAlive(holder)) {
+          throw new Error(
+            `JsonFileRepository: ${this.path} is locked by a live process (pid ${holder}). ` +
+              `Running two processes on one data file corrupts it (single-process only). ` +
+              `Stop the other process, or delete ${this.lockPath} if it is stale.`,
+          );
+        }
+        if (attempt > 0) throw err; // Lost the reclaim race: fail closed.
+        // Otherwise the lock is stale (dead holder, unparsable, or our own pid) — reclaim it.
+        rmSync(this.lockPath, { force: true });
       }
-      // Otherwise the lock is stale (dead holder, unparsable, or our own pid) — reclaim it.
     }
-    writeFileSync(this.lockPath, String(process.pid), 'utf8');
     heldLocks.add(this.lockKey);
     process.once('exit', this.releaseLock);
   }
